@@ -1,0 +1,21 @@
+{
+  // Shared compiler options for every package in this repo. Packages extend
+  // this and override only `include`/emit settings. Options mirror the
+  // stigmer TypeScript house style: strict ESM targeting Node 22.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    // NodeNext (not "bundler") because these packages are consumed by plain
+    // Node across repo boundaries, not only by bundlers. This forces
+    // explicit ".js" extensions on relative imports at compile time — the
+    // invariant stigmer records as DD-018 (extension-less specifiers crash
+    // every Node consumer with ERR_MODULE_NOT_FOUND; see stigmer/stigmer#209).
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  }
+}

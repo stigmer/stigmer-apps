@@ -1,0 +1,17 @@
+{
+  "name": "ts-commons",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/resource-api"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "codegen": "npm run codegen --workspaces --if-present"
+  }
+}

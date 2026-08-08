@@ -1,0 +1,44 @@
+{
+  "name": "@stigmer/resource-api",
+  "version": "0.1.0",
+  "description": "Proto-first resource API pipeline: common envelope, per-operation step chains, store port, and error contract. TypeScript edition of the Stigmer Java/Go request-pipeline commons.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stigmer/ts-commons.git",
+    "directory": "packages/resource-api"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./postgres": {
+      "types": "./dist/postgres/index.d.ts",
+      "default": "./dist/postgres/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "proto"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^12.1.0",
+    "@types/node": "^26.2.0",
+    "@types/pg": "^8.21.0",
+    "typescript": "^7.0.2",
+    "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "pg": "^8.22.0"
+  }
+}
