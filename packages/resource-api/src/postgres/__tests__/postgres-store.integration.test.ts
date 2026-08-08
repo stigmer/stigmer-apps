@@ -29,6 +29,8 @@ runStoreContractTests("PostgresResourceStore", async () => {
         columns: {
           inspectionDate: "inspection_date",
           ownerId: "owner_id",
+          retired: "retired",
+          createdAt: "created_at",
         },
       },
     }),

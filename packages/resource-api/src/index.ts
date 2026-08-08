@@ -20,6 +20,7 @@ export type { CallerPrincipal } from "./principal.js";
 export { SYSTEM_PRINCIPAL } from "./principal.js";
 export {
   alreadyExists,
+  failedPrecondition,
   internal,
   invalidArgument,
   notFound,
@@ -52,6 +53,8 @@ export { MemoryResourceStore } from "./store/memory-store.js";
 // Pipeline & steps (the extension seam for domain steps)
 export type { PipelineStep, StepTrait } from "./pipeline.js";
 export { Pipeline } from "./pipeline.js";
+export type { ResourceReference } from "./references.js";
+export { referencesExistStep } from "./references.js";
 
 // Resource definition & operations
 export type {
@@ -64,6 +67,7 @@ export type {
   OperationBinding,
   ReadContext,
   ResourceDefinition,
+  ResourceInvoker,
   ResourceRef,
   UpdateOperationOptions,
   WriteContext,

@@ -45,7 +45,14 @@ export interface PostgresKindConfig {
     /** Spec proto3-JSON key (to report the clashing value on races). */
     readonly jsonField: string;
   };
-  /** Logical spec field (proto3-JSON key) → generated column. */
+  /**
+   * Logical field name → generated column. The column's expression (in
+   * the migration) may read any proto3-JSON path — spec, status, or
+   * metadata (e.g. `resource->'status'->>'read'`,
+   * `resource->'metadata'->>'createdAt'`); `->>` renders booleans as
+   * 'true'/'false' text, which is exactly how the port contract compares
+   * them.
+   */
   readonly columns?: Readonly<Record<string, string>>;
 }
 
@@ -156,6 +163,32 @@ export class PostgresResourceStore implements ResourceStore {
       items: rows.rows.map((r) => this.#toMessage(config, r.resource)),
       totalCount: count.rows[0].n as number,
     };
+  }
+
+  async countBy(
+    kind: string,
+    field: string,
+    values: readonly string[],
+  ): Promise<Map<string, number>> {
+    const config = this.#config(kind);
+    const column = this.#column(kind, config, field);
+    const counts = new Map<string, number>();
+    if (values.length === 0) {
+      return counts;
+    }
+    // One GROUP BY regardless of how many values: this method exists so
+    // page-shaped status derivation is never an N+1 (T03 D4).
+    const res = await this.#pool.query(
+      `SELECT ${column} AS value, count(*)::int AS n
+         FROM ${config.table}
+        WHERE ${column} = ANY($1::text[])
+        GROUP BY ${column}`,
+      [[...values]],
+    );
+    for (const row of res.rows) {
+      counts.set(row.value as string, row.n as number);
+    }
+    return counts;
   }
 
   #config(kind: string): PostgresKindConfig {

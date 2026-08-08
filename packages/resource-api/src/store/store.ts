@@ -6,11 +6,16 @@
  * persistence code, and this port keeps that property.
  *
  * List semantics are part of the port contract so the in-memory fake and
- * the Postgres adapter are interchangeable in tests: logical field names in
- * `orderBy`/`filter` are the resource spec's proto3-JSON keys (camelCase,
- * e.g. "serialNumber"); each adapter maps them to its own representation
- * and MUST reject unregistered names loudly (a typo'd field silently
- * ignored would return wrong data).
+ * the Postgres adapter are interchangeable in tests: `orderBy`/`filter`
+ * use per-kind *logical field names* (camelCase, e.g. "serialNumber"),
+ * each registered in the adapter's kind config against a proto3-JSON path
+ * under spec, status, or metadata (e.g. "status.retired",
+ * "metadata.createdAt" — RFC3339 UTC text, so text ordering IS
+ * chronological ordering). Values compare as the field's proto3-JSON
+ * scalar rendered to text — booleans match "true"/"false" — which is
+ * exactly what Postgres `->>` yields, so the adapters cannot disagree.
+ * Every adapter MUST reject unregistered names loudly (a typo'd field
+ * silently ignored would return wrong data).
  *
  * Deliberately absent: delete (no MVP resource exposes it — absence is a
  * declaration, added when the first consumer needs it) and transactions
@@ -73,4 +78,13 @@ export interface ResourceStore {
   getByNaturalKey(kind: string, value: string): Promise<ResourceMessage | undefined>;
 
   list(kind: string, query: ListQuery): Promise<ListResult<ResourceMessage>>;
+
+  /**
+   * Row counts grouped by a registered logical field, for the values
+   * given — one round trip regardless of page size, so a page-shaped
+   * deriveStatus (e.g. Case.document_count over 20 cases) is never an
+   * N+1. Values absent from the result have count 0. Forced by the first
+   * derived-count consumer (T03 D4).
+   */
+  countBy(kind: string, field: string, values: readonly string[]): Promise<Map<string, number>>;
 }

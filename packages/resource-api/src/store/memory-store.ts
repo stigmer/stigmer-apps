@@ -1,9 +1,9 @@
 /**
  * In-memory ResourceStore. Not a mock: it implements the full port
  * contract (natural-key uniqueness, list ordering with explicit NULLS
- * placement, equality filters) and is exercised by the same contract test
- * suite as the Postgres adapter, so consumers can use it in their tests
- * with confidence that behavior matches production.
+ * placement, equality filters, grouped counts) and is exercised by the
+ * same contract test suite as the Postgres adapter, so consumers can use
+ * it in their tests with confidence that behavior matches production.
  */
 
 import { clone, type DescMessage, toJson } from "@bufbuild/protobuf";
@@ -21,12 +21,14 @@ export interface MemoryKindConfig {
   /** Spec proto3-JSON key of the natural key (e.g. "serialNumber"). */
   readonly naturalKeyField?: string;
   /**
-   * Spec fields allowed in list orderBy/filter — mirrors the Postgres
-   * adapter's registered generated columns, so a typo'd field name fails
-   * identically here and in production instead of silently matching
-   * nothing.
+   * Logical field name → proto3-JSON path under the resource root (e.g.
+   * "spec.ownerId", "status.retired", "metadata.createdAt") — mirrors the
+   * Postgres adapter's registered generated columns, so a typo'd field
+   * name fails identically here and in production instead of silently
+   * matching nothing. Values compare as JSON scalars rendered to text
+   * (booleans as "true"/"false"), matching Postgres `->>` semantics.
    */
-  readonly queryableFields?: readonly string[];
+  readonly fields?: Readonly<Record<string, string>>;
 }
 
 export class MemoryResourceStore implements ResourceStore {
@@ -45,11 +47,11 @@ export class MemoryResourceStore implements ResourceStore {
     }
 
     if (config.naturalKeyField) {
-      const value = this.#specField(kind, resource, config.naturalKeyField);
+      const value = this.#jsonValue(kind, resource, `spec.${config.naturalKeyField}`);
       if (value !== undefined) {
         for (const [otherId, other] of this.#table(kind)) {
           if (otherId === id) continue;
-          if (this.#specField(kind, other, config.naturalKeyField) === value) {
+          if (this.#jsonValue(kind, other, `spec.${config.naturalKeyField}`) === value) {
             throw new DuplicateNaturalKeyError(kind, value);
           }
         }
@@ -72,7 +74,7 @@ export class MemoryResourceStore implements ResourceStore {
     const field = this.#config(kind).naturalKeyField;
     if (!field) return undefined;
     for (const row of this.#table(kind).values()) {
-      if (this.#specField(kind, row, field) === value) {
+      if (this.#jsonValue(kind, row, `spec.${field}`) === value) {
         return this.#cloneOut(kind, row);
       }
     }
@@ -85,20 +87,21 @@ export class MemoryResourceStore implements ResourceStore {
 
     if (query.filter) {
       for (const [field, value] of Object.entries(query.filter)) {
-        this.#assertQueryable(kind, field);
-        rows = rows.filter((r) => this.#specField(kind, r, field) === value);
+        const path = this.#fieldPath(kind, field);
+        rows = rows.filter((r) => this.#jsonValue(kind, r, path) === value);
       }
     }
 
     if (query.orderBy) {
       const { field, direction, nulls } = query.orderBy;
-      this.#assertQueryable(kind, field);
-      // Lexicographic comparison — correct for the port's supported order
-      // fields (plain strings and ISO dates, which sort chronologically as
-      // text). Matches the Postgres adapter's text generated columns.
+      const path = this.#fieldPath(kind, field);
+      // Lexicographic comparison over the JSON-scalar text — correct for
+      // the port's supported order fields (plain strings, ISO dates, and
+      // RFC3339 timestamps all sort chronologically as text). Matches the
+      // Postgres adapter's text generated columns.
       rows.sort((a, b) => {
-        const av = this.#specField(kind, a, field);
-        const bv = this.#specField(kind, b, field);
+        const av = this.#jsonValue(kind, a, path);
+        const bv = this.#jsonValue(kind, b, path);
         if (av === undefined && bv === undefined) return 0;
         if (av === undefined) return nulls === "last" ? 1 : -1;
         if (bv === undefined) return nulls === "last" ? -1 : 1;
@@ -112,6 +115,24 @@ export class MemoryResourceStore implements ResourceStore {
       .slice(query.offset, query.offset + query.limit)
       .map((r) => this.#cloneOut(kind, r));
     return { items: page, totalCount };
+  }
+
+  async countBy(
+    kind: string,
+    field: string,
+    values: readonly string[],
+  ): Promise<Map<string, number>> {
+    this.#config(kind);
+    const path = this.#fieldPath(kind, field);
+    const wanted = new Set(values);
+    const counts = new Map<string, number>();
+    for (const row of this.#table(kind).values()) {
+      const value = this.#jsonValue(kind, row, path);
+      if (value !== undefined && wanted.has(value)) {
+        counts.set(value, (counts.get(value) ?? 0) + 1);
+      }
+    }
+    return counts;
   }
 
   #config(kind: string): MemoryKindConfig {
@@ -138,22 +159,34 @@ export class MemoryResourceStore implements ResourceStore {
     return clone(this.#config(kind).schema, row as never) as ResourceMessage;
   }
 
-  #assertQueryable(kind: string, field: string): void {
-    const { queryableFields } = this.#config(kind);
-    if (queryableFields && !queryableFields.includes(field)) {
+  #fieldPath(kind: string, field: string): string {
+    const path = this.#config(kind).fields?.[field];
+    if (!path) {
+      // Loud, not silent: an unregistered field in orderBy/filter/countBy
+      // is a programming error that would otherwise return wrong data.
       throw new Error(
-        `Field '${field}' is not registered as queryable for kind '${kind}'. ` +
-          `Registered fields: ${queryableFields.join(", ") || "(none)"}`,
+        `Field '${field}' is not registered for kind '${kind}'. ` +
+          `Registered fields: ${Object.keys(this.#config(kind).fields ?? {}).join(", ") || "(none)"}`,
       );
     }
+    return path;
   }
 
-  /** Reads a spec field by its proto3-JSON key — the port's logical field naming. */
-  #specField(kind: string, row: ResourceMessage, field: string): string | undefined {
-    const json = toJson(this.#config(kind).schema, row as never) as {
-      spec?: Record<string, unknown>;
-    };
-    const value = json.spec?.[field];
-    return typeof value === "string" && value !== "" ? value : undefined;
+  /**
+   * Reads a proto3-JSON path and renders the scalar as text — the same
+   * answer Postgres `->>` gives for that path, which is what keeps the
+   * two adapters bit-identical under the contract suite. Unset paths and
+   * empty strings read as undefined (an absent JSON key and `->>` NULL).
+   */
+  #jsonValue(kind: string, row: ResourceMessage, path: string): string | undefined {
+    let node: unknown = toJson(this.#config(kind).schema, row as never);
+    for (const key of path.split(".")) {
+      if (node === null || typeof node !== "object") return undefined;
+      node = (node as Record<string, unknown>)[key];
+    }
+    if (node === undefined || node === null) return undefined;
+    if (typeof node === "string") return node === "" ? undefined : node;
+    if (typeof node === "boolean" || typeof node === "number") return String(node);
+    return undefined;
   }
 }

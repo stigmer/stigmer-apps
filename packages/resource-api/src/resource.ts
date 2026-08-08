@@ -8,6 +8,18 @@
  * construction — connect-es supplies the fallback for every method missing
  * from a partial `ServiceImpl`.
  *
+ * Pipelines are transport-independent (T03 D1): create/update chains are
+ * built from the ResourceDefinition alone and exposed on
+ * `DefinedResource.invoke`, with the Connect handlers as thin adapters
+ * that extract the caller and delegate. That is what lets a system-written
+ * resource (e.g. a Notification created by an event handler) run the FULL
+ * pipeline — validation included, see validate.ts's documented double
+ * arrangement — without a service method existing at all
+ * (`systemOperations`). The Java parent cannot do this: its handlers
+ * thread the gRPC StreamObserver into the pipeline context. This edition
+ * already rejected that coupling by returning values from pipelines; the
+ * invoker completes the separation.
+ *
  * Per-operation chains are ports of the Java edition's canonical
  * pipelines, including their deliberate ordering:
  *
@@ -86,10 +98,12 @@ export interface ResourceDefinition<R extends ResourceMessage> {
   readonly caller: (ctx: HandlerContext) => CallerPrincipal | undefined;
   /**
    * Read-side status derivation (e.g. Case.document_count, Task.overdue):
-   * runs on every resource returned from get/list/create/update, after
-   * persistence — derived fields are never stored (§R3).
+   * runs once per response on the WHOLE page — a one-element array for
+   * get/create/update — so a derivation that needs a query issues it once
+   * per page, never once per row (T03 D4; pair with `store.countBy`).
+   * Derived fields are never stored (§R3).
    */
-  readonly deriveStatus?: (resource: R) => void | Promise<void>;
+  readonly deriveStatus?: (resources: readonly R[]) => void | Promise<void>;
 }
 
 export interface ResourceRef {
@@ -136,10 +150,22 @@ export interface CustomContext<R extends ResourceMessage, I> {
 
 type UnaryHandler = (req: never, ctx: HandlerContext) => Promise<unknown>;
 
+/**
+ * The transport-independent write executor (T03 D1): the full pipeline as
+ * a plain async function. An undefined caller still runs the chain — and
+ * fails in the authorize step with UNAUTHENTICATED, exactly like the wire.
+ */
+type WriteExecutor<R extends ResourceMessage> = (
+  input: R,
+  caller: CallerPrincipal | undefined,
+) => Promise<R>;
+
 export interface OperationBinding<R extends ResourceMessage> {
   readonly flavor: "create" | "update" | "get" | "list" | "custom";
-  /** @internal assembled by defineResource */
-  bind(runtime: Runtime<R>, method: DescMethod, operationName: string): UnaryHandler;
+  /** @internal transport adapter for get/list/custom (needs the method). */
+  bind?(runtime: Runtime<R>, method: DescMethod, operationName: string): UnaryHandler;
+  /** @internal pipeline construction for create/update (method-free, D1). */
+  buildExecutor?(runtime: Runtime<R>, operationName: string): WriteExecutor<R>;
 }
 
 interface Runtime<R extends ResourceMessage> {
@@ -271,19 +297,89 @@ async function publishSafely<R extends ResourceMessage>(
   }
 }
 
-async function derive<R extends ResourceMessage>(runtime: Runtime<R>, resource: R): Promise<R> {
-  await runtime.def.deriveStatus?.(resource);
-  return resource;
+async function deriveAll<R extends ResourceMessage>(
+  runtime: Runtime<R>,
+  resources: readonly R[],
+): Promise<void> {
+  if (resources.length > 0) {
+    await runtime.def.deriveStatus?.(resources);
+  }
 }
 
 /* -------------------------- create -------------------------------- */
 
 export interface CreateOperationOptions<R extends ResourceMessage> {
   /**
-   * Domain steps between build-state and persist (reference/guard checks —
-   * the extension point the Go consumers use most). ctx.newState is set.
+   * Domain steps between build-state and persist (reference/guard checks,
+   * normalization, domain defaults — the extension point the Go consumers
+   * use most). ctx.newState is set.
    */
   readonly beforePersist?: readonly PipelineStep<WriteContext<R>>[];
+}
+
+function buildCreateExecutor<R extends ResourceMessage>(
+  runtime: Runtime<R>,
+  operationName: string,
+  options: CreateOperationOptions<R>,
+): WriteExecutor<R> {
+  const { def } = runtime;
+  // Create speaks the resource message itself (asserted for bound
+  // methods in defineResource), so validating against the definition's
+  // schema keeps the chain identical with or without a transport.
+  const pipeline = new Pipeline<WriteContext<R>>(`${def.kind}-${operationName}`, [
+    validateInputStep(def.schema, runtime.displayName),
+    authorizeStep(runtime, operationName, () => undefined),
+    {
+      name: "check-duplicate",
+      async execute(ctx) {
+        if (!def.naturalKey) return;
+        const value = def.naturalKey.get(ctx.input);
+        if (value && (await def.store.getByNaturalKey(def.kind, value))) {
+          throw alreadyExists(runtime.displayName, def.naturalKey.label, value);
+        }
+      },
+    },
+    {
+      name: "build-new-state",
+      execute(ctx) {
+        ctx.newState = buildCreateState(
+          def.schema,
+          runtime.identity,
+          ctx.input,
+          // authorize guaranteed a caller above.
+          ctx.caller as CallerPrincipal,
+          new Date(),
+        );
+      },
+    },
+    ...(options.beforePersist ?? []),
+    {
+      name: "persist",
+      async execute(ctx) {
+        await persist(runtime, ctx.newState as R);
+      },
+    },
+    {
+      name: "publish",
+      async execute(ctx) {
+        await publishSafely(
+          runtime,
+          "created",
+          ctx.newState as R,
+          undefined,
+          ctx.caller as CallerPrincipal,
+        );
+      },
+    },
+  ]);
+
+  return async (input, caller) => {
+    const ctx: WriteContext<R> = { caller, input };
+    await pipeline.execute(ctx);
+    const created = ctx.newState as R;
+    await deriveAll(runtime, [created]);
+    return created;
+  };
 }
 
 export function createOperation<R extends ResourceMessage>(
@@ -291,60 +387,8 @@ export function createOperation<R extends ResourceMessage>(
 ): OperationBinding<R> {
   return {
     flavor: "create",
-    bind(runtime, method, operationName) {
-      const { def } = runtime;
-      const pipeline = new Pipeline<WriteContext<R>>(`${def.kind}-${operationName}`, [
-        validateInputStep(method.input, runtime.displayName),
-        authorizeStep(runtime, operationName, () => undefined),
-        {
-          name: "check-duplicate",
-          async execute(ctx) {
-            if (!def.naturalKey) return;
-            const value = def.naturalKey.get(ctx.input);
-            if (value && (await def.store.getByNaturalKey(def.kind, value))) {
-              throw alreadyExists(runtime.displayName, def.naturalKey.label, value);
-            }
-          },
-        },
-        {
-          name: "build-new-state",
-          execute(ctx) {
-            ctx.newState = buildCreateState(
-              def.schema,
-              runtime.identity,
-              ctx.input,
-              // authorize guaranteed a caller above.
-              ctx.caller as CallerPrincipal,
-              new Date(),
-            );
-          },
-        },
-        ...(options.beforePersist ?? []),
-        {
-          name: "persist",
-          async execute(ctx) {
-            await persist(runtime, ctx.newState as R);
-          },
-        },
-        {
-          name: "publish",
-          async execute(ctx) {
-            await publishSafely(
-              runtime,
-              "created",
-              ctx.newState as R,
-              undefined,
-              ctx.caller as CallerPrincipal,
-            );
-          },
-        },
-      ]);
-
-      return async (req, hctx) => {
-        const ctx: WriteContext<R> = { caller: def.caller(hctx), input: req as R };
-        await pipeline.execute(ctx);
-        return derive(runtime, ctx.newState as R);
-      };
+    buildExecutor(runtime, operationName) {
+      return buildCreateExecutor(runtime, operationName, options);
     },
   };
 }
@@ -355,87 +399,97 @@ export interface UpdateOperationOptions<R extends ResourceMessage> {
   readonly beforePersist?: readonly PipelineStep<WriteContext<R>>[];
 }
 
+function buildUpdateExecutor<R extends ResourceMessage>(
+  runtime: Runtime<R>,
+  operationName: string,
+  options: UpdateOperationOptions<R>,
+): WriteExecutor<R> {
+  const { def } = runtime;
+  const pipeline = new Pipeline<WriteContext<R>>(`${def.kind}-${operationName}`, [
+    validateInputStep(def.schema, runtime.displayName),
+    {
+      name: "load-existing",
+      traits: ["existence-check"],
+      async execute(ctx) {
+        const ref: ResourceRef = {
+          id: ctx.input.metadata?.id || undefined,
+          naturalKey: def.naturalKey?.get(ctx.input) || undefined,
+        };
+        requireRef(runtime, ref);
+        const existing = await loadByRef(runtime, ref);
+        if (!existing) {
+          throw notFound(runtime.displayName, refDescription(runtime, ref));
+        }
+        ctx.existing = existing;
+      },
+    },
+    authorizeStep(runtime, operationName, (ctx) => ctx.existing),
+    {
+      name: "check-duplicate",
+      async execute(ctx) {
+        // Unlike the parents (immutable slugs), products here allow
+        // natural-key edits (e.g. correcting a mistyped case number —
+        // FR-CASE-004), so uniqueness re-validates when it changes.
+        if (!def.naturalKey) return;
+        const next = def.naturalKey.get(ctx.input);
+        const current = def.naturalKey.get(ctx.existing as R);
+        if (!next || next === current) return;
+        const clash = await def.store.getByNaturalKey(def.kind, next);
+        if (clash && clash.metadata?.id !== ctx.existing?.metadata?.id) {
+          throw alreadyExists(runtime.displayName, def.naturalKey.label, next);
+        }
+      },
+    },
+    {
+      name: "build-new-state",
+      execute(ctx) {
+        ctx.newState = buildUpdateState(
+          def.schema,
+          runtime.identity,
+          ctx.input,
+          ctx.existing as R,
+          ctx.caller as CallerPrincipal,
+          new Date(),
+        );
+      },
+    },
+    ...(options.beforePersist ?? []),
+    {
+      name: "persist",
+      async execute(ctx) {
+        await persist(runtime, ctx.newState as R);
+      },
+    },
+    {
+      name: "publish",
+      async execute(ctx) {
+        await publishSafely(
+          runtime,
+          "updated",
+          ctx.newState as R,
+          ctx.existing,
+          ctx.caller as CallerPrincipal,
+        );
+      },
+    },
+  ]);
+
+  return async (input, caller) => {
+    const ctx: WriteContext<R> = { caller, input };
+    await pipeline.execute(ctx);
+    const updated = ctx.newState as R;
+    await deriveAll(runtime, [updated]);
+    return updated;
+  };
+}
+
 export function updateOperation<R extends ResourceMessage>(
   options: UpdateOperationOptions<R> = {},
 ): OperationBinding<R> {
   return {
     flavor: "update",
-    bind(runtime, method, operationName) {
-      const { def } = runtime;
-      const pipeline = new Pipeline<WriteContext<R>>(`${def.kind}-${operationName}`, [
-        validateInputStep(method.input, runtime.displayName),
-        {
-          name: "load-existing",
-          traits: ["existence-check"],
-          async execute(ctx) {
-            const ref: ResourceRef = {
-              id: ctx.input.metadata?.id || undefined,
-              naturalKey: def.naturalKey?.get(ctx.input) || undefined,
-            };
-            requireRef(runtime, ref);
-            const existing = await loadByRef(runtime, ref);
-            if (!existing) {
-              throw notFound(runtime.displayName, refDescription(runtime, ref));
-            }
-            ctx.existing = existing;
-          },
-        },
-        authorizeStep(runtime, operationName, (ctx) => ctx.existing),
-        {
-          name: "check-duplicate",
-          async execute(ctx) {
-            // Unlike the parents (immutable slugs), products here allow
-            // natural-key edits (e.g. correcting a mistyped case number —
-            // FR-CASE-004), so uniqueness re-validates when it changes.
-            if (!def.naturalKey) return;
-            const next = def.naturalKey.get(ctx.input);
-            const current = def.naturalKey.get(ctx.existing as R);
-            if (!next || next === current) return;
-            const clash = await def.store.getByNaturalKey(def.kind, next);
-            if (clash && clash.metadata?.id !== ctx.existing?.metadata?.id) {
-              throw alreadyExists(runtime.displayName, def.naturalKey.label, next);
-            }
-          },
-        },
-        {
-          name: "build-new-state",
-          execute(ctx) {
-            ctx.newState = buildUpdateState(
-              def.schema,
-              runtime.identity,
-              ctx.input,
-              ctx.existing as R,
-              ctx.caller as CallerPrincipal,
-              new Date(),
-            );
-          },
-        },
-        ...(options.beforePersist ?? []),
-        {
-          name: "persist",
-          async execute(ctx) {
-            await persist(runtime, ctx.newState as R);
-          },
-        },
-        {
-          name: "publish",
-          async execute(ctx) {
-            await publishSafely(
-              runtime,
-              "updated",
-              ctx.newState as R,
-              ctx.existing,
-              ctx.caller as CallerPrincipal,
-            );
-          },
-        },
-      ]);
-
-      return async (req, hctx) => {
-        const ctx: WriteContext<R> = { caller: def.caller(hctx), input: req as R };
-        await pipeline.execute(ctx);
-        return derive(runtime, ctx.newState as R);
-      };
+    buildExecutor(runtime, operationName) {
+      return buildUpdateExecutor(runtime, operationName, options);
     },
   };
 }
@@ -475,7 +529,9 @@ export function getOperation<R extends ResourceMessage, I>(
       return async (req, hctx) => {
         const ctx: ReadContext<R, I> = { caller: def.caller(hctx), input: req as I };
         await pipeline.execute(ctx);
-        return derive(runtime, ctx.target as R);
+        const target = ctx.target as R;
+        await deriveAll(runtime, [target]);
+        return target;
       };
     },
   };
@@ -485,12 +541,20 @@ export function getOperation<R extends ResourceMessage, I>(
 
 export interface ListOperationOptions<R extends ResourceMessage, I, O> {
   /**
-   * Fixed ordering for this resource (part of its list contract, e.g.
-   * cases by next_hearing_date ascending, dateless last).
+   * Fixed ordering for this resource — part of its list contract (e.g.
+   * cases by next_hearing_date ascending, dateless last), and mandatory:
+   * an unordered list paginates nondeterministically (T03 recipe rule).
    */
-  readonly orderBy?: ListQuery["orderBy"];
-  /** Maps the request to paging and equality filters. */
-  readonly query: (request: I) => {
+  readonly orderBy: NonNullable<ListQuery["orderBy"]>;
+  /**
+   * Maps the request to paging and equality filters. The caller is the
+   * authorized principal (T03 D2) — the seam for caller-scoped defaults
+   * like "My Tasks" or a recipient's own notifications.
+   */
+  readonly query: (
+    request: I,
+    caller: CallerPrincipal,
+  ) => {
     readonly pageSize?: number;
     readonly pageOffset?: number;
     readonly filter?: Readonly<Record<string, string>>;
@@ -517,7 +581,8 @@ export function listOperation<R extends ResourceMessage, I, O>(
         const ctx: ReadContext<R, I> = { caller: def.caller(hctx), input: req as I };
         await pipeline.execute(ctx);
 
-        const q = options.query(ctx.input);
+        // authorize guaranteed a caller above.
+        const q = options.query(ctx.input, ctx.caller as CallerPrincipal);
         const limit = Math.min(q.pageSize && q.pageSize > 0 ? q.pageSize : DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
         const offset = q.pageOffset && q.pageOffset > 0 ? q.pageOffset : 0;
         const { items, totalCount } = await def.store.list(def.kind, {
@@ -526,11 +591,10 @@ export function listOperation<R extends ResourceMessage, I, O>(
           orderBy: options.orderBy,
           filter: q.filter,
         });
-        const derived: R[] = [];
-        for (const item of items) {
-          derived.push(await derive(runtime, item as R));
-        }
-        return options.respond(derived, totalCount);
+        // One derivation for the whole page (T03 D4) — a counting
+        // derivation costs one query here, not one per row.
+        await deriveAll(runtime, items as R[]);
+        return options.respond(items as R[], totalCount);
       };
     },
   };
@@ -610,19 +674,42 @@ type ServiceMethodNames<S extends DescService> = S extends { method: infer M }
   ? Extract<keyof M, string>
   : string;
 
-export interface DefinedResource<S extends DescService> {
+/**
+ * The in-process invocation surface (T03 D1). Present for every declared
+ * create/update — whether bound to a service method or declared
+ * system-only — and typed to demand a caller: in-process code always
+ * knows who it is acting as (an event handler passes SYSTEM_PRINCIPAL).
+ */
+export interface ResourceInvoker<R extends ResourceMessage> {
+  readonly create?: (input: R, caller: CallerPrincipal) => Promise<R>;
+  readonly update?: (input: R, caller: CallerPrincipal) => Promise<R>;
+}
+
+export interface DefinedResource<R extends ResourceMessage, S extends DescService> {
   readonly service: S;
   readonly impl: Partial<ServiceImpl<S>>;
   /** Registers the service on a ConnectRouter. */
   routes(router: ConnectRouter): void;
+  /** Same pipelines, no transport (T03 D1). */
+  readonly invoke: ResourceInvoker<R>;
 }
 
 export function defineResource<R extends ResourceMessage, S extends DescService>(opts: {
   definition: ResourceDefinition<R>;
   service: S;
   operations: { readonly [K in ServiceMethodNames<S>]?: OperationBinding<R> };
-}): DefinedResource<S> {
-  const { definition, service, operations } = opts;
+  /**
+   * Operations that exist ONLY in-process — no service method, absent
+   * from the wire by construction, reachable through `invoke` alone. The
+   * system-written-resource seam: DD-001's "create: system" cell is
+   * `systemOperations: { create: {} }` plus a system-only policy branch.
+   */
+  systemOperations?: {
+    readonly create?: CreateOperationOptions<R>;
+    readonly update?: UpdateOperationOptions<R>;
+  };
+}): DefinedResource<R, S> {
+  const { definition, service, operations, systemOperations } = opts;
   const runtime: Runtime<R> = {
     def: definition,
     displayName: definition.displayName ?? definition.kind,
@@ -636,6 +723,7 @@ export function defineResource<R extends ResourceMessage, S extends DescService>
 
   const methodsByLocalName = new Map(service.methods.map((m) => [m.localName, m]));
   const impl: Record<string, UnaryHandler> = {};
+  const invoke: { create?: WriteExecutor<R>; update?: WriteExecutor<R> } = {};
 
   for (const [name, binding] of Object.entries(operations) as [string, OperationBinding<R>][]) {
     if (!binding) continue;
@@ -651,19 +739,44 @@ export function defineResource<R extends ResourceMessage, S extends DescService>
         `${definition.kind}: operation '${name}' is ${method.methodKind}; only unary is supported`,
       );
     }
-    // Runtime half of the typing stance: create/update must speak the
-    // resource message itself (the resource-API convention).
-    if (
-      (binding.flavor === "create" || binding.flavor === "update") &&
-      (method.input.typeName !== definition.schema.typeName ||
-        method.output.typeName !== definition.schema.typeName)
-    ) {
+    if (binding.flavor === "create" || binding.flavor === "update") {
+      // Runtime half of the typing stance: create/update must speak the
+      // resource message itself (the resource-API convention) — which is
+      // also what lets their pipelines validate against the definition's
+      // schema and run without a transport.
+      if (
+        method.input.typeName !== definition.schema.typeName ||
+        method.output.typeName !== definition.schema.typeName
+      ) {
+        throw new Error(
+          `${definition.kind}: '${name}' must take and return ${definition.schema.typeName} ` +
+            `(got ${method.input.typeName} -> ${method.output.typeName})`,
+        );
+      }
+      const executor = (binding.buildExecutor as NonNullable<typeof binding.buildExecutor>)(
+        runtime,
+        name,
+      );
+      invoke[binding.flavor] = executor;
+      impl[name] = async (req, hctx) => executor(req as R, definition.caller(hctx));
+    } else {
+      impl[name] = (binding.bind as NonNullable<typeof binding.bind>)(runtime, method, name);
+    }
+  }
+
+  for (const flavor of ["create", "update"] as const) {
+    const options = systemOperations?.[flavor];
+    if (!options) continue;
+    if (invoke[flavor]) {
       throw new Error(
-        `${definition.kind}: '${name}' must take and return ${definition.schema.typeName} ` +
-          `(got ${method.input.typeName} -> ${method.output.typeName})`,
+        `${definition.kind}: '${flavor}' is declared both as a service operation and a ` +
+          `system operation — declare it once (the service binding already populates invoke)`,
       );
     }
-    impl[name] = binding.bind(runtime, method, name);
+    invoke[flavor] =
+      flavor === "create"
+        ? buildCreateExecutor(runtime, flavor, options)
+        : buildUpdateExecutor(runtime, flavor, options);
   }
 
   return {
@@ -674,6 +787,7 @@ export function defineResource<R extends ResourceMessage, S extends DescService>
       // connect-es answers every unbound method with UNIMPLEMENTED.
       router.service(service, impl as Partial<ServiceImpl<S>>);
     },
+    invoke,
   };
 }
 

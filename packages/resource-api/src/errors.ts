@@ -33,6 +33,16 @@ export function alreadyExists(
   );
 }
 
+/**
+ * The request was well-formed but system state does not support it — the
+ * canonical answer for a missing *referenced* resource (the Go edition's
+ * ValidateReferencesStep precedent; NOT_FOUND is reserved for the target
+ * of the operation itself).
+ */
+export function failedPrecondition(message: string): ConnectError {
+  return new ConnectError(message, Code.FailedPrecondition);
+}
+
 export function unauthenticated(message = "Authentication required"): ConnectError {
   return new ConnectError(message, Code.Unauthenticated);
 }

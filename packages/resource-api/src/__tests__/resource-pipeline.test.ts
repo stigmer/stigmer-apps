@@ -139,6 +139,7 @@ describe("create", () => {
         return real.getByNaturalKey(kind, value);
       },
       list: (kind, q) => real.list(kind, q),
+      countBy: (kind, field, values) => real.countBy(kind, field, values),
     };
     const { client } = makeClient({ store: racy });
     await client.create(widgetInput({ serialNumber: "SN-RACE" }), asCaller("u1"));

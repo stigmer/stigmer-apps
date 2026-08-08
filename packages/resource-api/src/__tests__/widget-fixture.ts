@@ -52,7 +52,15 @@ export function widgetMemoryStore(): MemoryResourceStore {
     Widget: {
       schema: WidgetSchema,
       naturalKeyField: "serialNumber",
-      queryableFields: ["inspectionDate", "ownerId"],
+      // One registry, three roots (T03 D5): spec fields, a stored-status
+      // boolean, and the metadata creation instant — mirroring the
+      // generated columns the Postgres contract run registers.
+      fields: {
+        inspectionDate: "spec.inspectionDate",
+        ownerId: "spec.ownerId",
+        retired: "status.retired",
+        createdAt: "metadata.createdAt",
+      },
     },
   });
 }
@@ -78,11 +86,15 @@ export function widgetResource(options: {
       caller: callerFromTestHeaders,
       // Derived-on-read status (mirrors Case.document_count): recomputed on
       // every read, never stored; stored fields (retired) are preserved.
-      deriveStatus: (w: Widget) => {
-        w.status = create(WidgetStatusSchema, {
-          retired: w.status?.retired ?? false,
-          nameLength: w.spec?.name.length ?? 0,
-        });
+      // Page-shaped (T03 D4): called once per response with the whole
+      // page, so a counting derivation costs one query, not one per row.
+      deriveStatus: (widgets: readonly Widget[]) => {
+        for (const w of widgets) {
+          w.status = create(WidgetStatusSchema, {
+            retired: w.status?.retired ?? false,
+            nameLength: w.spec?.name.length ?? 0,
+          });
+        }
       },
     },
     service: WidgetService,

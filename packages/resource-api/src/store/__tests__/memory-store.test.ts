@@ -7,7 +7,14 @@ runStoreContractTests("MemoryResourceStore", async () => ({
     Widget: {
       schema: WidgetSchema,
       naturalKeyField: "serialNumber",
-      queryableFields: ["inspectionDate", "ownerId"],
+      // Must mirror the generated columns the Postgres contract run
+      // registers — same logical names, same JSON roots (T03 D5).
+      fields: {
+        inspectionDate: "spec.inspectionDate",
+        ownerId: "spec.ownerId",
+        retired: "status.retired",
+        createdAt: "metadata.createdAt",
+      },
     },
   }),
 }));

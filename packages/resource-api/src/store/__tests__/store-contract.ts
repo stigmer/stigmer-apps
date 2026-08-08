@@ -26,6 +26,7 @@ export function makeWidget(overrides: {
   ownerId?: string;
   retired?: boolean;
   version?: bigint;
+  createdAt?: string;
 }): Widget {
   return create(WidgetSchema, {
     apiVersion: "testing.stigmer.ai/v1",
@@ -33,9 +34,9 @@ export function makeWidget(overrides: {
     metadata: create(ResourceMetadataSchema, {
       id: overrides.id,
       version: overrides.version ?? 1n,
-      createdAt: timestampFromDate(new Date("2026-08-08T05:00:00Z")),
+      createdAt: timestampFromDate(new Date(overrides.createdAt ?? "2026-08-08T05:00:00Z")),
       createdBy: create(ActorSchema, { id: "tester" }),
-      updatedAt: timestampFromDate(new Date("2026-08-08T05:00:00Z")),
+      updatedAt: timestampFromDate(new Date(overrides.createdAt ?? "2026-08-08T05:00:00Z")),
       updatedBy: create(ActorSchema, { id: "tester" }),
     }),
     spec: {
@@ -203,6 +204,80 @@ export function runStoreContractTests(
         const result = await store.list("Widget", { limit: 10, offset: 100 });
         expect(result.items).toEqual([]);
         expect(result.totalCount).toBe(1);
+      });
+    });
+
+    it("filters on a status-backed boolean by its proto3-JSON text (T03 D5)", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_live", serialNumber: "SN-L" }));
+        await store.save("Widget", makeWidget({ id: "wdg_dead", serialNumber: "SN-D", retired: true }));
+
+        const retired = await store.list("Widget", {
+          limit: 10,
+          offset: 0,
+          orderBy: { field: "createdAt", direction: "asc", nulls: "last" },
+          filter: { retired: "true" },
+        });
+        expect(retired.items.map((w) => w.metadata?.id)).toEqual(["wdg_dead"]);
+        expect(retired.totalCount).toBe(1);
+      });
+    });
+
+    it("orders by metadata creation time — RFC3339 text sorts chronologically (T03 D5)", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_mid", serialNumber: "M", createdAt: "2026-08-08T09:00:00Z" }));
+        await store.save("Widget", makeWidget({ id: "wdg_new", serialNumber: "Z", createdAt: "2026-08-08T11:00:00Z" }));
+        await store.save("Widget", makeWidget({ id: "wdg_old", serialNumber: "A", createdAt: "2026-08-08T07:00:00Z" }));
+
+        const newestFirst = await store.list("Widget", {
+          limit: 10,
+          offset: 0,
+          orderBy: { field: "createdAt", direction: "desc", nulls: "last" },
+        });
+        expect(newestFirst.items.map((w) => w.metadata?.id)).toEqual([
+          "wdg_new",
+          "wdg_mid",
+          "wdg_old",
+        ]);
+      });
+    });
+
+    it("counts grouped by a registered field in one call (T03 D4 — the anti-N+1 seam)", async () => {
+      await withStore(async (store) => {
+        for (const [id, owner] of [
+          ["wdg_1", "owner-a"],
+          ["wdg_2", "owner-a"],
+          ["wdg_3", "owner-b"],
+          ["wdg_4", "owner-c"],
+        ] as const) {
+          await store.save("Widget", makeWidget({ id, serialNumber: `SN-${id}`, ownerId: owner }));
+        }
+
+        const counts = await store.countBy("Widget", "ownerId", [
+          "owner-a",
+          "owner-b",
+          "owner-none",
+        ]);
+        expect(counts.get("owner-a")).toBe(2);
+        expect(counts.get("owner-b")).toBe(1);
+        // Absent from the result means zero — and unrequested values
+        // ("owner-c") are not reported.
+        expect(counts.has("owner-none")).toBe(false);
+        expect(counts.has("owner-c")).toBe(false);
+      });
+    });
+
+    it("countBy with no values returns an empty map without touching the store", async () => {
+      await withStore(async (store) => {
+        expect((await store.countBy("Widget", "ownerId", [])).size).toBe(0);
+      });
+    });
+
+    it("rejects countBy on unregistered fields loudly", async () => {
+      await withStore(async (store) => {
+        await expect(store.countBy("Widget", "noSuchField", ["x"])).rejects.toThrowError(
+          /noSuchField/,
+        );
       });
     });
 
