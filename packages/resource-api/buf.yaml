@@ -1,0 +1,22 @@
+# Two modules: `proto` ships with the package (the envelope contract
+# consumers import); `testproto` is the fixture module for the commons' own
+# tests and never ships.
+version: v2
+modules:
+  - path: proto
+  - path: testproto
+deps:
+  - buf.build/bufbuild/protovalidate
+lint:
+  use:
+    - STANDARD
+  except:
+    # The resource-API convention (shared with buf.build/stigmer/stigmer):
+    # create/update take the resource message and return it — request
+    # wrappers around a resource that IS the request add nothing.
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+    - RPC_REQUEST_RESPONSE_UNIQUE
+breaking:
+  use:
+    - FILE

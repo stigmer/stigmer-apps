@@ -1,0 +1,94 @@
+// Test fixture ONLY — never shipped (excluded from the build tree). The
+// commons' entire test suite runs against this resource so that the
+// package is provably business-agnostic: if a test needs a real product's
+// resource, the commons has failed its own design contract.
+//
+// The fixture deliberately exercises every seam a real resource will pull
+// on: buf.validate rules, a natural key, an optional calendar-date field
+// (ordering with NULLS LAST), an equality filter, a stored status field, a
+// derived-on-read status field, a custom operation (Retire), and a
+// declared-but-unbound operation (Archive) proving absence answers
+// UNIMPLEMENTED.
+syntax = "proto3";
+
+package stigmer.resourceapi.testing.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message Widget {
+  string api_version = 1;
+  string kind = 2;
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  WidgetSpec spec = 4 [(buf.validate.field).required = true];
+  WidgetStatus status = 5;
+}
+
+message WidgetSpec {
+  // Natural key: unique, user-provided.
+  string serial_number = 1 [(buf.validate.field).string.min_len = 1];
+
+  string name = 2 [(buf.validate.field).string = {
+    min_len: 1,
+    max_len: 100
+  }];
+
+  // Calendar date (not an instant): plain YYYY-MM-DD, matching how the
+  // consuming products model dates like court hearings. Optional — unset
+  // means "none scheduled".
+  optional string inspection_date = 3 [(buf.validate.field).string.pattern = "^\\d{4}-\\d{2}-\\d{2}$"];
+
+  // Reference-shaped field used by filter tests ("my widgets").
+  string owner_id = 4;
+}
+
+message WidgetStatus {
+  // Stored status, mutated only by the Retire custom operation — mirrors
+  // Task.status in consuming products.
+  bool retired = 1;
+
+  // Derived on read, never stored — mirrors Case.document_count.
+  int32 name_length = 2;
+}
+
+message GetWidgetRequest {
+  // Exactly one of internal id or natural key.
+  string id = 1;
+  string serial_number = 2;
+}
+
+message ListWidgetsRequest {
+  int32 page_size = 1 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 100
+  }];
+  int32 page_offset = 2 [(buf.validate.field).int32.gte = 0];
+  // Optional equality filter.
+  string owner_id = 3;
+}
+
+message ListWidgetsResponse {
+  repeated Widget items = 1;
+  int64 total_count = 2;
+}
+
+message RetireWidgetRequest {
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message ArchiveWidgetRequest {
+  string id = 1;
+}
+
+service WidgetService {
+  rpc Create(Widget) returns (Widget);
+  rpc Update(Widget) returns (Widget);
+  rpc Get(GetWidgetRequest) returns (Widget);
+  rpc List(ListWidgetsRequest) returns (ListWidgetsResponse);
+  // Custom operation beyond CRUD — proves the seam Task.updateStatus,
+  // Document.download, and Notification.markRead will use.
+  rpc Retire(RetireWidgetRequest) returns (Widget);
+  // Declared in the contract but never bound in the resource definition:
+  // tests assert this answers UNIMPLEMENTED by construction.
+  rpc Archive(ArchiveWidgetRequest) returns (Widget);
+}

@@ -1,0 +1,17 @@
+# protoc-gen-es v2 only: it also emits Connect service descriptors, which
+# @connectrpc/connect v2 consumes directly. import_extension=js keeps
+# generated relative imports Node-resolvable (DD-018).
+# include_imports materializes buf.validate and well-known types so the
+# package has no generated-code dependency outside itself.
+version: v2
+clean: true
+plugins:
+  - remote: buf.build/bufbuild/es
+    out: src/gen
+    opt:
+      - target=ts
+      - import_extension=js
+    include_imports: true
+inputs:
+  - directory: proto
+  - directory: testproto

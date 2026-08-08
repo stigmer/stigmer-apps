@@ -19,6 +19,13 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - name: Codegen drift check
+        # Generated code is committed for reviewability; regenerating must
+        # be a no-op or someone edited generated files (or forgot to run
+        # codegen after a proto change).
+        run: |
+          npm run codegen
+          git diff --exit-code -- 'packages/*/src/gen'
       - run: npm run typecheck
       - run: npm test
       - run: npm run build

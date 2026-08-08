@@ -29,7 +29,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "codegen": "npx @bufbuild/buf generate"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.1.0",
@@ -39,6 +40,10 @@
     "vitest": "^3.2.7"
   },
   "dependencies": {
-    "pg": "^8.22.0"
+    "@bufbuild/protobuf": "^2.13.0",
+    "@bufbuild/protovalidate": "^1.2.0",
+    "@connectrpc/connect": "^2.1.2",
+    "pg": "^8.22.0",
+    "ulidx": "^2.4.1"
   }
 }

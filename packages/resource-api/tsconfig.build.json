@@ -9,6 +9,14 @@
   },
   "include": ["src/**/*.ts"],
   // Tests never ship in the published artifact; the build tree is the
-  // package's public surface and nothing else.
-  "exclude": ["src/**/*.test.ts", "src/**/__tests__/**"]
+  // package's public surface and nothing else. The testing/* generated code
+  // (Widget fixture) and the buf.validate/WKT types only it imports are
+  // test-suite dependencies, not exports.
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/__tests__/**",
+    "src/gen/stigmer/resourceapi/testing/**",
+    "src/gen/buf/**",
+    "src/gen/google/**"
+  ]
 }
