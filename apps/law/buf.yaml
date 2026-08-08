@@ -2,16 +2,15 @@
 # backend feature starts here; TypeScript types are generated, never
 # hand-written (stigmer DD-007: generated types are the source of truth).
 #
-# proto-vendor/ is a byte-for-byte copy of @stigmer/resource-api's envelope
-# protos (buf cannot resolve imports from node_modules); CI diffs it
-# against the installed package so it can never drift silently. Replace
-# with a BSR dependency once the commons publishes its module.
+# The @stigmer/resource-api envelope protos are consumed as a BSR
+# dependency (buf.build/stigmer/resourceapi) — one definition in
+# ts-commons, every consumer imports it; nothing is vendored.
 version: v2
 modules:
   - path: proto
-  - path: proto-vendor
 deps:
   - buf.build/bufbuild/protovalidate
+  - buf.build/stigmer/resourceapi
 lint:
   use:
     - STANDARD

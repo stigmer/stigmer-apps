@@ -24,8 +24,7 @@ pipeline; none bypasses it.
 
 | Path | Contents |
 |---|---|
-| `proto/` | Proto contracts (source of truth; TypeScript types are generated). Package convention: `stigmer.lawfirm.<resource>.v1` |
-| `proto-vendor/` | Byte-for-byte copy of the `@stigmer/resource-api` envelope protos (CI-checked against the installed package) |
+| `proto/` | Proto contracts (source of truth; TypeScript types are generated). Package convention: `stigmer.lawfirm.<resource>.v1`. The `@stigmer/resource-api` envelope is a BSR dependency ([`buf.build/stigmer/resourceapi`](https://buf.build/stigmer/resourceapi), pinned in `buf.lock`) — one definition in ts-commons, no vendored copies |
 | `backend/` | Connect-RPC backend: resource definitions on the commons pipeline, per-resource Postgres migrations, acceptance tests |
 
 ## Development
