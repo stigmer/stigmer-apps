@@ -32,14 +32,15 @@ async function main(): Promise<void> {
     console.log(`migrations applied: ${migrated.applied.join(", ")}`);
   }
 
-  // Event consumers (T03: notification handlers) subscribe here — on the
-  // dispatcher, never inside resource handlers.
-  const publisher = new InProcessEventDispatcher();
+  // The event bus: pipelines publish on it, notification handlers
+  // subscribe on it (inside createBackendServer) — never inside resource
+  // handlers.
+  const dispatcher = new InProcessEventDispatcher();
 
   const server = createBackendServer({
     store: createResourceStore(pool),
     credentials: createPgCredentialStore(pool),
-    publisher,
+    dispatcher,
   });
   server.listen(config.port, () => {
     console.log(`backend listening on :${config.port}`);

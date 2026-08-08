@@ -16,6 +16,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import pg from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { CaseSchema, CaseService } from "../gen/stigmer/law/case/v1/case_pb.js";
+import { UserSchema, UserService } from "../gen/stigmer/law/user/v1/user_pb.js";
 import { createPgCredentialStore } from "../domain/user/credentials.js";
 import { createBackendServer } from "../server.js";
 import { createResourceStore } from "../storage.js";
@@ -25,6 +26,14 @@ const MIGRATIONS_DIR = new URL("../../migrations", import.meta.url).pathname;
 const asLawyer = (id = "lawyer-one") => ({
   headers: { "x-dev-caller-id": id },
 });
+const asOperator = () => ({
+  headers: { "x-dev-caller-id": "ops-one", "x-dev-caller-kind": "operator" },
+});
+
+// Real user ids for assigned_lawyer_id: since the T03 reference check,
+// a case must point at an existing User. Populated in beforeAll.
+let lawyer1 = "";
+let lawyer2 = "";
 
 function caseInput(overrides: Partial<{
   caseNumber: string;
@@ -38,7 +47,7 @@ function caseInput(overrides: Partial<{
       caseNumber: overrides.caseNumber ?? "CRL-142/2026",
       clientName: overrides.clientName ?? "Ramesh Traders",
       caseType: overrides.caseType ?? "criminal",
-      assignedLawyerId: overrides.assignedLawyerId ?? "user_lawyer1",
+      assignedLawyerId: overrides.assignedLawyerId ?? lawyer1,
       nextHearingDate: overrides.nextHearingDate,
     },
   });
@@ -72,10 +81,27 @@ describe("Case resource", () => {
     });
     await new Promise<void>((resolve) => server.listen(0, resolve));
     const { port } = server.address() as AddressInfo;
-    client = createClient(
-      CaseService,
-      createConnectTransport({ baseUrl: `http://localhost:${port}`, httpVersion: "1.1" }),
-    );
+    const transport = createConnectTransport({
+      baseUrl: `http://localhost:${port}`,
+      httpVersion: "1.1",
+    });
+    client = createClient(CaseService, transport);
+
+    // The lawyers every case fixture assigns — real users, through the
+    // real operator provisioning path (the reference check demands them).
+    const users = createClient(UserService, transport);
+    lawyer1 = (
+      await users.create(
+        create(UserSchema, { spec: { email: "lawyer-one@example.com" } }),
+        asOperator(),
+      )
+    ).metadata?.id as string;
+    lawyer2 = (
+      await users.create(
+        create(UserSchema, { spec: { email: "lawyer-two@example.com" } }),
+        asOperator(),
+      )
+    ).metadata?.id as string;
   }, 120_000);
 
   afterEach(async () => {
@@ -152,6 +178,16 @@ describe("Case resource", () => {
     it("requires authentication", async () => {
       await expectCode(client.create(caseInput()), Code.Unauthenticated);
     });
+
+    it("rejects an assigned lawyer that does not exist (T03 reference check)", async () => {
+      await expectCode(
+        client.create(caseInput({ assignedLawyerId: "user_ghost" }), asLawyer()),
+        Code.FailedPrecondition,
+        /assigned lawyer 'user_ghost' not found/,
+      );
+      const rows = await pool.query("SELECT count(*)::int AS n FROM cases");
+      expect(rows.rows[0].n).toBe(0);
+    });
   });
 
   describe("update (FR-CASE-004)", () => {
@@ -163,7 +199,7 @@ describe("Case resource", () => {
           caseNumber: "CRL-142/2026",
           clientName: "Ramesh Traders Pvt Ltd",
           caseType: "criminal",
-          assignedLawyerId: "user_lawyer2",
+          assignedLawyerId: lawyer2,
           nextHearingDate: "2026-10-05",
         },
       });
@@ -184,7 +220,7 @@ describe("Case resource", () => {
       // Renumber B onto a free number: allowed.
       const renumber = create(CaseSchema, {
         metadata: { id: b.metadata?.id ?? "" },
-        spec: { caseNumber: "CRL-3/2026", clientName: "x", caseType: "civil", assignedLawyerId: "u1" },
+        spec: { caseNumber: "CRL-3/2026", clientName: "x", caseType: "civil", assignedLawyerId: lawyer1 },
       });
       const renumbered = await client.update(renumber, asLawyer());
       expect(renumbered.spec?.caseNumber).toBe("CRL-3/2026");
@@ -192,7 +228,7 @@ describe("Case resource", () => {
       // Renumber B onto A's number: ALREADY_EXISTS.
       const collide = create(CaseSchema, {
         metadata: { id: b.metadata?.id ?? "" },
-        spec: { caseNumber: "CRL-1/2026", clientName: "x", caseType: "civil", assignedLawyerId: "u1" },
+        spec: { caseNumber: "CRL-1/2026", clientName: "x", caseType: "civil", assignedLawyerId: lawyer1 },
       });
       await expectCode(client.update(collide, asLawyer()), Code.AlreadyExists, /CRL-1\/2026/);
     });
@@ -200,9 +236,27 @@ describe("Case resource", () => {
     it("answers NOT_FOUND for an unknown id", async () => {
       const edit = create(CaseSchema, {
         metadata: { id: "case_00000000000000000000000000" },
-        spec: { caseNumber: "X-1", clientName: "x", caseType: "civil", assignedLawyerId: "u1" },
+        spec: { caseNumber: "X-1", clientName: "x", caseType: "civil", assignedLawyerId: lawyer1 },
       });
       await expectCode(client.update(edit, asLawyer()), Code.NotFound, /case_0{26}/);
+    });
+
+    it("rejects reassignment to a lawyer that does not exist (T03 reference check)", async () => {
+      const created = await client.create(caseInput(), asLawyer());
+      const edit = create(CaseSchema, {
+        metadata: { id: created.metadata?.id ?? "" },
+        spec: {
+          caseNumber: "CRL-142/2026",
+          clientName: "Ramesh Traders",
+          caseType: "criminal",
+          assignedLawyerId: "user_ghost",
+        },
+      });
+      await expectCode(
+        client.update(edit, asLawyer()),
+        Code.FailedPrecondition,
+        /assigned lawyer 'user_ghost' not found/,
+      );
     });
   });
 
