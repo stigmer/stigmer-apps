@@ -11,8 +11,10 @@ import type pg from "pg";
 import type { ResourceStore } from "@stigmer/resource-api";
 import { PostgresResourceStore } from "@stigmer/resource-api/postgres";
 import { CaseSchema } from "./gen/stigmer/law/case/v1/case_pb.js";
+import { CaseNoteSchema } from "./gen/stigmer/law/casenote/v1/casenote_pb.js";
 import { NotificationSchema } from "./gen/stigmer/law/notification/v1/notification_pb.js";
 import { TaskSchema } from "./gen/stigmer/law/task/v1/task_pb.js";
+import { TaskCommentSchema } from "./gen/stigmer/law/taskcomment/v1/taskcomment_pb.js";
 import { UserSchema } from "./gen/stigmer/law/user/v1/user_pb.js";
 
 export function createResourceStore(pool: pg.Pool): ResourceStore {
@@ -49,6 +51,22 @@ export function createResourceStore(pool: pg.Pool): ResourceStore {
       columns: {
         recipientId: "recipient_id",
         read: "read",
+        createdAt: "created_at",
+      },
+    },
+    CaseNote: {
+      schema: CaseNoteSchema,
+      table: "case_notes",
+      columns: {
+        caseId: "case_id",
+        createdAt: "created_at",
+      },
+    },
+    TaskComment: {
+      schema: TaskCommentSchema,
+      table: "task_comments",
+      columns: {
+        taskId: "task_id",
         createdAt: "created_at",
       },
     },

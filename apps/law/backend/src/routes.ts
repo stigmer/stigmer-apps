@@ -1,8 +1,10 @@
 import type { ConnectRouter } from "@connectrpc/connect";
 import type { ResourceEventPublisher, ResourceStore } from "@stigmer/resource-api";
 import { caseResource } from "./domain/case/case-resource.js";
+import { caseNoteResource } from "./domain/casenote/casenote-resource.js";
 import { notificationResource } from "./domain/notification/notification-resource.js";
 import { taskResource } from "./domain/task/task-resource.js";
+import { taskCommentResource } from "./domain/taskcomment/taskcomment-resource.js";
 import type { CredentialStore } from "./domain/user/credentials.js";
 import { userResource } from "./domain/user/user-resource.js";
 import { firmPolicy } from "./domain/authz/policy.js";
@@ -28,6 +30,8 @@ export function createResources(deps: AppDeps) {
     users: userResource({ ...shared, credentials: deps.credentials }),
     tasks: taskResource(shared),
     notifications: notificationResource(shared),
+    caseNotes: caseNoteResource(shared),
+    taskComments: taskCommentResource(shared),
     // T03.4: documents.
   };
 }
