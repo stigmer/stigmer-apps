@@ -35,6 +35,7 @@ import {
 } from "../gen/stigmer/law/task/v1/task_pb.js";
 import { UserSchema, UserService } from "../gen/stigmer/law/user/v1/user_pb.js";
 import { createPgCredentialStore } from "../domain/user/credentials.js";
+import { memoryObjectStore } from "./memory-object-store.js";
 import { createBackendServer } from "../server.js";
 import { createResourceStore } from "../storage.js";
 
@@ -96,6 +97,7 @@ describe("Task and Notification resources", () => {
     server = createBackendServer({
       store: createResourceStore(pool),
       credentials: createPgCredentialStore(pool),
+      objectStore: memoryObjectStore(),
       dispatcher: new InProcessEventDispatcher(),
     });
     await new Promise<void>((resolve) => server.listen(0, resolve));

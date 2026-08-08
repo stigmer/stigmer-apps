@@ -18,6 +18,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { CaseSchema, CaseService } from "../gen/stigmer/law/case/v1/case_pb.js";
 import { UserSchema, UserService } from "../gen/stigmer/law/user/v1/user_pb.js";
 import { createPgCredentialStore } from "../domain/user/credentials.js";
+import { memoryObjectStore } from "./memory-object-store.js";
 import { createBackendServer } from "../server.js";
 import { createResourceStore } from "../storage.js";
 
@@ -78,6 +79,7 @@ describe("Case resource", () => {
     server = createBackendServer({
       store: createResourceStore(pool),
       credentials: createPgCredentialStore(pool),
+      objectStore: memoryObjectStore(),
     });
     await new Promise<void>((resolve) => server.listen(0, resolve));
     const { port } = server.address() as AddressInfo;

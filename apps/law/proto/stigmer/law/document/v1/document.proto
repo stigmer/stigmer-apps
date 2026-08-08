@@ -1,0 +1,89 @@
+// The Document resource — transcribed from the MVP scope contract's
+// record model (design-decisions/001-mvp-scope-contract.md).
+//
+// DELIBERATE WIRE SHAPE (T03 D6): this service declares Get and List
+// ONLY. Bytes never ride Connect unary — a 25 MB file inside a resource
+// message would land base64-encoded in the row. Upload and Download are
+// plain HTTP routes beside the Connect adapter (POST
+// /files/cases/{case_id}/documents, GET /files/documents/{id}/content),
+// authenticated by the same caller seam, authorized by the same policy
+// module, and running the same create pipeline through the in-process
+// invoker. ALL byte access is backend-mediated — clients never touch the
+// bucket (scope contract).
+syntax = "proto3";
+
+// Package convention: `stigmer.<domain>.<resource>.v1` pairs with
+// apiVersion `<domain>.stigmer.ai/v1`; the domain is "law" (DD-002
+// addendum) — never the customer segment, never the brand.
+package stigmer.law.document.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message Document {
+  string api_version = 1;
+  string kind = 2;
+  // System-managed; created_by/created_at are the uploader and time.
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  DocumentSpec spec = 4 [(buf.validate.field).required = true];
+}
+
+message DocumentSpec {
+  // The case this document belongs to — existence enforced by the
+  // pipeline's reference check (FAILED_PRECONDITION).
+  string case_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // Original filename, shown in lists and set as the download name.
+  string file_name = 2 [(buf.validate.field).string = {
+    min_len: 1,
+    max_len: 255
+  }];
+
+  // PDF, PNG, and JPG only (scope contract).
+  string mime_type = 3 [(buf.validate.field).string = {
+    in: ["application/pdf", "image/png", "image/jpeg"]
+  }];
+
+  // Object size; the upload route enforces the 25 MB cap while reading.
+  int64 size_bytes = 4 [(buf.validate.field).int64 = {
+    gt: 0,
+    lte: 26214400
+  }];
+
+  // Where the bytes live in the private bucket. Set by the upload route
+  // BEFORE the row is created (the object is uploaded first), so a
+  // persisted document always has its bytes — the only possible
+  // inconsistency is an invisible unreferenced object, never a download
+  // that 404s. Never exposed to clients as a bucket URL.
+  string object_key = 5 [(buf.validate.field).string.min_len = 1];
+}
+
+message GetDocumentRequest {
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message ListDocumentsRequest {
+  // Documents are always read in the context of a case.
+  string case_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // Defaults to 20 (the contract's page size), capped at 100.
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 100
+  }];
+  int32 page_offset = 3 [(buf.validate.field).int32.gte = 0];
+}
+
+message ListDocumentsResponse {
+  // Newest first.
+  repeated Document items = 1;
+  int64 total_count = 2;
+}
+
+service DocumentService {
+  // Get a document's metadata by internal id. Bytes are served by the
+  // download route, never by this RPC.
+  rpc Get(GetDocumentRequest) returns (Document);
+  // List a case's documents, newest first.
+  rpc List(ListDocumentsRequest) returns (ListDocumentsResponse);
+}

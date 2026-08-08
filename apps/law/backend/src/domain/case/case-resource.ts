@@ -58,12 +58,17 @@ export function caseResource(deps: {
       publisher: deps.publisher,
       caller: callerFromRequest,
       // document_count is derived on read, never stored (FR-CASE-005 AC8).
-      // Page-shaped (T03 D4) so the count is ONE grouped query per
-      // response, never one per row. Always 0 until Document lands
-      // (T03.4), when this becomes store.countBy("Document", "caseId", ids).
-      deriveStatus: (cases: readonly Case[]) => {
+      // Page-shaped (T03 D4): ONE grouped query per response — a 20-case
+      // page costs one countBy, never twenty counts.
+      deriveStatus: async (cases: readonly Case[]) => {
+        const ids = cases
+          .map((c) => c.metadata?.id)
+          .filter((id): id is string => !!id);
+        const counts = await deps.store.countBy("Document", "caseId", ids);
         for (const c of cases) {
-          c.status = create(CaseStatusSchema, { documentCount: 0 });
+          c.status = create(CaseStatusSchema, {
+            documentCount: counts.get(c.metadata?.id ?? "") ?? 0,
+          });
         }
       },
     },

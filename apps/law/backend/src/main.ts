@@ -5,6 +5,7 @@ import { runMigrations } from "@stigmer/resource-api/postgres";
 import pg from "pg";
 import { loadConfigFromEnv } from "./config.js";
 import { createPgCredentialStore } from "./domain/user/credentials.js";
+import { createS3ObjectStore } from "./objectstore/object-store.js";
 import { createBackendServer } from "./server.js";
 import { createResourceStore } from "./storage.js";
 
@@ -40,6 +41,7 @@ async function main(): Promise<void> {
   const server = createBackendServer({
     store: createResourceStore(pool),
     credentials: createPgCredentialStore(pool),
+    objectStore: createS3ObjectStore(config.objectStore),
     dispatcher,
   });
   server.listen(config.port, () => {

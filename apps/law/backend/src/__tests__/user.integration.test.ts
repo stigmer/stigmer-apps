@@ -18,6 +18,7 @@ import pg from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createPgCredentialStore, type CredentialStore } from "../domain/user/credentials.js";
 import { UserSchema, UserService } from "../gen/stigmer/law/user/v1/user_pb.js";
+import { memoryObjectStore } from "./memory-object-store.js";
 import { createBackendServer } from "../server.js";
 import { createResourceStore } from "../storage.js";
 
@@ -66,7 +67,11 @@ describe("User resource", () => {
     await runMigrations(pool, MIGRATIONS_DIR);
 
     credentials = createPgCredentialStore(pool);
-    server = createBackendServer({ store: createResourceStore(pool), credentials });
+    server = createBackendServer({
+      store: createResourceStore(pool),
+      credentials,
+      objectStore: memoryObjectStore(),
+    });
     await new Promise<void>((resolve) => server.listen(0, resolve));
     const { port } = server.address() as AddressInfo;
     client = createClient(
