@@ -29,7 +29,7 @@ import {
   type GetCaseRequest,
   type ListCasesRequest,
   ListCasesResponseSchema,
-} from "../../gen/stigmer/lawfirm/case/v1/case_pb.js";
+} from "../../gen/stigmer/law/case/v1/case_pb.js";
 
 export function caseResource(deps: {
   store: ResourceStore;
@@ -39,7 +39,7 @@ export function caseResource(deps: {
   return defineResource({
     definition: {
       kind: "Case",
-      apiVersion: "lawfirm.stigmer.ai/v1",
+      apiVersion: "law.stigmer.ai/v1",
       idPrefix: "case",
       schema: CaseSchema,
       naturalKey: {

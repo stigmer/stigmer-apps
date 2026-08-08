@@ -15,14 +15,14 @@ import { runMigrations } from "@stigmer/resource-api/postgres";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import pg from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { CaseSchema, CaseService } from "../gen/stigmer/lawfirm/case/v1/case_pb.js";
+import { CaseSchema, CaseService } from "../gen/stigmer/law/case/v1/case_pb.js";
 import { createBackendServer } from "../server.js";
 import { createResourceStore } from "../storage.js";
 
 const MIGRATIONS_DIR = new URL("../../migrations", import.meta.url).pathname;
 
 const asLawyer = (id = "lawyer-one") => ({
-  headers: { "x-lawfirm-user-id": id },
+  headers: { "x-dev-caller-id": id },
 });
 
 function caseInput(overrides: Partial<{
@@ -96,7 +96,7 @@ describe("Case resource", () => {
       expect(created.metadata?.id).toMatch(/^case_[0-9a-z]{26}$/);
       expect(created.metadata?.version).toBe(1n);
       expect(created.metadata?.createdBy?.id).toBe("lawyer-one");
-      expect(created.apiVersion).toBe("lawfirm.stigmer.ai/v1");
+      expect(created.apiVersion).toBe("law.stigmer.ai/v1");
       expect(created.kind).toBe("Case");
       expect(created.spec?.caseNumber).toBe("CRL-142/2026");
       // Derived on read, never stored; 0 until Document lands (T03).

@@ -7,10 +7,14 @@
 syntax = "proto3";
 
 // Package convention (established by @stigmer/resource-api and its fixture):
-// proto package `stigmer.<domain>...v1` pairs with apiVersion
-// `<domain>.stigmer.ai/v1`. The domain is "lawfirm" — never the product
-// brand, which must stay out of the wire contract.
-package stigmer.lawfirm.case.v1;
+// proto package `stigmer.<domain>.<resource>.v1` pairs with apiVersion
+// `<domain>.stigmer.ai/v1`. The domain is "law" — the practice area, never
+// the customer segment ("lawfirm" would bake a market segment into a
+// contract that outlives it: solo practitioners and in-house teams run the
+// same code) and never the product brand, which must stay out of the wire
+// contract (DD-002 D3). Future verticals follow the same one-word domain
+// root: stigmer.gym, stigmer.clinic.
+package stigmer.law.case.v1;
 
 import "buf/validate/validate.proto";
 import "stigmer/resourceapi/v1/resource.proto";
