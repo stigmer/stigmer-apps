@@ -1,0 +1,60 @@
+// The CaseNote resource — transcribed from the MVP scope contract's
+// record model (design-decisions/001-mvp-scope-contract.md). Append-only
+// by contract: create and list are the ENTIRE operation set (no update,
+// no delete — a note is a dated record, not a document). Author and
+// timestamp come from the envelope metadata, never from the spec.
+syntax = "proto3";
+
+// Package convention: `stigmer.<domain>.<resource>.v1` pairs with
+// apiVersion `<domain>.stigmer.ai/v1`; the domain is "law" (DD-002
+// addendum) — never the customer segment, never the brand.
+package stigmer.law.casenote.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message CaseNote {
+  string api_version = 1;
+  string kind = 2;
+  // System-managed; the pipeline overwrites whatever a client sends.
+  // created_by/created_at ARE the note's author and date.
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  CaseNoteSpec spec = 4 [(buf.validate.field).required = true];
+}
+
+message CaseNoteSpec {
+  // The case this note belongs to — existence enforced by the pipeline's
+  // reference check (FAILED_PRECONDITION).
+  string case_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  string content = 2 [(buf.validate.field).string = {
+    min_len: 1,
+    max_len: 5000
+  }];
+}
+
+message ListCaseNotesRequest {
+  // Notes are always read in the context of a case (the case detail
+  // view); a firm-wide note feed is not in the contract.
+  string case_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // Defaults to 20 (the contract's page size), capped at 100.
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 100
+  }];
+  int32 page_offset = 3 [(buf.validate.field).int32.gte = 0];
+}
+
+message ListCaseNotesResponse {
+  // Newest first (the record model's list contract).
+  repeated CaseNote items = 1;
+  int64 total_count = 2;
+}
+
+service CaseNoteService {
+  // Add a note to a case. The referenced case must exist.
+  rpc Create(CaseNote) returns (CaseNote);
+  // List a case's notes, newest first.
+  rpc List(ListCaseNotesRequest) returns (ListCaseNotesResponse);
+}

@@ -1,0 +1,94 @@
+// The Case resource — transcribed from the MVP scope contract's record
+// model (project log §R3.2; design-decisions/001-mvp-scope-contract.md).
+// Every field and every absent operation below is a recorded decision, not
+// an oversight: no status field, no Hearing entity, and NO delete
+// operation (FR-CASE-004 notes, Appendix C) — so delete is not declared on
+// the service at all.
+syntax = "proto3";
+
+// Package convention (established by @stigmer/resource-api and its fixture):
+// proto package `stigmer.<domain>.<resource>.v1` pairs with apiVersion
+// `<domain>.stigmer.ai/v1`. The domain is "law" — the practice area, never
+// the customer segment ("lawfirm" would bake a market segment into a
+// contract that outlives it: solo practitioners and in-house teams run the
+// same code) and never the product brand, which must stay out of the wire
+// contract (DD-002 D3). Future verticals follow the same one-word domain
+// root: stigmer.gym, stigmer.clinic.
+package stigmer.law.case.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message Case {
+  string api_version = 1;
+  string kind = 2;
+  // System-managed; the pipeline overwrites whatever a client sends.
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  CaseSpec spec = 4 [(buf.validate.field).required = true];
+  CaseStatus status = 5;
+}
+
+message CaseSpec {
+  // The court-issued case number: mandatory, unique (the natural key),
+  // user-provided — distinct from the internal id (FR-CASE-001 AC2/AC7).
+  // Editable on update with uniqueness re-validated (FR-CASE-004).
+  string case_number = 1 [(buf.validate.field).string.min_len = 1];
+
+  // Single client per case (FR-CASE-001 AC3).
+  string client_name = 2 [(buf.validate.field).string.min_len = 1];
+
+  // Free text; no managed taxonomy in MVP (FR-CASE-001 AC4; a managed
+  // list is FR-ADMIN-002, deliberately out of MVP).
+  string case_type = 3 [(buf.validate.field).string.min_len = 1];
+
+  // Exactly one owner — "one owner, that's it" (FR-CASE-001 AC5).
+  string assigned_lawyer_id = 4 [(buf.validate.field).string.min_len = 1];
+
+  // Calendar date (YYYY-MM-DD), not an instant: a hearing date is a court
+  // calendar entry; modeling it as a timestamp invites timezone bugs.
+  // Optional — unset means no hearing scheduled (FR-CASE-001 AC6).
+  optional string next_hearing_date = 5 [(buf.validate.field).string.pattern = "^\\d{4}-\\d{2}-\\d{2}$"];
+}
+
+message CaseStatus {
+  // Derived on read, never stored (FR-CASE-005 AC8). Wired to the
+  // Document resource when it lands (T03); until then always 0.
+  int32 document_count = 1;
+}
+
+message GetCaseRequest {
+  // Exactly one of: internal id, or the court case number (lawyers speak
+  // in case numbers — the WhatsApp get_case tool resolves by natural key).
+  string id = 1;
+  string case_number = 2;
+}
+
+message ListCasesRequest {
+  // Defaults to 20 (the contract's page size), capped at 100.
+  int32 page_size = 1 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 100
+  }];
+  int32 page_offset = 2 [(buf.validate.field).int32.gte = 0];
+}
+
+message ListCasesResponse {
+  // Ordered by next_hearing_date ascending, dateless cases last
+  // (FR-CASE-002 AC4/AC5) — the ordering is part of the resource's list
+  // contract, fixed server-side, not a client option.
+  repeated Case items = 1;
+  int64 total_count = 2;
+}
+
+service CaseService {
+  // Create a case. Duplicate case numbers answer ALREADY_EXISTS naming
+  // the value (FR-CASE-001 AC7).
+  rpc Create(Case) returns (Case);
+  // Update a case: full spec replacement; all spec fields editable,
+  // case_number re-validated unique (FR-CASE-004).
+  rpc Update(Case) returns (Case);
+  // Get a case by internal id or by case number.
+  rpc Get(GetCaseRequest) returns (Case);
+  // List the firm's cases, soonest hearing first, dateless last.
+  rpc List(ListCasesRequest) returns (ListCasesResponse);
+}

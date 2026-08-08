@@ -1,0 +1,59 @@
+// The TaskComment resource — transcribed from the MVP scope contract's
+// record model (design-decisions/001-mvp-scope-contract.md). Append-only
+// by contract: create and list are the ENTIRE operation set. Author and
+// timestamp come from the envelope metadata, never from the spec.
+syntax = "proto3";
+
+// Package convention: `stigmer.<domain>.<resource>.v1` pairs with
+// apiVersion `<domain>.stigmer.ai/v1`; the domain is "law" (DD-002
+// addendum) — never the customer segment, never the brand.
+package stigmer.law.taskcomment.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message TaskComment {
+  string api_version = 1;
+  string kind = 2;
+  // System-managed; the pipeline overwrites whatever a client sends.
+  // created_by/created_at ARE the comment's author and date.
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  TaskCommentSpec spec = 4 [(buf.validate.field).required = true];
+}
+
+message TaskCommentSpec {
+  // The task this comment belongs to — existence enforced by the
+  // pipeline's reference check (FAILED_PRECONDITION).
+  string task_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  string content = 2 [(buf.validate.field).string = {
+    min_len: 1,
+    max_len: 2000
+  }];
+}
+
+message ListTaskCommentsRequest {
+  // Comments are always read in the context of a task.
+  string task_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // Defaults to 20 (the contract's page size), capped at 100.
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 100
+  }];
+  int32 page_offset = 3 [(buf.validate.field).int32.gte = 0];
+}
+
+message ListTaskCommentsResponse {
+  // Oldest first — a conversation reads top-down (the record model's
+  // list contract, deliberately opposite to case notes).
+  repeated TaskComment items = 1;
+  int64 total_count = 2;
+}
+
+service TaskCommentService {
+  // Add a comment to a task. The referenced task must exist.
+  rpc Create(TaskComment) returns (TaskComment);
+  // List a task's comments, oldest first.
+  rpc List(ListTaskCommentsRequest) returns (ListTaskCommentsResponse);
+}

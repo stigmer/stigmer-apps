@@ -1,0 +1,115 @@
+// The Notification resource — transcribed from the MVP scope contract's
+// record model (design-decisions/001-mvp-scope-contract.md, amended by
+// T03 D8: `read` lives in status, the Task.state precedent — it is state
+// mutated by an operation, not client-desired configuration).
+//
+// System-written ONLY: no Create RPC exists on the wire; event handlers
+// create notifications in-process through the pipeline invoker, and the
+// policy module additionally requires a system principal. Dedup is owned
+// by the dedup_key unique constraint — nothing else keeps sent-state.
+syntax = "proto3";
+
+// Package convention: `stigmer.<domain>.<resource>.v1` pairs with
+// apiVersion `<domain>.stigmer.ai/v1`; the domain is "law" (DD-002
+// addendum) — never the customer segment, never the brand.
+package stigmer.law.notification.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message Notification {
+  string api_version = 1;
+  string kind = 2;
+  // System-managed; the pipeline overwrites whatever a client sends.
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  NotificationSpec spec = 4 [(buf.validate.field).required = true];
+  NotificationStatus status = 5;
+}
+
+message NotificationSpec {
+  string recipient_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  NotificationType type = 2 [(buf.validate.field).enum = {
+    defined_only: true,
+    not_in: [0]
+  }];
+
+  string title = 3 [(buf.validate.field).string.min_len = 1];
+
+  string body = 4;
+
+  // What the notification points at (a case or a task) — the web app and
+  // WhatsApp render this as the tap-through target.
+  NotificationTarget target = 5;
+
+  // The dedup owner (natural key, unique): composed by the producer so an
+  // identical event can never notify twice, while a legitimately new
+  // event (rescheduled hearing, re-assignment) composes a new key.
+  // HEARING_REMINDER: (type, recipient, case, hearing_date);
+  // TASK_ASSIGNMENT: (type, task, assignee, task version) — see the
+  // producer for the exact format.
+  string dedup_key = 6 [(buf.validate.field).string.min_len = 1];
+}
+
+message NotificationTarget {
+  // Resource kind of the target: "Case" or "Task".
+  string kind = 1;
+  string id = 2;
+}
+
+enum NotificationType {
+  NOTIFICATION_TYPE_UNSPECIFIED = 0;
+  NOTIFICATION_TYPE_HEARING_REMINDER = 1;
+  NOTIFICATION_TYPE_TASK_ASSIGNMENT = 2;
+}
+
+message NotificationStatus {
+  // Read marker, false on create, set by MarkRead/MarkAllRead. Explicit
+  // presence (`optional`) is deliberate: proto3 JSON omits implicit-
+  // presence false, and the storage layer filters unread rows by the
+  // JSON text 'false' — presence tracking is what makes false a value.
+  optional bool read = 1;
+}
+
+message ListNotificationsRequest {
+  // Defaults to 20 (the contract's page size), capped at 100.
+  int32 page_size = 1 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 100
+  }];
+  int32 page_offset = 2 [(buf.validate.field).int32.gte = 0];
+
+  // Only unread notifications. The unread badge is
+  // list(unread_only, page_size: 1).total_count — derived, never stored.
+  bool unread_only = 3;
+}
+
+message ListNotificationsResponse {
+  // Always the caller's own notifications (recipient-scoped server-side,
+  // not a client option), newest first.
+  repeated Notification items = 1;
+  int64 total_count = 2;
+}
+
+message MarkNotificationReadRequest {
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message MarkAllNotificationsReadRequest {}
+
+message MarkAllNotificationsReadResponse {
+  // How many notifications were marked. Bounded to one page (100) per
+  // call — callers with more unread call again.
+  int32 marked_count = 1;
+}
+
+service NotificationService {
+  // List the caller's notifications, newest first. There is deliberately
+  // no Create (system-written), no Get, no delete (30-day retention is an
+  // operational sweep, deferred to T06).
+  rpc List(ListNotificationsRequest) returns (ListNotificationsResponse);
+  // Mark one of the caller's notifications read. Recipient-only (policy).
+  rpc MarkRead(MarkNotificationReadRequest) returns (Notification);
+  // Mark the caller's unread notifications read (up to one page per call).
+  rpc MarkAllRead(MarkAllNotificationsReadRequest) returns (MarkAllNotificationsReadResponse);
+}

@@ -1,0 +1,25 @@
+# Proto contracts for Stigmer Law. Proto-first: every
+# backend feature starts here; TypeScript types are generated, never
+# hand-written (stigmer DD-007: generated types are the source of truth).
+#
+# The @stigmer/resource-api envelope protos are consumed as a BSR
+# dependency (buf.build/stigmer/resourceapi) — one definition in
+# ts-commons, every consumer imports it; nothing is vendored.
+version: v2
+modules:
+  - path: proto
+deps:
+  - buf.build/bufbuild/protovalidate
+  - buf.build/stigmer/resourceapi
+lint:
+  use:
+    - STANDARD
+  except:
+    # The resource-API convention (shared with the stigmer platform):
+    # create/update take the resource message and return it.
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+    - RPC_REQUEST_RESPONSE_UNIQUE
+breaking:
+  use:
+    - FILE
