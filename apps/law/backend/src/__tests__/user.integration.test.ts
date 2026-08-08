@@ -15,6 +15,7 @@ import { runMigrations } from "@stigmer/resource-api/postgres";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import bcrypt from "bcryptjs";
 import pg from "pg";
+import { createTestPool } from "./test-pool.js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createPgCredentialStore, type CredentialStore } from "../domain/user/credentials.js";
 import { UserSchema, UserService } from "../gen/stigmer/law/user/v1/user_pb.js";
@@ -63,7 +64,7 @@ describe("User resource", () => {
 
   beforeAll(async () => {
     container = await new PostgreSqlContainer("postgres:17-alpine").start();
-    pool = new pg.Pool({ connectionString: container.getConnectionUri() });
+    pool = createTestPool(container.getConnectionUri());
     await runMigrations(pool, MIGRATIONS_DIR);
 
     credentials = createPgCredentialStore(pool);
@@ -97,7 +98,9 @@ describe("User resource", () => {
   describe("create (FR-ADMIN-001)", () => {
     it("stamps the envelope, lowercases the email, and defaults the name to the local-part", async () => {
       const created = await client.create(
-        userInput({ email: "Asha.K@Example.COM", phone: "+919876543210" }),
+        // Short fictional number: the customer-data guard rejects anything
+        // shaped like a real E.164 (10+ digits) in this public repo.
+        userInput({ email: "Asha.K@Example.COM", phone: "+91123456" }),
         asOperator(),
       );
 
@@ -110,15 +113,15 @@ describe("User resource", () => {
       // construction (T03 D7).
       expect(created.spec?.email).toBe("asha.k@example.com");
       expect(created.spec?.name).toBe("asha.k");
-      expect(created.spec?.phone).toBe("+919876543210");
+      expect(created.spec?.phone).toBe("+91123456");
     });
 
     it("keeps an explicit name instead of the local-part fallback", async () => {
       const created = await client.create(
-        userInput({ name: "Asha Krishnan" }),
+        userInput({ name: "Asha Verma" }),
         asOperator(),
       );
-      expect(created.spec?.name).toBe("Asha Krishnan");
+      expect(created.spec?.name).toBe("Asha Verma");
     });
 
     it("is operator-only: a firm user is denied with the policy reason", async () => {

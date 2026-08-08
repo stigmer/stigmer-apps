@@ -83,7 +83,9 @@ export type UserSpec = Message<"stigmer.law.user.v1.UserSpec"> & {
   name: string;
 
   /**
-   * Strict E.164 (e.g. +919876543210), no spaces or dashes — accounts are
+   * Strict E.164 (e.g. +91123456 — examples and fixtures in this public
+   * repo deliberately use short fictional numbers, enforced by the
+   * customer-data CI guard), no spaces or dashes: accounts are
    * operator-created, so the input discipline is ours, and T05's WhatsApp
    * binding matches on this exact canonical form. Optional in MVP,
    * required in practice for WhatsApp staff.

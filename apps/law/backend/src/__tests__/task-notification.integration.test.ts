@@ -21,6 +21,7 @@ import { InProcessEventDispatcher } from "@stigmer/resource-api";
 import { runMigrations } from "@stigmer/resource-api/postgres";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import pg from "pg";
+import { createTestPool } from "./test-pool.js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { CaseSchema, CaseService } from "../gen/stigmer/law/case/v1/case_pb.js";
 import {
@@ -91,7 +92,7 @@ describe("Task and Notification resources", () => {
 
   beforeAll(async () => {
     container = await new PostgreSqlContainer("postgres:17-alpine").start();
-    pool = new pg.Pool({ connectionString: container.getConnectionUri() });
+    pool = createTestPool(container.getConnectionUri());
     await runMigrations(pool, MIGRATIONS_DIR);
 
     server = createBackendServer({

@@ -20,6 +20,7 @@ import { runMigrations } from "@stigmer/resource-api/postgres";
 import { MinioContainer, type StartedMinioContainer } from "@testcontainers/minio";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import pg from "pg";
+import { createTestPool } from "./test-pool.js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { CaseSchema, CaseService } from "../gen/stigmer/law/case/v1/case_pb.js";
 import { DocumentService } from "../gen/stigmer/law/document/v1/document_pb.js";
@@ -87,7 +88,7 @@ describe("Document resource and byte routes", () => {
       new PostgreSqlContainer("postgres:17-alpine").start(),
       new MinioContainer("minio/minio:RELEASE.2025-07-23T15-54-02Z").start(),
     ]);
-    pool = new pg.Pool({ connectionString: pgContainer.getConnectionUri() });
+    pool = createTestPool(pgContainer.getConnectionUri());
     await runMigrations(pool, MIGRATIONS_DIR);
 
     const objectStore = createS3ObjectStore({
