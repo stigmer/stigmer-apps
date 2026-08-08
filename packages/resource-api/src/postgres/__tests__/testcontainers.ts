@@ -20,9 +20,27 @@ export interface TestDatabase {
   stop(): Promise<void>;
 }
 
+/**
+ * pg pools CRASH THE PROCESS when an idle client errors with no 'error'
+ * listener attached (documented pg behavior). During teardown the
+ * container's shutdown can race a client's own graceful close and deliver
+ * a FATAL 57P01 ("admin shutdown") — timing-dependent, so it passes
+ * locally and detonates on slow CI runners. The listener logs instead of
+ * throwing; a mid-test idle-client error still fails the test through
+ * the query that hits the broken connection.
+ */
+function withErrorListener(pool: pg.Pool): pg.Pool {
+  pool.on("error", (err) => {
+    console.warn("idle pool client error (expected during container teardown):", err.message);
+  });
+  return pool;
+}
+
 export async function startTestDatabase(): Promise<TestDatabase> {
   const container = await new PostgreSqlContainer(POSTGRES_IMAGE).start();
-  const adminPool = new pg.Pool({ connectionString: container.getConnectionUri() });
+  const adminPool = withErrorListener(
+    new pg.Pool({ connectionString: container.getConnectionUri() }),
+  );
   let dbCounter = 0;
   const pools: pg.Pool[] = [adminPool];
 
@@ -34,13 +52,15 @@ export async function startTestDatabase(): Promise<TestDatabase> {
       // Identifier is generated locally (never user input), so simple
       // interpolation is safe here; CREATE DATABASE cannot be parameterized.
       await adminPool.query(`CREATE DATABASE ${dbName}`);
-      const pool = new pg.Pool({
-        host: container.getHost(),
-        port: container.getPort(),
-        user: container.getUsername(),
-        password: container.getPassword(),
-        database: dbName,
-      });
+      const pool = withErrorListener(
+        new pg.Pool({
+          host: container.getHost(),
+          port: container.getPort(),
+          user: container.getUsername(),
+          password: container.getPassword(),
+          database: dbName,
+        }),
+      );
       pools.push(pool);
       return pool;
     },
