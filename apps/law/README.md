@@ -15,7 +15,8 @@ pipeline; none bypasses it.
 | Path | Contents |
 |---|---|
 | `proto/` | Proto contracts (source of truth; TypeScript types are generated) |
-| `backend/` | Connect-RPC backend: services, Postgres migrations, integration tests |
+| `proto-vendor/` | Byte-for-byte copy of the `@stigmer/resource-api` envelope protos (CI-checked against the installed package) |
+| `backend/` | Connect-RPC backend: resource definitions on the commons pipeline, per-resource Postgres migrations, acceptance tests |
 
 ## Development
 

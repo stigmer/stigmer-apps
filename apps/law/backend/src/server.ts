@@ -1,6 +1,7 @@
 import http from "node:http";
 import { connectNodeAdapter } from "@connectrpc/connect-node";
 import { buildRoutes, type RouteDeps } from "./routes.js";
+export type { RouteDeps } from "./routes.js";
 
 /**
  * Builds the HTTP server: health endpoint plus every Connect route.

@@ -1,37 +1,27 @@
 import type { ConnectRouter } from "@connectrpc/connect";
-import type pg from "pg";
-import { PingService } from "./gen/lawfirm/ping/v1/ping_pb.js";
+import type { ResourceEventPublisher, ResourceStore } from "@stigmer/resource-api";
+import { caseResource } from "./domain/case/case-resource.js";
+import { firmPolicy } from "./domain/authz/policy.js";
 
 export interface RouteDeps {
-  readonly pool: pg.Pool;
+  readonly store: ResourceStore;
+  readonly publisher?: ResourceEventPublisher;
 }
 
 /**
- * Registers every Connect service this backend serves. Dependencies are
- * explicit arguments (never module state) so tests can build routes against
- * their own pool.
+ * Registers every resource this backend serves. One policy module for all
+ * of them; dependencies are explicit arguments (never module state) so
+ * tests build routes against their own store.
  */
 export function buildRoutes(deps: RouteDeps): (router: ConnectRouter) => void {
+  const policy = firmPolicy();
+  const resources = [
+    caseResource({ store: deps.store, policy, publisher: deps.publisher }),
+    // T03: users, tasks, case notes, task comments, documents, notifications.
+  ];
   return (router) => {
-    // THROWAWAY (Stage A toolchain proof) — replaced by real resource
-    // services when Case lands.
-    router.service(PingService, {
-      async ping(req) {
-        // A data-modifying CTE is not visible to the outer SELECT's
-        // snapshot, so count(*) sees only pre-insert rows; +1 accounts for
-        // the row this statement inserts. One statement, no race window.
-        const result = await deps.pool.query<{ total: string }>(
-          `WITH inserted AS (INSERT INTO pings (label) VALUES ($1))
-           SELECT count(*) + 1 AS total FROM pings`,
-          [req.label],
-        );
-        return {
-          label: req.label,
-          // int64 fields are bigint in protobuf-es; count(*) arrives as a
-          // string from pg because it exceeds JS number range in general.
-          totalPings: BigInt(result.rows[0]?.total ?? "1"),
-        };
-      },
-    });
+    for (const resource of resources) {
+      resource.routes(router);
+    }
   };
 }

@@ -33,6 +33,14 @@ jobs:
         working-directory: lawfirm-assistant
         run: npm ci
 
+      - name: Vendored proto drift check
+        working-directory: lawfirm-assistant
+        # proto-vendor/ must be byte-identical to the envelope protos the
+        # installed @stigmer/resource-api ships — vendoring exists only
+        # because buf cannot resolve imports from node_modules, and it must
+        # never drift silently.
+        run: diff -r proto-vendor node_modules/@stigmer/resource-api/proto
+
       - name: Codegen drift check
         working-directory: lawfirm-assistant
         # Generated code is committed for reviewability; regenerating must

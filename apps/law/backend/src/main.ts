@@ -1,9 +1,11 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { InProcessEventDispatcher } from "@stigmer/resource-api";
 import { runMigrations } from "@stigmer/resource-api/postgres";
 import pg from "pg";
 import { loadConfigFromEnv } from "./config.js";
 import { createBackendServer } from "./server.js";
+import { createResourceStore } from "./storage.js";
 
 /**
  * Migrations live beside the source tree (`backend/migrations`). The
@@ -29,7 +31,11 @@ async function main(): Promise<void> {
     console.log(`migrations applied: ${migrated.applied.join(", ")}`);
   }
 
-  const server = createBackendServer({ pool });
+  // Event consumers (T03: notification handlers) subscribe here — on the
+  // dispatcher, never inside resource handlers.
+  const publisher = new InProcessEventDispatcher();
+
+  const server = createBackendServer({ store: createResourceStore(pool), publisher });
   server.listen(config.port, () => {
     console.log(`backend listening on :${config.port}`);
   });
