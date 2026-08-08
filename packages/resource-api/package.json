@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/stigmer/ts-commons.git",
+    "url": "git+https://github.com/stigmer/stigmer-apps.git",
     "directory": "packages/resource-api"
   },
   "type": "module",
@@ -29,8 +29,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "codegen": "npx @bufbuild/buf generate"
+    "test": "vitest run"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.1.0",

@@ -1,8 +1,14 @@
 /**
- * Customer-data guard — build-enforced backing for the design position
- * that this public repository contains zero customer-specific strings
- * (onboarding a firm is configuration only, and that configuration lives
- * outside this repo).
+ * Customer-data guard — build-enforced backing for the confinement rule:
+ * customer-specific strings live ONLY under _projects/ and _changelog/
+ * (the working records); every other path — code, protos, fixtures,
+ * roles, rules, docs — stays publication-ready at all times. Onboarding a
+ * customer is configuration only, and that configuration lives outside
+ * this repo.
+ *
+ * The repo is private today, but the guard is the insurance that keeps a
+ * future open-sourcing a bounded excision (drop the two excluded folders)
+ * instead of a forensic scrub of the whole tree (project DD-003).
  *
  * Two layers:
  *
@@ -27,6 +33,12 @@ import { readFileSync } from "node:fs";
 // hashes can coincidentally match the phone pattern.
 const SKIPPED = new Set(["package-lock.json"]);
 
+// The confinement boundary (DD-003): project working records and
+// changelogs legitimately carry customer context — they are the ONLY
+// paths allowed to. Everything outside these prefixes must stay
+// publication-ready, which is exactly what the scan enforces.
+const EXCLUDED_PREFIXES = ["_projects/", "_changelog/"];
+
 const GENERIC_PATTERNS = [
   { name: "E.164 phone number", regex: /\+[1-9]\d{9,14}\b/ },
   { name: "WhatsApp caller id", regex: /wa[_-]?id["'\s:=]+\d{10,15}/i },
@@ -35,7 +47,12 @@ const GENERIC_PATTERNS = [
 function trackedFiles() {
   return execFileSync("git", ["ls-files"], { encoding: "utf8" })
     .split("\n")
-    .filter((f) => f && !SKIPPED.has(f));
+    .filter(
+      (f) =>
+        f &&
+        !SKIPPED.has(f.split("/").pop()) &&
+        !EXCLUDED_PREFIXES.some((prefix) => f.startsWith(prefix)),
+    );
 }
 
 function denylistTerms() {

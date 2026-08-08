@@ -1,17 +1,18 @@
 {
-  "name": "ts-commons",
+  "name": "stigmer-apps",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "workspaces": [
-    "packages/resource-api"
+    "packages/resource-api",
+    "apps/law/backend"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build -w @stigmer/resource-api && npm run build -w @law/backend",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "codegen": "npm run codegen --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "codegen": "npx @bufbuild/buf generate --template packages/resource-api/buf.gen.yaml && npx @bufbuild/buf generate --template apps/law/buf.gen.yaml"
   }
 }

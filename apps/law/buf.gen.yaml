@@ -1,18 +1,25 @@
+# Codegen template for Stigmer Law. Run from the REPO ROOT via the root
+# `npm run codegen` (buf generate --template ...): inputs and out are
+# root-relative, so invoking it from anywhere else generates into the
+# wrong place.
+#
 # TypeScript codegen, mirroring stigmer/apis/buf.gen.ts.yaml. A single
 # plugin suffices: protoc-gen-es v2 also emits Connect service descriptors,
 # which @connectrpc/connect v2 consumes directly (the separate connectrpc/es
 # plugin is a v1-era artifact).
 #
 # import_extension=js keeps generated relative imports Node-resolvable
-# (DD-018). Generated code is committed; CI regenerates and fails on drift.
+# (DD-018). include_imports materializes the stigmer/resourceapi envelope
+# and buf.validate types alongside the law contracts. Generated code is
+# committed; CI regenerates and fails on drift.
 version: v2
 clean: true
 plugins:
   - remote: buf.build/bufbuild/es
-    out: backend/src/gen
+    out: apps/law/backend/src/gen
     opt:
       - target=ts
       - import_extension=js
     include_imports: true
 inputs:
-  - directory: proto
+  - directory: apps/law/proto

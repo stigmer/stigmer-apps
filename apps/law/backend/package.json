@@ -3,6 +3,11 @@
   "private": true,
   "license": "AGPL-3.0-only",
   "version": "0.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stigmer/stigmer-apps.git",
+    "directory": "apps/law/backend"
+  },
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -18,7 +23,7 @@
     "@bufbuild/protobuf": "^2.13.0",
     "@connectrpc/connect": "^2.1.2",
     "@connectrpc/connect-node": "^2.1.2",
-    "@stigmer/resource-api": "file:../../ts-commons/packages/resource-api",
+    "@stigmer/resource-api": "^0.2.0",
     "bcryptjs": "^3.0.3",
     "pg": "^8.22.0"
   },

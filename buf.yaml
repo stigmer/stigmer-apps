@@ -1,0 +1,35 @@
+# One buf workspace for the whole monorepo. Three modules:
+#
+# - packages/resource-api/proto is the envelope contract consumers import.
+#   It ships with the @stigmer/resource-api npm package AND is published to
+#   the Buf Schema Registry as buf.build/stigmer/resourceapi (external
+#   consumers declare it as a buf dep; nobody vendors these files).
+# - packages/resource-api/testproto is the commons' test fixture module and
+#   never ships.
+# - apps/law/proto holds the Stigmer Law contracts (stigmer.law.<r>.v1).
+#   Proto-first: every backend feature starts here; TypeScript types are
+#   generated, never hand-written (stigmer DD-007). Its imports of
+#   stigmer/resourceapi/* resolve IN-WORKSPACE — one definition, every
+#   consumer imports it, nothing is vendored and nothing is pinned between
+#   siblings.
+version: v2
+modules:
+  - path: packages/resource-api/proto
+    name: buf.build/stigmer/resourceapi
+  - path: packages/resource-api/testproto
+  - path: apps/law/proto
+deps:
+  - buf.build/bufbuild/protovalidate
+lint:
+  use:
+    - STANDARD
+  except:
+    # The resource-API convention (shared with buf.build/stigmer/stigmer):
+    # create/update take the resource message and return it — request
+    # wrappers around a resource that IS the request add nothing.
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+    - RPC_REQUEST_RESPONSE_UNIQUE
+breaking:
+  use:
+    - FILE
