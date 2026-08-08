@@ -50,6 +50,7 @@
 import type { DescMessage, DescMethod, DescService, MessageInitShape } from "@bufbuild/protobuf";
 import { create } from "@bufbuild/protobuf";
 import type { GenMessage } from "@bufbuild/protobuf/codegenv2";
+import { ConnectError } from "@connectrpc/connect";
 import type { ConnectRouter, HandlerContext, ServiceImpl } from "@connectrpc/connect";
 import {
   buildCreateState,
@@ -297,12 +298,28 @@ async function publishSafely<R extends ResourceMessage>(
   }
 }
 
+/**
+ * Runs the consumer's status derivation with the same error discipline as
+ * pipeline steps: ConnectErrors pass through; anything untyped is a bug —
+ * logged with context, surfaced as INTERNAL, never UNKNOWN. Derivation
+ * runs after the pipeline (on its results), so it cannot ride the
+ * pipeline's own mapper.
+ */
 async function deriveAll<R extends ResourceMessage>(
   runtime: Runtime<R>,
   resources: readonly R[],
 ): Promise<void> {
-  if (resources.length > 0) {
-    await runtime.def.deriveStatus?.(resources);
+  if (resources.length === 0 || !runtime.def.deriveStatus) {
+    return;
+  }
+  try {
+    await runtime.def.deriveStatus(resources);
+  } catch (err) {
+    if (err instanceof ConnectError) {
+      throw err;
+    }
+    console.error(`deriveStatus failed (kind=${runtime.def.kind}):`, err);
+    throw internal(`Internal error deriving ${runtime.displayName} status`, err);
   }
 }
 
