@@ -4,6 +4,7 @@ import { InProcessEventDispatcher } from "@stigmer/resource-api";
 import { runMigrations } from "@stigmer/resource-api/postgres";
 import pg from "pg";
 import { loadConfigFromEnv } from "./config.js";
+import { createPgCredentialStore } from "./domain/user/credentials.js";
 import { createBackendServer } from "./server.js";
 import { createResourceStore } from "./storage.js";
 
@@ -35,7 +36,11 @@ async function main(): Promise<void> {
   // dispatcher, never inside resource handlers.
   const publisher = new InProcessEventDispatcher();
 
-  const server = createBackendServer({ store: createResourceStore(pool), publisher });
+  const server = createBackendServer({
+    store: createResourceStore(pool),
+    credentials: createPgCredentialStore(pool),
+    publisher,
+  });
   server.listen(config.port, () => {
     console.log(`backend listening on :${config.port}`);
   });

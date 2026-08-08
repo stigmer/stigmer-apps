@@ -11,6 +11,7 @@ import type pg from "pg";
 import type { ResourceStore } from "@stigmer/resource-api";
 import { PostgresResourceStore } from "@stigmer/resource-api/postgres";
 import { CaseSchema } from "./gen/stigmer/law/case/v1/case_pb.js";
+import { UserSchema } from "./gen/stigmer/law/user/v1/user_pb.js";
 
 export function createResourceStore(pool: pg.Pool): ResourceStore {
   return new PostgresResourceStore(pool, {
@@ -20,6 +21,14 @@ export function createResourceStore(pool: pg.Pool): ResourceStore {
       naturalKey: { column: "case_number", jsonField: "caseNumber" },
       columns: {
         nextHearingDate: "next_hearing_date",
+      },
+    },
+    User: {
+      schema: UserSchema,
+      table: "users",
+      naturalKey: { column: "email", jsonField: "email" },
+      columns: {
+        email: "email",
       },
     },
   });

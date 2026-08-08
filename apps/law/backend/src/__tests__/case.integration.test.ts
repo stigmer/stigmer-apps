@@ -16,6 +16,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import pg from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { CaseSchema, CaseService } from "../gen/stigmer/law/case/v1/case_pb.js";
+import { createPgCredentialStore } from "../domain/user/credentials.js";
 import { createBackendServer } from "../server.js";
 import { createResourceStore } from "../storage.js";
 
@@ -65,7 +66,10 @@ describe("Case resource", () => {
     pool = new pg.Pool({ connectionString: container.getConnectionUri() });
     await runMigrations(pool, MIGRATIONS_DIR);
 
-    server = createBackendServer({ store: createResourceStore(pool) });
+    server = createBackendServer({
+      store: createResourceStore(pool),
+      credentials: createPgCredentialStore(pool),
+    });
     await new Promise<void>((resolve) => server.listen(0, resolve));
     const { port } = server.address() as AddressInfo;
     client = createClient(

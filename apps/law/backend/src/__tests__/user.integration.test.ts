@@ -1,0 +1,277 @@
+/**
+ * User acceptance tests, derived from the MVP scope contract
+ * (design-decisions/001-mvp-scope-contract.md, amended by T03 D7). Every
+ * test names its FR. Full production path: Connect client → real HTTP
+ * server → pipeline → real Postgres (Testcontainers), with the users
+ * migration applied by the commons runner.
+ */
+
+import type http from "node:http";
+import type { AddressInfo } from "node:net";
+import { create } from "@bufbuild/protobuf";
+import { Code, ConnectError, createClient, type Client } from "@connectrpc/connect";
+import { createConnectTransport } from "@connectrpc/connect-node";
+import { runMigrations } from "@stigmer/resource-api/postgres";
+import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
+import bcrypt from "bcryptjs";
+import pg from "pg";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { createPgCredentialStore, type CredentialStore } from "../domain/user/credentials.js";
+import { UserSchema, UserService } from "../gen/stigmer/law/user/v1/user_pb.js";
+import { createBackendServer } from "../server.js";
+import { createResourceStore } from "../storage.js";
+
+const MIGRATIONS_DIR = new URL("../../migrations", import.meta.url).pathname;
+
+// Accounts are operator-provisioned (FR-ADMIN-001); the operator identity
+// arrives via the T02 interim dev shim, replaced by JWT in T04.
+const asOperator = (id = "ops-one") => ({
+  headers: { "x-dev-caller-id": id, "x-dev-caller-kind": "operator" },
+});
+const asLawyer = (id = "lawyer-one") => ({
+  headers: { "x-dev-caller-id": id },
+});
+
+function userInput(overrides: Partial<{ email: string; name: string; phone: string }> = {}) {
+  return create(UserSchema, {
+    spec: {
+      email: overrides.email ?? "asha@example.com",
+      name: overrides.name,
+      phone: overrides.phone,
+    },
+  });
+}
+
+async function expectCode(promise: Promise<unknown>, code: Code, pattern?: RegExp) {
+  try {
+    await promise;
+    expect.fail(`expected ConnectError ${Code[code]}, got success`);
+  } catch (err) {
+    const cerr = ConnectError.from(err);
+    expect(cerr.code, `expected ${Code[code]}, got ${Code[cerr.code]}: ${cerr.message}`).toBe(code);
+    if (pattern) expect(cerr.message).toMatch(pattern);
+  }
+}
+
+describe("User resource", () => {
+  let container: StartedPostgreSqlContainer;
+  let pool: pg.Pool;
+  let credentials: CredentialStore;
+  let server: http.Server;
+  let client: Client<typeof UserService>;
+
+  beforeAll(async () => {
+    container = await new PostgreSqlContainer("postgres:17-alpine").start();
+    pool = new pg.Pool({ connectionString: container.getConnectionUri() });
+    await runMigrations(pool, MIGRATIONS_DIR);
+
+    credentials = createPgCredentialStore(pool);
+    server = createBackendServer({ store: createResourceStore(pool), credentials });
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const { port } = server.address() as AddressInfo;
+    client = createClient(
+      UserService,
+      createConnectTransport({ baseUrl: `http://localhost:${port}`, httpVersion: "1.1" }),
+    );
+  }, 120_000);
+
+  afterEach(async () => {
+    // Credentials reference users; delete child rows first.
+    await pool.query("DELETE FROM user_credentials");
+    await pool.query("DELETE FROM users");
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+    await pool.end();
+    await container.stop();
+  });
+
+  describe("create (FR-ADMIN-001)", () => {
+    it("stamps the envelope, lowercases the email, and defaults the name to the local-part", async () => {
+      const created = await client.create(
+        userInput({ email: "Asha.K@Example.COM", phone: "+919876543210" }),
+        asOperator(),
+      );
+
+      expect(created.metadata?.id).toMatch(/^user_[0-9a-z]{26}$/);
+      expect(created.metadata?.version).toBe(1n);
+      expect(created.metadata?.createdBy?.id).toBe("ops-one");
+      expect(created.apiVersion).toBe("law.stigmer.ai/v1");
+      expect(created.kind).toBe("User");
+      // Stored lowercase: the unique constraint and every lookup agree by
+      // construction (T03 D7).
+      expect(created.spec?.email).toBe("asha.k@example.com");
+      expect(created.spec?.name).toBe("asha.k");
+      expect(created.spec?.phone).toBe("+919876543210");
+    });
+
+    it("keeps an explicit name instead of the local-part fallback", async () => {
+      const created = await client.create(
+        userInput({ name: "Asha Krishnan" }),
+        asOperator(),
+      );
+      expect(created.spec?.name).toBe("Asha Krishnan");
+    });
+
+    it("is operator-only: a firm user is denied with the policy reason", async () => {
+      await expectCode(
+        client.create(userInput(), asLawyer()),
+        Code.PermissionDenied,
+        /Only an operator may manage user accounts/,
+      );
+    });
+
+    it("requires authentication", async () => {
+      await expectCode(client.create(userInput()), Code.Unauthenticated);
+    });
+
+    it("rejects a duplicate email naming the value", async () => {
+      await client.create(userInput({ email: "dup@example.com" }), asOperator());
+      await expectCode(
+        client.create(userInput({ email: "dup@example.com" }), asOperator()),
+        Code.AlreadyExists,
+        /User with email 'dup@example.com' already exists/,
+      );
+    });
+
+    it("rejects a re-cased duplicate: casing cannot mint a second account", async () => {
+      await client.create(userInput({ email: "nk@example.com" }), asOperator());
+      await expectCode(
+        client.create(userInput({ email: "NK@Example.com" }), asOperator()),
+        Code.AlreadyExists,
+        /nk@example\.com/,
+      );
+    });
+
+    it("rejects a malformed email", async () => {
+      await expectCode(
+        client.create(userInput({ email: "not-an-email" }), asOperator()),
+        Code.InvalidArgument,
+        /email/,
+      );
+    });
+
+    it("rejects a non-E.164 phone (T05's WhatsApp binding matches this exact form)", async () => {
+      await expectCode(
+        client.create(userInput({ phone: "+91 98765 43210" }), asOperator()),
+        Code.InvalidArgument,
+        /phone/,
+      );
+    });
+  });
+
+  describe("get (FR-USER-001)", () => {
+    it("loads by internal id and by email, case-insensitively", async () => {
+      const created = await client.create(userInput({ email: "get@example.com" }), asOperator());
+
+      const byId = await client.get({ id: created.metadata?.id ?? "" }, asLawyer());
+      expect(byId.spec?.email).toBe("get@example.com");
+
+      const byEmail = await client.get({ email: "GET@Example.COM" }, asLawyer());
+      expect(byEmail.metadata?.id).toBe(created.metadata?.id);
+    });
+
+    it("answers NOT_FOUND naming the reference", async () => {
+      await expectCode(
+        client.get({ email: "ghost@example.com" }, asLawyer()),
+        Code.NotFound,
+        /User 'ghost@example\.com' not found/,
+      );
+    });
+
+    it("rejects an empty reference", async () => {
+      await expectCode(client.get({}, asLawyer()), Code.InvalidArgument, /id or email/);
+    });
+  });
+
+  describe("list (FR-USER-001)", () => {
+    it("orders by email ascending with a stable total", async () => {
+      for (const email of ["c@example.com", "a@example.com", "b@example.com"]) {
+        await client.create(userInput({ email }), asOperator());
+      }
+      const res = await client.list({}, asLawyer());
+      expect(res.items.map((u) => u.spec?.email)).toEqual([
+        "a@example.com",
+        "b@example.com",
+        "c@example.com",
+      ]);
+      expect(res.totalCount).toBe(3n);
+    });
+
+    it("requires authentication", async () => {
+      await expectCode(client.list({}), Code.Unauthenticated);
+    });
+  });
+
+  describe("setPassword (FR-ADMIN-001; T03 D7)", () => {
+    it("bcrypts server-side into user_credentials — never into the resource", async () => {
+      const created = await client.create(userInput(), asOperator());
+      await client.setPassword(
+        { id: created.metadata?.id ?? "", password: "correct horse battery" },
+        asOperator(),
+      );
+
+      const hash = await credentials.getPasswordHash(created.metadata?.id ?? "");
+      expect(hash).toBeDefined();
+      expect(hash).not.toContain("correct horse battery");
+      expect(await bcrypt.compare("correct horse battery", hash as string)).toBe(true);
+
+      // The resource itself carries nothing: the stored row's spec has
+      // exactly the declared fields (leak impossible by construction).
+      const row = await pool.query("SELECT resource->'spec' AS spec FROM users WHERE id = $1", [
+        created.metadata?.id,
+      ]);
+      expect(Object.keys(row.rows[0].spec).sort()).toEqual(["email", "name"]);
+    });
+
+    it("resolves the target by email and supports reset (operator action, T01 decision 1)", async () => {
+      const created = await client.create(userInput({ email: "reset@example.com" }), asOperator());
+      await client.setPassword({ email: "Reset@Example.com", password: "first-password" }, asOperator());
+      await client.setPassword({ email: "reset@example.com", password: "second-password" }, asOperator());
+
+      const hash = (await credentials.getPasswordHash(created.metadata?.id ?? "")) as string;
+      expect(await bcrypt.compare("second-password", hash)).toBe(true);
+      expect(await bcrypt.compare("first-password", hash)).toBe(false);
+    });
+
+    it("is operator-only", async () => {
+      const created = await client.create(userInput(), asOperator());
+      await expectCode(
+        client.setPassword({ id: created.metadata?.id ?? "", password: "long enough" }, asLawyer()),
+        Code.PermissionDenied,
+        /Only an operator may manage user accounts/,
+      );
+    });
+
+    it("answers NOT_FOUND for an unknown user", async () => {
+      await expectCode(
+        client.setPassword({ email: "ghost@example.com", password: "long enough" }, asOperator()),
+        Code.NotFound,
+        /ghost@example\.com/,
+      );
+    });
+
+    it("rejects a password under 8 characters", async () => {
+      const created = await client.create(userInput(), asOperator());
+      await expectCode(
+        client.setPassword({ id: created.metadata?.id ?? "", password: "short" }, asOperator()),
+        Code.InvalidArgument,
+        /password/,
+      );
+    });
+  });
+
+  describe("the operation matrix is the contract", () => {
+    it("declares exactly create/get/list/setPassword — no update, no delete (FR-USER-001 notes)", () => {
+      expect(UserService.methods.map((m) => m.localName).sort()).toEqual([
+        "create",
+        "get",
+        "list",
+        "setPassword",
+      ]);
+    });
+  });
+});
