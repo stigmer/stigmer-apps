@@ -1,0 +1,24 @@
+apiVersion: infra-hub.planton.ai/v1
+kind: InfraChart
+metadata:
+  name: Stigmer Law Firm Stack
+spec:
+  selector:
+    kind: organization
+    id: stigmer
+  description: >-
+    Per-firm infrastructure for the law vertical (apps/law). Each law firm
+    is a single-tenant deployment — its own document bucket and credential,
+    later its own database — so this chart is a reusable template with the
+    firm as a parameter: one install per firm, never one chart per firm.
+    Onboarding firm #2 is a new values file plus one `planton chart
+    install` (DD-004, the T06 configurability proof). The chart lives
+    beside the app it deploys and carries NO customer strings (the
+    customer-data guard enforces this); per-client values files, variable
+    groups, and secrets live under clients/law/<client>/ — the
+    confinement folder for customer-named config.
+    Deliberately SEPARATE from stigmer-infrastructure-stack: app
+    infrastructure must never fan a pipeline across the platform's
+    resources (the isc-infrastructure-stack precedent).
+  iconUrl: https://assets.planton.ai/apis/infrahub/cloudresource/v1/assets/provider/cloudflare/cloudflarer2bucket/v1/logo.svg
+  isReady: true

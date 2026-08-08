@@ -1,0 +1,44 @@
+# Reference defaults for the Stigmer Law Firm Stack. These are NOT merged
+# at install time — `planton chart install --values` replaces them, so the
+# per-firm values file must carry EVERY param below (verified against a
+# live pipeline failure: an omitted cloudflare_account_id rendered an empty
+# accountId and failed stack-input validation). Per-firm values files live
+# under clients/law/<client>/infra-project/ — the confinement folder for
+# customer-named config (DD-A10 as amended by DD-004).
+params:
+  # ─── Pulumi / Planton stack identity ────────────────────────────────────────
+  - name: pulumi_organization
+    description: Pulumi organization name
+    value: stigmer
+
+  - name: pulumi_project
+    description: Pulumi project name
+    value: stigmer
+
+  - name: env
+    description: Environment name (used for stack naming and metadata)
+    value: prod
+
+  - name: org
+    description: Planton organization slug
+    value: stigmer
+
+  # ─── Firm identity ───────────────────────────────────────────────────────────
+  # REQUIRED, no usable default: the firm slug names every resource this chart
+  # renders (an empty value would render malformed resource names). Short,
+  # lowercase, DNS-safe — set it ONLY in the client's values file under
+  # clients/law/<client>/, never here.
+  - name: firm
+    description: Firm slug (lowercase DNS-safe, e.g. a firm's initials); set per install
+    value: ""
+
+  # ─── Cloudflare R2 ───────────────────────────────────────────────────────────
+  # The account ID is the same across environments and firms, so it lives here
+  # as a default (same convention as stigmer-infrastructure-stack).
+  - name: cloudflare_account_id
+    description: Cloudflare account ID for R2 bucket provisioning
+    value: "074755a78d8e8f77c119a90a125e8a06"
+
+  - name: r2_location
+    description: R2 bucket location hint (wnam, enam, weur, eeur, apac, oc)
+    value: apac

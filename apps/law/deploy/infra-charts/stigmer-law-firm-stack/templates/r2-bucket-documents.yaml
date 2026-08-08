@@ -1,0 +1,38 @@
+---
+# Per-firm document bucket. The backend consumes it as plain S3 with an
+# endpoint override (OBJECT_STORE_* env contract, backend/src/config.ts);
+# object keys are cases/{caseId}/documents/{uuid} with NO tenant segment,
+# so the bucket itself is the firm isolation boundary — one bucket per
+# firm, never a shared bucket with prefixes (DD-004).
+#
+# Credentials are NOT provisioned here: each firm gets a Cloudflare R2 API
+# token scoped to only this bucket, created in the dashboard and stored as
+# the env-scoped secret stigmer-law-<firm>-r2-credentials in config-manager
+# (per-firm containment for attorney-client privileged documents; revoking
+# one token offboards one firm).
+#
+# No metadata.relationships: this is the sole resource in the chart. The
+# platform chart's R2 serialization chain exists to avoid Pulumi state-lock
+# races WITHIN one install; across charts the rule is operational — do not
+# run this install concurrently with other installs (documented in the
+# per-firm values file, where installs are launched from).
+apiVersion: cloudflare.openmcf.org/v1
+kind: CloudflareR2Bucket
+metadata:
+  name: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}-documents-r2-bucket
+  slug: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}-documents-r2-bucket
+  org: {{ values.org }}
+  env: {{ values.env }}
+  labels:
+    project-planton.org/provisioner: pulumi
+    pulumi.project-planton.org/organization: {{ values.pulumi_organization }}
+    pulumi.project-planton.org/project: {{ values.pulumi_project }}
+    pulumi.project-planton.org/stack.name: {{ values.env }}.CloudflareR2Bucket.{{ values.org }}-{{ values.env }}-law-{{ values.firm }}-documents-r2-bucket
+spec:
+  # Firm- and env-derived so the same template serves every firm and
+  # environment (e.g. stigmer-law-acme-documents-prod). Must satisfy the
+  # R2 DNS-name constraint: lowercase alphanumeric/hyphen, 3-63 chars.
+  bucketName: {{ values.org }}-law-{{ values.firm }}-documents-{{ values.env }}
+  accountId: {{ values.cloudflare_account_id }}
+  location: {{ values.r2_location }}
+  publicAccess: false
