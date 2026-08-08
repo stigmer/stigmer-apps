@@ -12,13 +12,15 @@
  *
  * The per-resource migration file IS the storage design artifact: table,
  * generated columns, indexes, and the natural-key constraint (named
- * `<table>_natural_key` so this adapter can map violations). Example:
+ * `<table>_natural_key` so this adapter can map violations). Example,
+ * using this package's own Widget test fixture (the commons illustrates
+ * with its fixture, never a consumer's resource):
  *
- *   CREATE TABLE cases (
+ *   CREATE TABLE widgets (
  *     id       text PRIMARY KEY,
  *     resource jsonb NOT NULL,
- *     case_number text GENERATED ALWAYS AS (resource->'spec'->>'caseNumber') STORED,
- *     CONSTRAINT cases_natural_key UNIQUE (case_number)
+ *     serial_number text GENERATED ALWAYS AS (resource->'spec'->>'serialNumber') STORED,
+ *     CONSTRAINT widgets_natural_key UNIQUE (serial_number)
  *   );
  *
  * Generated-column expressions read proto3 JSON, so keys are camelCase.
