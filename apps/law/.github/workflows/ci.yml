@@ -25,6 +25,16 @@ jobs:
         with:
           node-version-file: stigmer-law/.nvmrc
 
+      - name: Customer-data guard
+        working-directory: stigmer-law
+        # Generic patterns live in the repo; the customer-name denylist is
+        # a secret because committing it would publish the names it blocks.
+        # Fork PRs get no secrets — the script warns and runs generic-only
+        # there, but hard-fails on push if the secret is missing.
+        env:
+          CUSTOMER_DENYLIST: ${{ secrets.CUSTOMER_DENYLIST }}
+        run: node scripts/check-customer-data.mjs
+
       - name: Build ts-commons (linked dependency)
         working-directory: ts-commons
         run: npm ci && npm run build
