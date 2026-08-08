@@ -1,0 +1,31 @@
+{
+  "name": "@lawfirm/backend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "node build.mjs",
+    "dev": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.13.0",
+    "@connectrpc/connect": "^2.1.2",
+    "@connectrpc/connect-node": "^2.1.2",
+    "@stigmer/resource-api": "file:../../ts-commons/packages/resource-api",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^12.1.0",
+    "@types/node": "^26.2.0",
+    "@types/pg": "^8.21.0",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.23.11",
+    "typescript": "^7.0.2",
+    "vitest": "^3.2.7"
+  }
+}

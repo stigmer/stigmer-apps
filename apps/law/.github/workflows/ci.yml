@@ -1,0 +1,55 @@
+# CI is the only gate between a commit and production (the deploy pipeline
+# builds every push to main without running tests — isc-assistant
+# precedent). The backend links @stigmer/resource-api from the sibling
+# ts-commons checkout, so CI reproduces the two-repo layout: both repos
+# checked out side by side, commons built first.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: lawfirm-assistant
+      - uses: actions/checkout@v4
+        with:
+          repository: stigmer/ts-commons
+          path: ts-commons
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: lawfirm-assistant/.nvmrc
+
+      - name: Build ts-commons (linked dependency)
+        working-directory: ts-commons
+        run: npm ci && npm run build
+
+      - name: Install
+        working-directory: lawfirm-assistant
+        run: npm ci
+
+      - name: Codegen drift check
+        working-directory: lawfirm-assistant
+        # Generated code is committed for reviewability; regenerating must
+        # be a no-op or someone edited generated files (or forgot to run
+        # codegen after a proto change).
+        run: |
+          npm run codegen
+          git diff --exit-code -- backend/src/gen
+
+      - name: Typecheck
+        working-directory: lawfirm-assistant
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: lawfirm-assistant
+        run: npm test
+
+      - name: Build
+        working-directory: lawfirm-assistant
+        run: npm run build

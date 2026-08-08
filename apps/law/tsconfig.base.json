@@ -1,0 +1,17 @@
+{
+  // Shared compiler options for every package in this repo (same base as
+  // stigmer/ts-commons): strict ESM targeting Node 22, NodeNext resolution
+  // so relative imports carry explicit ".js" extensions (DD-018 — the
+  // extension-less form crashes plain-Node consumers).
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  }
+}
