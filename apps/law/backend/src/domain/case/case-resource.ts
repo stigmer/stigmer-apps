@@ -29,7 +29,7 @@ import {
   type GetCaseRequest,
   type ListCasesRequest,
   ListCasesResponseSchema,
-} from "../../gen/lawfirm/case/v1/case_pb.js";
+} from "../../gen/stigmer/lawfirm/case/v1/case_pb.js";
 
 export function caseResource(deps: {
   store: ResourceStore;

@@ -10,7 +10,7 @@
 import type pg from "pg";
 import type { ResourceStore } from "@stigmer/resource-api";
 import { PostgresResourceStore } from "@stigmer/resource-api/postgres";
-import { CaseSchema } from "./gen/lawfirm/case/v1/case_pb.js";
+import { CaseSchema } from "./gen/stigmer/lawfirm/case/v1/case_pb.js";
 
 export function createResourceStore(pool: pg.Pool): ResourceStore {
   return new PostgresResourceStore(pool, {

@@ -15,7 +15,7 @@ import { runMigrations } from "@stigmer/resource-api/postgres";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import pg from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { CaseSchema, CaseService } from "../gen/lawfirm/case/v1/case_pb.js";
+import { CaseSchema, CaseService } from "../gen/stigmer/lawfirm/case/v1/case_pb.js";
 import { createBackendServer } from "../server.js";
 import { createResourceStore } from "../storage.js";
 

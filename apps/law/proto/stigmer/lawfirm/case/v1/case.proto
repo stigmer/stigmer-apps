@@ -6,7 +6,11 @@
 // the service at all.
 syntax = "proto3";
 
-package lawfirm.case.v1;
+// Package convention (established by @stigmer/resource-api and its fixture):
+// proto package `stigmer.<domain>...v1` pairs with apiVersion
+// `<domain>.stigmer.ai/v1`. The domain is "lawfirm" — never the product
+// brand, which must stay out of the wire contract.
+package stigmer.lawfirm.case.v1;
 
 import "buf/validate/validate.proto";
 import "stigmer/resourceapi/v1/resource.proto";
