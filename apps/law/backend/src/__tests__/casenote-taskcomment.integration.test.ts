@@ -14,9 +14,13 @@ import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError, createClient, type Client, type Transport } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { runMigrations } from "@stigmer/resource-api/postgres";
+import { UserSchema, UserService } from "@stigmer/identity";
+import { createPgCredentialStore, createPgRefreshTokenStore } from "@stigmer/identity/postgres";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import pg from "pg";
 import { createTestPool } from "./test-pool.js";
+import { createTestAuth, type TestAuth } from "./test-auth.js";
+import { testMigrationSources } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { CaseSchema, CaseService } from "../gen/stigmer/law/case/v1/case_pb.js";
 import {
@@ -28,18 +32,13 @@ import {
   TaskCommentSchema,
   TaskCommentService,
 } from "../gen/stigmer/law/taskcomment/v1/taskcomment_pb.js";
-import { UserSchema, UserService } from "../gen/stigmer/law/user/v1/user_pb.js";
-import { createPgCredentialStore } from "../domain/user/credentials.js";
 import { memoryObjectStore } from "./memory-object-store.js";
 import { createBackendServer } from "../server.js";
 import { createResourceStore } from "../storage.js";
 
-const MIGRATIONS_DIR = new URL("../../migrations", import.meta.url).pathname;
-
-const asUser = (id: string) => ({ headers: { "x-dev-caller-id": id } });
-const asOperator = () => ({
-  headers: { "x-dev-caller-id": "ops-one", "x-dev-caller-kind": "operator" },
-});
+let auth: TestAuth;
+const asUser = (id: string) => auth.as(id);
+const asOperator = () => auth.asOperator();
 
 async function expectCode(promise: Promise<unknown>, code: Code, pattern?: RegExp) {
   try {
@@ -68,11 +67,14 @@ describe("CaseNote and TaskComment resources", () => {
   beforeAll(async () => {
     container = await new PostgreSqlContainer("postgres:17-alpine").start();
     pool = createTestPool(container.getConnectionUri());
-    await runMigrations(pool, MIGRATIONS_DIR);
+    await runMigrations(pool, testMigrationSources());
+    auth = await createTestAuth();
 
     server = createBackendServer({
       store: createResourceStore(pool),
+      auth: auth.kit,
       credentials: createPgCredentialStore(pool),
+      refreshTokens: createPgRefreshTokenStore(pool),
       objectStore: memoryObjectStore(),
     });
     await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -88,6 +90,7 @@ describe("CaseNote and TaskComment resources", () => {
     lawyer = (
       await users.create(create(UserSchema, { spec: { email: "note-author@example.com" } }), asOperator())
     ).metadata?.id as string;
+    await auth.mint(lawyer);
 
     const cases = createClient(CaseService, transport);
     const makeCase = async (caseNumber: string) =>

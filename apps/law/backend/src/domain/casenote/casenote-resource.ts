@@ -18,7 +18,7 @@ import {
   listOperation,
   referencesExistStep,
 } from "@stigmer/resource-api";
-import { callerFromRequest } from "../../auth/caller.js";
+import type { CallerExtractor } from "@stigmer/resource-api";
 import {
   type CaseNote,
   CaseNoteSchema,
@@ -31,6 +31,7 @@ export function caseNoteResource(deps: {
   store: ResourceStore;
   policy: AuthorizationPolicy;
   publisher?: ResourceEventPublisher;
+  caller: CallerExtractor;
 }) {
   return defineResource({
     definition: {
@@ -41,7 +42,7 @@ export function caseNoteResource(deps: {
       store: deps.store,
       policy: deps.policy,
       publisher: deps.publisher,
-      caller: callerFromRequest,
+      caller: deps.caller,
     },
     service: CaseNoteService,
     operations: {

@@ -52,6 +52,7 @@ Determine scope from the affected files/components:
 #### Workspaces
 - `law`: Changes under `apps/law/**` (backend, proto contracts, buf.gen.yaml)
 - `resource-api`: Changes under `packages/resource-api/**` (commons package, its proto/testproto modules)
+- `identity`: Changes under `packages/identity/**` (shared identity commons: User, credentials, tokens, authenticator chain)
 
 #### Other Areas
 - `docs`: Documentation changes

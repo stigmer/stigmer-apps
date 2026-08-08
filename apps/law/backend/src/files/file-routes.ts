@@ -5,9 +5,9 @@
  * `GET /files/documents/{id}/content` (a stream the browser can save).
  *
  * These routes are the second transport, not a second implementation:
- * identity comes from the same caller seam (auth/caller.ts), authorization
- * from the same policy module, and the row is created by the same
- * pipeline through the in-process invoker. What is deliberately different
+ * identity comes from the same authenticator chain (auth/auth.ts, its
+ * plain-HTTP binding), authorization from the same policy module, and the
+ * row is created by the same pipeline through the in-process invoker. What is deliberately different
  * is the ORDER: the object is uploaded BEFORE the row is created, so the
  * only possible inconsistency is an invisible unreferenced object — a
  * persisted document can never 404 on download. On pipeline failure the
@@ -24,7 +24,7 @@ import type {
   CallerPrincipal,
   ResourceStore,
 } from "@stigmer/resource-api";
-import { callerFromHttpRequest } from "../auth/caller.js";
+import type { CallerResolver } from "@stigmer/identity";
 import {
   type Document,
   DocumentSchema,
@@ -42,6 +42,8 @@ const DOWNLOAD_PATH = /^\/files\/documents\/([A-Za-z0-9_-]+)\/content$/;
 
 export interface FileRouteDeps {
   readonly policy: AuthorizationPolicy;
+  /** The identity chain's plain-HTTP binding — the same chain Connect uses. */
+  readonly caller: CallerResolver["fromHttp"];
   readonly store: ResourceStore;
   readonly objectStore: ObjectStore;
   readonly createDocument: (input: Document, caller: CallerPrincipal) => Promise<Document>;
@@ -84,7 +86,7 @@ async function handleUpload(
   res: ServerResponse,
   caseId: string,
 ): Promise<void> {
-  const caller = callerFromHttpRequest(req);
+  const caller = await deps.caller(req);
   if (!caller) {
     throw new ConnectError("Authentication required", Code.Unauthenticated);
   }
@@ -172,7 +174,7 @@ async function handleDownload(
   res: ServerResponse,
   id: string,
 ): Promise<void> {
-  const caller = callerFromHttpRequest(req);
+  const caller = await deps.caller(req);
   if (!caller) {
     throw new ConnectError("Authentication required", Code.Unauthenticated);
   }

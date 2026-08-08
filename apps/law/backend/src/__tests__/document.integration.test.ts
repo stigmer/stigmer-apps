@@ -17,26 +17,28 @@ import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError, createClient, type Client, type Transport } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { runMigrations } from "@stigmer/resource-api/postgres";
+import { UserSchema, UserService } from "@stigmer/identity";
+import { createPgCredentialStore, createPgRefreshTokenStore } from "@stigmer/identity/postgres";
 import { MinioContainer, type StartedMinioContainer } from "@testcontainers/minio";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import pg from "pg";
 import { createTestPool } from "./test-pool.js";
+import { createTestAuth, type TestAuth } from "./test-auth.js";
+import { testMigrationSources } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { CaseSchema, CaseService } from "../gen/stigmer/law/case/v1/case_pb.js";
 import { DocumentService } from "../gen/stigmer/law/document/v1/document_pb.js";
-import { UserSchema, UserService } from "../gen/stigmer/law/user/v1/user_pb.js";
-import { createPgCredentialStore } from "../domain/user/credentials.js";
 import { MAX_UPLOAD_BYTES } from "../files/file-routes.js";
 import { createS3ObjectStore } from "../objectstore/object-store.js";
 import { createBackendServer } from "../server.js";
 import { createResourceStore } from "../storage.js";
 
-const MIGRATIONS_DIR = new URL("../../migrations", import.meta.url).pathname;
+let auth: TestAuth;
+const asUser = (id: string) => auth.as(id);
+const asOperator = () => auth.asOperator();
 
-const asUser = (id: string) => ({ headers: { "x-dev-caller-id": id } });
-const asOperator = () => ({
-  headers: { "x-dev-caller-id": "ops-one", "x-dev-caller-kind": "operator" },
-});
+/** createdAt-descending lists tie on same-millisecond births (DD-003). */
+const nextInstant = () => new Promise((resolve) => setTimeout(resolve, 5));
 
 const PDF_BYTES = Buffer.from("%PDF-1.4 fake but honest test bytes");
 
@@ -77,7 +79,8 @@ describe("Document resource and byte routes", () => {
       headers: {
         "content-type": options.contentType ?? "application/pdf",
         "x-file-name": encodeURIComponent(options.fileName ?? "vakalatnama.pdf"),
-        ...(options.caller === "" ? {} : { "x-dev-caller-id": options.caller ?? lawyer }),
+        // caller: "" means anonymous — no Authorization header at all.
+        ...(options.caller === "" ? {} : auth.as(options.caller ?? lawyer).headers),
       },
       body: new Uint8Array(options.body ?? PDF_BYTES),
     });
@@ -89,7 +92,8 @@ describe("Document resource and byte routes", () => {
       new MinioContainer("minio/minio:RELEASE.2025-07-23T15-54-02Z").start(),
     ]);
     pool = createTestPool(pgContainer.getConnectionUri());
-    await runMigrations(pool, MIGRATIONS_DIR);
+    await runMigrations(pool, testMigrationSources());
+    auth = await createTestAuth();
 
     const objectStore = createS3ObjectStore({
       endpoint: minio.getConnectionUrl(),
@@ -110,7 +114,9 @@ describe("Document resource and byte routes", () => {
 
     server = createBackendServer({
       store: createResourceStore(pool),
+      auth: auth.kit,
       credentials: createPgCredentialStore(pool),
+      refreshTokens: createPgRefreshTokenStore(pool),
       objectStore,
     });
     await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -124,6 +130,7 @@ describe("Document resource and byte routes", () => {
     lawyer = (
       await users.create(create(UserSchema, { spec: { email: "doc-owner@example.com" } }), asOperator())
     ).metadata?.id as string;
+    await auth.mint(lawyer);
 
     const makeCase = async (caseNumber: string) =>
       (
@@ -196,7 +203,7 @@ describe("Document resource and byte routes", () => {
     it("requires a filename", async () => {
       const res = await fetch(`${baseUrl}/files/cases/${caseId}/documents`, {
         method: "POST",
-        headers: { "content-type": "application/pdf", "x-dev-caller-id": lawyer },
+        headers: { "content-type": "application/pdf", ...auth.as(lawyer).headers },
         body: new Uint8Array(PDF_BYTES),
       });
       expect(res.status).toBe(400);
@@ -211,7 +218,7 @@ describe("Document resource and byte routes", () => {
       };
 
       const res = await fetch(`${baseUrl}/files/documents/${uploaded.metadata.id}/content`, {
-        headers: { "x-dev-caller-id": lawyer },
+        headers: auth.as(lawyer).headers,
       });
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toBe("application/pdf");
@@ -225,7 +232,7 @@ describe("Document resource and byte routes", () => {
 
     it("answers 404 for an unknown document and 401 unauthenticated", async () => {
       const missing = await fetch(`${baseUrl}/files/documents/doc_ghost/content`, {
-        headers: { "x-dev-caller-id": lawyer },
+        headers: auth.as(lawyer).headers,
       });
       expect(missing.status).toBe(404);
 
@@ -239,6 +246,7 @@ describe("Document resource and byte routes", () => {
       const first = (await (await upload({ fileName: "one.pdf" })).json()) as {
         metadata: { id: string };
       };
+      await nextInstant();
       await upload({ fileName: "two.pdf" });
       await upload({ fileName: "elsewhere.pdf", caseId: otherCaseId });
 

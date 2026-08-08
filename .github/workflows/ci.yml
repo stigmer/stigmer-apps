@@ -47,7 +47,7 @@ jobs:
         # codegen after a proto change).
         run: |
           npm run codegen
-          git diff --exit-code -- packages/resource-api/src/gen apps/law/backend/src/gen
+          git diff --exit-code -- packages/resource-api/src/gen packages/identity/src/gen apps/law/backend/src/gen
 
       - name: Build
         run: npm run build

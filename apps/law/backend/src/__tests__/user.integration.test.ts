@@ -12,27 +12,28 @@ import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError, createClient, type Client } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { runMigrations } from "@stigmer/resource-api/postgres";
+import {
+  UserSchema,
+  UserService,
+  verifyPassword,
+  type CredentialStore,
+} from "@stigmer/identity";
+import { createPgCredentialStore, createPgRefreshTokenStore } from "@stigmer/identity/postgres";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
-import bcrypt from "bcryptjs";
 import pg from "pg";
 import { createTestPool } from "./test-pool.js";
+import { createTestAuth, type TestAuth } from "./test-auth.js";
+import { testMigrationSources } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { createPgCredentialStore, type CredentialStore } from "../domain/user/credentials.js";
-import { UserSchema, UserService } from "../gen/stigmer/law/user/v1/user_pb.js";
 import { memoryObjectStore } from "./memory-object-store.js";
 import { createBackendServer } from "../server.js";
 import { createResourceStore } from "../storage.js";
 
-const MIGRATIONS_DIR = new URL("../../migrations", import.meta.url).pathname;
-
 // Accounts are operator-provisioned (FR-ADMIN-001); the operator identity
-// arrives via the T02 interim dev shim, replaced by JWT in T04.
-const asOperator = (id = "ops-one") => ({
-  headers: { "x-dev-caller-id": id, "x-dev-caller-kind": "operator" },
-});
-const asLawyer = (id = "lawyer-one") => ({
-  headers: { "x-dev-caller-id": id },
-});
+// is the per-deployment opk_ key (DD-005 D7), a real credential here too.
+let auth: TestAuth;
+const asOperator = () => auth.asOperator();
+const asLawyer = (id = "lawyer-one") => auth.as(id);
 
 function userInput(overrides: Partial<{ email: string; name: string; phone: string }> = {}) {
   return create(UserSchema, {
@@ -65,12 +66,16 @@ describe("User resource", () => {
   beforeAll(async () => {
     container = await new PostgreSqlContainer("postgres:17-alpine").start();
     pool = createTestPool(container.getConnectionUri());
-    await runMigrations(pool, MIGRATIONS_DIR);
+    await runMigrations(pool, testMigrationSources());
+    auth = await createTestAuth();
+    await auth.mint("lawyer-one");
 
     credentials = createPgCredentialStore(pool);
     server = createBackendServer({
       store: createResourceStore(pool),
+      auth: auth.kit,
       credentials,
+      refreshTokens: createPgRefreshTokenStore(pool),
       objectStore: memoryObjectStore(),
     });
     await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -82,7 +87,8 @@ describe("User resource", () => {
   }, 120_000);
 
   afterEach(async () => {
-    // Credentials reference users; delete child rows first.
+    // Credentials and refresh sessions reference users; children first.
+    await pool.query("DELETE FROM refresh_tokens");
     await pool.query("DELETE FROM user_credentials");
     await pool.query("DELETE FROM users");
   });
@@ -106,8 +112,9 @@ describe("User resource", () => {
 
       expect(created.metadata?.id).toMatch(/^user_[0-9a-z]{26}$/);
       expect(created.metadata?.version).toBe(1n);
-      expect(created.metadata?.createdBy?.id).toBe("ops-one");
-      expect(created.apiVersion).toBe("law.stigmer.ai/v1");
+      expect(created.metadata?.createdBy?.id).toBe("operator");
+      // The commons resource (DD-005 D2/D3): capability-named apiVersion.
+      expect(created.apiVersion).toBe("identity.stigmer.ai/v1");
       expect(created.kind).toBe("User");
       // Stored lowercase: the unique constraint and every lookup agree by
       // construction (T03 D7).
@@ -129,6 +136,19 @@ describe("User resource", () => {
         client.create(userInput(), asLawyer()),
         Code.PermissionDenied,
         /Only an operator may manage user accounts/,
+      );
+    });
+
+    it("INVARIANT (DD-005): no bearer token can claim elevated kind — not even one whose subject says so", async () => {
+      // The dead shim accepted `x-dev-caller-kind: system` from anyone.
+      // Its replacement mints user-kind principals unconditionally: a
+      // token whose SUBJECT is the string "system" is still an ordinary
+      // user and bounces off the operator-only branch like anyone else.
+      await auth.mint("system");
+      await expectCode(
+        client.create(userInput(), auth.as("system")),
+        Code.PermissionDenied,
+        /Only an operator/,
       );
     });
 
@@ -225,7 +245,7 @@ describe("User resource", () => {
       const hash = await credentials.getPasswordHash(created.metadata?.id ?? "");
       expect(hash).toBeDefined();
       expect(hash).not.toContain("correct horse battery");
-      expect(await bcrypt.compare("correct horse battery", hash as string)).toBe(true);
+      expect(await verifyPassword("correct horse battery", hash as string)).toBe(true);
 
       // The resource itself carries nothing: the stored row's spec has
       // exactly the declared fields (leak impossible by construction).
@@ -241,8 +261,8 @@ describe("User resource", () => {
       await client.setPassword({ email: "reset@example.com", password: "second-password" }, asOperator());
 
       const hash = (await credentials.getPasswordHash(created.metadata?.id ?? "")) as string;
-      expect(await bcrypt.compare("second-password", hash)).toBe(true);
-      expect(await bcrypt.compare("first-password", hash)).toBe(false);
+      expect(await verifyPassword("second-password", hash)).toBe(true);
+      expect(await verifyPassword("first-password", hash)).toBe(false);
     });
 
     it("is operator-only", async () => {

@@ -1,25 +1,45 @@
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { InProcessEventDispatcher } from "@stigmer/resource-api";
-import { runMigrations } from "@stigmer/resource-api/postgres";
+import { runMigrations, type MigrationSource } from "@stigmer/resource-api/postgres";
+import { createPgCredentialStore, createPgRefreshTokenStore } from "@stigmer/identity/postgres";
 import pg from "pg";
+import { createAuthKit } from "./auth/auth.js";
 import { loadConfigFromEnv } from "./config.js";
-import { createPgCredentialStore } from "./domain/user/credentials.js";
 import { createS3ObjectStore } from "./objectstore/object-store.js";
 import { createBackendServer } from "./server.js";
 import { createResourceStore } from "./storage.js";
 
 /**
- * Migrations live beside the source tree (`backend/migrations`). The
- * default resolves relative to this module so it works under both `tsx
- * src/main.ts` (src/../migrations) and the bundled `dist/main.js`
- * (dist/../migrations). Containers set MIGRATIONS_DIR explicitly.
+ * Two migration sources, identity first so app tables may reference
+ * users(id) (DD-005 D8). Two layouts exist:
+ *
+ * - Built artifact: build.mjs copies both directories to
+ *   `dist/migrations/{identity,app}` because the image carries no
+ *   node_modules — detected by that directory existing beside this module.
+ * - Dev (`tsx src/main.ts`): the app's own files sit at ../migrations and
+ *   identity's resolve through the workspace link.
  */
-function migrationsDir(): string {
-  return (
-    process.env.MIGRATIONS_DIR ??
-    path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "migrations")
+function migrationSources(): MigrationSource[] {
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const bundledBase = path.join(moduleDir, "migrations");
+  if (existsSync(path.join(bundledBase, "app"))) {
+    return [
+      { source: "identity", dir: path.join(bundledBase, "identity") },
+      { source: "app", dir: path.join(bundledBase, "app") },
+    ];
+  }
+  const require = createRequire(import.meta.url);
+  const identityDir = path.join(
+    path.dirname(require.resolve("@stigmer/identity/package.json")),
+    "migrations",
   );
+  return [
+    { source: "identity", dir: identityDir },
+    { source: "app", dir: path.join(moduleDir, "..", "migrations") },
+  ];
 }
 
 async function main(): Promise<void> {
@@ -28,10 +48,12 @@ async function main(): Promise<void> {
 
   // Migrate on boot: replicas serialize on the runner's advisory lock, so
   // this is safe under horizontal scaling.
-  const migrated = await runMigrations(pool, migrationsDir());
+  const migrated = await runMigrations(pool, migrationSources());
   if (migrated.applied.length > 0) {
     console.log(`migrations applied: ${migrated.applied.join(", ")}`);
   }
+
+  const auth = await createAuthKit(config.auth);
 
   // The event bus: pipelines publish on it, notification handlers
   // subscribe on it (inside createBackendServer) — never inside resource
@@ -40,7 +62,9 @@ async function main(): Promise<void> {
 
   const server = createBackendServer({
     store: createResourceStore(pool),
+    auth,
     credentials: createPgCredentialStore(pool),
+    refreshTokens: createPgRefreshTokenStore(pool),
     objectStore: createS3ObjectStore(config.objectStore),
     dispatcher,
   });

@@ -10,6 +10,7 @@
 import { create } from "@bufbuild/protobuf";
 import type {
   AuthorizationPolicy,
+  CallerExtractor,
   ResourceEventPublisher,
   ResourceStore,
 } from "@stigmer/resource-api";
@@ -21,7 +22,6 @@ import {
   referencesExistStep,
   updateOperation,
 } from "@stigmer/resource-api";
-import { callerFromRequest } from "../../auth/caller.js";
 import {
   type Case,
   CaseSchema,
@@ -36,6 +36,7 @@ export function caseResource(deps: {
   store: ResourceStore;
   policy: AuthorizationPolicy;
   publisher?: ResourceEventPublisher;
+  caller: CallerExtractor;
 }) {
   // T03 retrofit (D3): assigned_lawyer_id was mandatory but unvalidated
   // while no user table existed — it now must reference a real User.
@@ -56,7 +57,7 @@ export function caseResource(deps: {
       store: deps.store,
       policy: deps.policy,
       publisher: deps.publisher,
-      caller: callerFromRequest,
+      caller: deps.caller,
       // document_count is derived on read, never stored (FR-CASE-005 AC8).
       // Page-shaped (T03 D4): ONE grouped query per response — a 20-case
       // page costs one countBy, never twenty counts.

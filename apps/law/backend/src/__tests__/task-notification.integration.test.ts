@@ -19,9 +19,13 @@ import { Code, ConnectError, createClient, type Client, type Transport } from "@
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { InProcessEventDispatcher } from "@stigmer/resource-api";
 import { runMigrations } from "@stigmer/resource-api/postgres";
+import { UserSchema, UserService } from "@stigmer/identity";
+import { createPgCredentialStore, createPgRefreshTokenStore } from "@stigmer/identity/postgres";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import pg from "pg";
 import { createTestPool } from "./test-pool.js";
+import { createTestAuth, type TestAuth } from "./test-auth.js";
+import { testMigrationSources } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { CaseSchema, CaseService } from "../gen/stigmer/law/case/v1/case_pb.js";
 import {
@@ -34,18 +38,20 @@ import {
   TaskService,
   TaskState,
 } from "../gen/stigmer/law/task/v1/task_pb.js";
-import { UserSchema, UserService } from "../gen/stigmer/law/user/v1/user_pb.js";
-import { createPgCredentialStore } from "../domain/user/credentials.js";
 import { memoryObjectStore } from "./memory-object-store.js";
 import { createBackendServer } from "../server.js";
 import { createResourceStore } from "../storage.js";
 
-const MIGRATIONS_DIR = new URL("../../migrations", import.meta.url).pathname;
+let auth: TestAuth;
+const asUser = (id: string) => auth.as(id);
+const asOperator = () => auth.asOperator();
 
-const asUser = (id: string) => ({ headers: { "x-dev-caller-id": id } });
-const asOperator = () => ({
-  headers: { "x-dev-caller-id": "ops-one", "x-dev-caller-kind": "operator" },
-});
+/**
+ * Notification ordering is createdAt-descending, and two notifications
+ * born in the same millisecond tie nondeterministically (the DD-003
+ * known flake) — separate order-sensitive creations by a real instant.
+ */
+const nextInstant = () => new Promise((resolve) => setTimeout(resolve, 5));
 
 async function expectCode(promise: Promise<unknown>, code: Code, pattern?: RegExp) {
   try {
@@ -93,11 +99,14 @@ describe("Task and Notification resources", () => {
   beforeAll(async () => {
     container = await new PostgreSqlContainer("postgres:17-alpine").start();
     pool = createTestPool(container.getConnectionUri());
-    await runMigrations(pool, MIGRATIONS_DIR);
+    await runMigrations(pool, testMigrationSources());
+    auth = await createTestAuth();
 
     server = createBackendServer({
       store: createResourceStore(pool),
+      auth: auth.kit,
       credentials: createPgCredentialStore(pool),
+      refreshTokens: createPgRefreshTokenStore(pool),
       objectStore: memoryObjectStore(),
       dispatcher: new InProcessEventDispatcher(),
     });
@@ -117,6 +126,7 @@ describe("Task and Notification resources", () => {
     bina = (
       await users.create(create(UserSchema, { spec: { email: "bina@example.com" } }), asOperator())
     ).metadata?.id as string;
+    await auth.mint(asha, bina);
 
     const cases = createClient(CaseService, transport);
     caseId = (
@@ -386,6 +396,7 @@ describe("Task and Notification resources", () => {
   describe("notification inbox (recipient-scoped, newest first)", () => {
     it("lists only the caller's own, newest first; unread badge is derived", async () => {
       await tasks.create(taskInput({ title: "first", assigneeId: bina }), asUser(asha));
+      await nextInstant();
       await tasks.create(taskInput({ title: "second", assigneeId: bina }), asUser(asha));
       await tasks.create(taskInput({ title: "for-asha", assigneeId: asha }), asUser(bina));
 

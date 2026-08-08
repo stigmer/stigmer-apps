@@ -1,6 +1,6 @@
 {
   "name": "@stigmer/resource-api",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Proto-first resource API pipeline: common envelope, per-operation step chains, store port, and error contract. TypeScript edition of the Stigmer Java/Go request-pipeline commons.",
   "license": "Apache-2.0",
   "repository": {

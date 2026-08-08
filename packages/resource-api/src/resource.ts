@@ -71,6 +71,16 @@ import { validateMessage } from "./validate.js";
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 100;
 
+/**
+ * The transport-identity seam's shape. May be async: real credential
+ * verification does cryptographic work (and, for future authenticators,
+ * I/O like a JWKS fetch); the sync form remains valid for tests and
+ * shims (T04a).
+ */
+export type CallerExtractor = (
+  ctx: HandlerContext,
+) => CallerPrincipal | undefined | Promise<CallerPrincipal | undefined>;
+
 export interface ResourceDefinition<R extends ResourceMessage> {
   /** Resource kind, e.g. "Case". Used as store key and event kind. */
   readonly kind: string;
@@ -93,10 +103,10 @@ export interface ResourceDefinition<R extends ResourceMessage> {
   readonly publisher?: ResourceEventPublisher;
   /**
    * Extracts the caller from the transport context. This is the app's
-   * enforcement seam (JWT middleware, test headers, MCP gate) — the
+   * enforcement seam (JWT verification, test headers, MCP gate) — the
    * pipeline never parses credentials itself.
    */
-  readonly caller: (ctx: HandlerContext) => CallerPrincipal | undefined;
+  readonly caller: CallerExtractor;
   /**
    * Read-side status derivation (e.g. Case.document_count, Task.overdue):
    * runs once per response on the WHOLE page — a one-element array for
@@ -544,7 +554,7 @@ export function getOperation<R extends ResourceMessage, I>(
       ]);
 
       return async (req, hctx) => {
-        const ctx: ReadContext<R, I> = { caller: def.caller(hctx), input: req as I };
+        const ctx: ReadContext<R, I> = { caller: await def.caller(hctx), input: req as I };
         await pipeline.execute(ctx);
         const target = ctx.target as R;
         await deriveAll(runtime, [target]);
@@ -595,7 +605,7 @@ export function listOperation<R extends ResourceMessage, I, O>(
       ]);
 
       return async (req, hctx) => {
-        const ctx: ReadContext<R, I> = { caller: def.caller(hctx), input: req as I };
+        const ctx: ReadContext<R, I> = { caller: await def.caller(hctx), input: req as I };
         await pipeline.execute(ctx);
 
         // authorize guaranteed a caller above.
@@ -631,7 +641,7 @@ export function customOperation<R extends ResourceMessage, I, O>(
     bind(runtime, method, operationName) {
       const { def } = runtime;
       return async (req, hctx) => {
-        const caller = def.caller(hctx);
+        const caller = await def.caller(hctx);
         validateMessage(method.input, req, `${runtime.displayName} ${operationName}`);
 
         // Fail-closed authorization: the handler MUST authorize (via
@@ -775,7 +785,7 @@ export function defineResource<R extends ResourceMessage, S extends DescService>
         name,
       );
       invoke[binding.flavor] = executor;
-      impl[name] = async (req, hctx) => executor(req as R, definition.caller(hctx));
+      impl[name] = async (req, hctx) => executor(req as R, await definition.caller(hctx));
     } else {
       impl[name] = (binding.bind as NonNullable<typeof binding.bind>)(runtime, method, name);
     }

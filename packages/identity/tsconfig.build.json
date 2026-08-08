@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "include": ["src/**/*.ts"],
+  // Tests never ship in the published artifact (the resource-api
+  // precedent): the build tree is the package's public surface.
+  "exclude": ["src/**/*.test.ts", "src/**/__tests__/**"]
+}

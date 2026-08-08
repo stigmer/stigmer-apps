@@ -25,7 +25,7 @@ import {
   MAX_PAGE_SIZE,
   referencesExistStep,
 } from "@stigmer/resource-api";
-import { callerFromRequest } from "../../auth/caller.js";
+import type { CallerExtractor } from "@stigmer/resource-api";
 import {
   type ListNotificationsRequest,
   ListNotificationsResponseSchema,
@@ -55,6 +55,7 @@ export function notificationResource(deps: {
   store: ResourceStore;
   policy: AuthorizationPolicy;
   publisher?: ResourceEventPublisher;
+  caller: CallerExtractor;
 }) {
   return defineResource({
     definition: {
@@ -69,7 +70,7 @@ export function notificationResource(deps: {
       store: deps.store,
       policy: deps.policy,
       publisher: deps.publisher,
-      caller: callerFromRequest,
+      caller: deps.caller,
     },
     service: NotificationService,
     operations: {

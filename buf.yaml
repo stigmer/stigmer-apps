@@ -1,4 +1,4 @@
-# One buf workspace for the whole monorepo. Three modules:
+# One buf workspace for the whole monorepo. Four modules:
 #
 # - packages/resource-api/proto is the envelope contract consumers import.
 #   It ships with the @stigmer/resource-api npm package AND is published to
@@ -6,6 +6,10 @@
 #   consumers declare it as a buf dep; nobody vendors these files).
 # - packages/resource-api/testproto is the commons' test fixture module and
 #   never ships.
+# - packages/identity/proto holds the shared identity contracts
+#   (stigmer.identity.<r>.v1 — DD-A2 as amended by DD-005: commons
+#   resources are named by capability). BSR publication deferred until the
+#   API holds (mirroring resourceapi's path to the registry).
 # - apps/law/proto holds the Stigmer Law contracts (stigmer.law.<r>.v1).
 #   Proto-first: every backend feature starts here; TypeScript types are
 #   generated, never hand-written (stigmer DD-007). Its imports of
@@ -17,6 +21,7 @@ modules:
   - path: packages/resource-api/proto
     name: buf.build/stigmer/resourceapi
   - path: packages/resource-api/testproto
+  - path: packages/identity/proto
   - path: apps/law/proto
 deps:
   - buf.build/bufbuild/protovalidate

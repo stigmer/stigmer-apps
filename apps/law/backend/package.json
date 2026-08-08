@@ -23,8 +23,8 @@
     "@bufbuild/protobuf": "^2.13.0",
     "@connectrpc/connect": "^2.1.2",
     "@connectrpc/connect-node": "^2.1.2",
-    "@stigmer/resource-api": "^0.2.0",
-    "bcryptjs": "^3.0.3",
+    "@stigmer/identity": "^0.1.0",
+    "@stigmer/resource-api": "^0.3.0",
     "pg": "^8.22.0"
   },
   "devDependencies": {

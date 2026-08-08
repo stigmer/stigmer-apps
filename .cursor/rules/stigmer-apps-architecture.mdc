@@ -32,12 +32,14 @@ with a real consumer (the way `@stigmer/resource-api` grew from the first
 vertical), never from speculation. Premature extraction is as much a
 defect as domain leakage.
 
-**DD-A2 — The naming law (project DD-002).** Proto packages are
-`stigmer.<domain>.<resource>.v1`, apiVersions are `<domain>.stigmer.ai/v1`.
-Domain words name practice areas (`law`, `gym`, `clinic`) — never customer
-segments, never brands. The brand ("Stigmer Law") never enters the wire
-contract: apiVersions are stamped into every persisted row, and a brand in
-there turns a rebrand into a data migration.
+**DD-A2 — The naming law (project DD-002, amended by DD-005).** Proto
+packages are `stigmer.<domain>.<resource>.v1`, apiVersions are
+`<domain>.stigmer.ai/v1`. For apps, domain words name practice areas
+(`law`, `gym`, `clinic`); for commons resources, they name capabilities
+(`identity`) — never customer segments, never brands, never repo-layout
+words (`apps` is a folder, not a domain). The brand ("Stigmer Law") never
+enters the wire contract: apiVersions are stamped into every persisted
+row, and a brand in there turns a rebrand into a data migration.
 
 **DD-A3 — One proto definition, everywhere.** The envelope module is
 `buf.build/stigmer/resourceapi` on the BSR for external consumers; inside

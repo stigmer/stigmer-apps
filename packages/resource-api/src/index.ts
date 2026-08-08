@@ -58,6 +58,7 @@ export { referencesExistStep } from "./references.js";
 
 // Resource definition & operations
 export type {
+  CallerExtractor,
   CreateOperationOptions,
   CustomContext,
   CustomOperationOptions,

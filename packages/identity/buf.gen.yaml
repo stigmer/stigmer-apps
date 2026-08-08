@@ -1,0 +1,22 @@
+# Codegen template for the identity commons. Run from the REPO ROOT via
+# the root `npm run codegen` (buf generate --template ...): inputs and out
+# are root-relative, so invoking it from anywhere else generates into the
+# wrong place.
+#
+# protoc-gen-es v2 only: it also emits Connect service descriptors, which
+# @connectrpc/connect v2 consumes directly. import_extension=js keeps
+# generated relative imports Node-resolvable (DD-A8).
+# include_imports materializes the stigmer/resourceapi envelope and
+# buf.validate types so the package has no generated-code dependency
+# outside itself.
+version: v2
+clean: true
+plugins:
+  - remote: buf.build/bufbuild/es
+    out: packages/identity/src/gen
+    opt:
+      - target=ts
+      - import_extension=js
+    include_imports: true
+inputs:
+  - directory: packages/identity/proto

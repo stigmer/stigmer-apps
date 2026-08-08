@@ -25,7 +25,7 @@ import {
   referencesExistStep,
   updateOperation,
 } from "@stigmer/resource-api";
-import { callerFromRequest } from "../../auth/caller.js";
+import type { CallerExtractor } from "@stigmer/resource-api";
 import {
   type GetTaskRequest,
   type ListTasksRequest,
@@ -81,6 +81,7 @@ export function taskResource(deps: {
   store: ResourceStore;
   policy: AuthorizationPolicy;
   publisher?: ResourceEventPublisher;
+  caller: CallerExtractor;
 }) {
   // case_id is mandatory (validated), assignee_id optional (the step
   // skips empty) — both must exist when set (FAILED_PRECONDITION, D3).
@@ -98,7 +99,7 @@ export function taskResource(deps: {
       store: deps.store,
       policy: deps.policy,
       publisher: deps.publisher,
-      caller: callerFromRequest,
+      caller: deps.caller,
       // Page-shaped (T03 D4); pure computation here, so no query at all.
       deriveStatus: (tasks: readonly Task[]) => {
         const today = todayInFirmTimezone();

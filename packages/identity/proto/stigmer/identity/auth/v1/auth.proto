@@ -1,0 +1,64 @@
+// The authentication surface (DD-005): the smallest correct issuer's
+// wire contract. Login verifies email+password (bcrypt) and mints a pair:
+// a short-lived access token (returned in the body, held in memory by the
+// web app) and a long-lived refresh token (set as an httpOnly cookie
+// path-scoped to this service — never in the body, never readable by
+// page script; D5). Refresh rotates the cookie one-time-use with reuse
+// detection (D6). These RPCs are identity-level: Login is necessarily
+// pre-authentication, and WhoAmI is self-scoped by construction (it can
+// only ever return the caller's own record) — the consuming app's policy
+// module governs the User RESOURCE operations, not this surface.
+syntax = "proto3";
+
+package stigmer.identity.auth.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/identity/user/v1/user.proto";
+
+message LoginRequest {
+  // Case-insensitive (the User natural key is stored lowercase).
+  string email = 1 [(buf.validate.field).string.email = true];
+  string password = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+message LoginResponse {
+  // Short-lived (≈1h, T01 owner decision 1); attach as
+  // `Authorization: Bearer …`. The refresh token travels ONLY in the
+  // Set-Cookie header.
+  string access_token = 1;
+  int32 expires_in_seconds = 2;
+  // The signed-in user, so the app renders a session without a second
+  // round trip.
+  stigmer.identity.user.v1.User user = 3;
+}
+
+// The refresh token arrives in the request's Cookie header, not the body.
+message RefreshRequest {}
+
+message RefreshResponse {
+  string access_token = 1;
+  int32 expires_in_seconds = 2;
+}
+
+// Revokes the presented refresh session (cookie) and clears the cookie.
+// Idempotent: logging out without a live session still succeeds.
+message LogoutRequest {}
+
+message LogoutResponse {}
+
+message WhoAmIRequest {}
+
+service AuthService {
+  // Verify email + password; mint the token pair. Failures are uniform
+  // ("email or password is incorrect") — the one recorded exception to
+  // the errors-name-the-value rule (DD-005): for credentials, precision
+  // helps an attacker more than a clerk. Rate-limited, fail-closed.
+  rpc Login(LoginRequest) returns (LoginResponse);
+  // Rotate the refresh session and mint a fresh access token. A replayed
+  // (already-used) refresh token is theft evidence: every session of the
+  // affected user is revoked and the caller must sign in again (D6).
+  rpc Refresh(RefreshRequest) returns (RefreshResponse);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  // The caller's own User record — the web app's session bootstrap.
+  rpc WhoAmI(WhoAmIRequest) returns (stigmer.identity.user.v1.User);
+}

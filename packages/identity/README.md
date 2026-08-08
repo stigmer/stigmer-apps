@@ -1,0 +1,93 @@
+# @stigmer/identity
+
+Shared identity for Stigmer vertical apps: the `User` resource, credential
+storage, token issuing/verification, and a pluggable authenticator chain.
+Apache-2.0, like every commons package.
+
+This package answers **"who is calling"** — never "what may they do".
+Authorization stays in each app's policy module (one policy, N enforcement
+points); this package produces the `CallerPrincipal` that policy consumes.
+
+The design record is DD-005 in the first consumer's project folder: own
+the authentication seam, ship the smallest correct issuer behind it
+(bcrypt password → locally-signed RS256 tokens), keep "bring your own
+identity provider" one authenticator away.
+
+## The pieces
+
+| Piece | What it is |
+|---|---|
+| `Authenticator` + `composeAuthenticators` | The seam. Each authenticator claims or passes on a presented bearer credential; first claim wins. |
+| `bearerTokenAuthenticator` | Verifies locally-signed RS256 access tokens (the ones Login mints). |
+| `operatorKeyAuthenticator` | The per-deployment `opk_` operator credential — how a fresh deployment with zero users bootstraps its first one. Not a user row: there is no phishable admin account. |
+| `createCallerResolver` | Binds the chain to both transports: Connect handlers (`fromConnect`, for `defineResource`'s `caller` seam) and plain-HTTP byte routes (`fromHttp`). |
+| `createAccessTokenIssuer` / `loadSigningKeys` | RS256, `kid` = RFC 7638 thumbprint, verify-only previous key for rotation. Production loads configured keys and fails fast; dev/tests use `generateEphemeralSigningKeys()`. |
+| `userResource` | The shared `User` resource on the commons pipeline (`stigmer.identity.user.v1`, apiVersion `identity.stigmer.ai/v1`). |
+| `CredentialStore` / `RefreshTokenStore` | Ports; Postgres adapters under `@stigmer/identity/postgres`. Refresh tokens are opaque, hashed at rest, one-time-use with reuse detection. |
+
+## The profile pattern (binding on every vertical)
+
+The identity `User` carries **identity attributes only**: email (natural
+key), name, phone (E.164 — a channel binding is an identity attribute).
+
+Vertical-specific person data — a lawyer's bar number, a gym member's
+plan — lives in **vertical-owned profile resources that reference the
+user id**. Verticals extend by reference, never by widening this
+package's proto. A field proposed for `UserSpec` must be an attribute of
+*identity itself*, meaningful to every vertical, or it does not land.
+
+## Composing into an app
+
+The app stays the composition root — it declares the chain, owns the
+policy, registers the storage kinds, and orders the migration sources:
+
+```ts
+const keys = config.auth.ephemeralKeys
+  ? await generateEphemeralSigningKeys()
+  : await loadSigningKeys(config.auth);
+const issuer = createAccessTokenIssuer(keys);
+const resolver = createCallerResolver([
+  operatorKeyAuthenticator(config.auth.operatorKeySha256Hex),
+  bearerTokenAuthenticator(issuer),
+]);
+
+// Storage: spread the identity kinds into the app's one store.
+const store = new PostgresResourceStore(pool, {
+  ...identityStoreKinds(),
+  Case: { /* the app's own kinds */ },
+});
+
+// Migrations: identity's source first, so app tables can reference users(id).
+await runMigrations(pool, [
+  { source: "identity", dir: identityMigrationsDir },
+  { source: "app", dir: appMigrationsDir },
+]);
+
+// The resource: app policy, app publisher, the chain's resolver.
+const users = userResource({ store, policy, caller: resolver.fromConnect, credentials, refreshTokens });
+```
+
+Deploy note: the app's build must ship both migration directories beside
+the bundle (the deployed image carries no `node_modules`) — see the first
+consumer's `build.mjs`.
+
+## Growth path (each waits for a real consumer)
+
+- **OIDC authenticator** — "bring your own IdP" (Entra, Google, Okta):
+  verify against the provider's JWKS, map the subject to a `User`. This is
+  the enterprise-SSO answer; it plugs into the chain without app changes.
+- **Channel authenticator** (T05) — MCP service credential + verified
+  channel binding (`wa_id` → `User.phone`) resolving to a user-kind
+  principal.
+- **API-key authenticator** — platform-precedented (`stk_`), when a
+  machine consumer exists.
+
+## Invariants (tested)
+
+1. No transport credential can produce the system principal — bearer
+   tokens verify to user-kind only (`token_type` asserted even on genuine
+   signatures), the operator key to operator-kind; `kind: "system"`
+   exists only in-process.
+2. A password reset revokes the user's refresh sessions (DD-005 D9): with
+   no user delete/disable in the contract, SetPassword is the offboarding
+   lever, and it must kill what the old credential earned.

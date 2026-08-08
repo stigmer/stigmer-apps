@@ -19,7 +19,7 @@ afterAll(async () => {
 
 runStoreContractTests("PostgresResourceStore", async () => {
   const pool = await db.createIsolatedPool();
-  await runMigrations(pool, MIGRATIONS);
+  await runMigrations(pool, [{ source: "testdata", dir: MIGRATIONS }]);
   return {
     store: new PostgresResourceStore(pool, {
       Widget: {

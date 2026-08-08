@@ -12,10 +12,10 @@
  * here, without touching any handler, because the authorize slot always
  * runs.
  *
- * Until T04's JWT lands, the caller KIND is asserted by the x-dev-caller-*
- * shim (see auth/caller.ts) — these branches are real policy, but their
- * authentication is only as strong as that seam. Nothing deploys before
- * T04.
+ * Caller KIND is real authentication since T04a (DD-005): bearer tokens
+ * verify to user-kind only, the opk_ operator key to operator-kind, and
+ * the system kind exists exclusively in-process — so the operator and
+ * system branches below are enforced boundaries, not assertions.
  */
 
 import {

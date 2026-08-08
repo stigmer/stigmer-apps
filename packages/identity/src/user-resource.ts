@@ -1,17 +1,23 @@
 /**
- * The User resource on the commons pipeline. Operation matrix (DD-001,
- * amended by T03 D7): create (operator-only), get, list, setPassword
- * (operator-only) — no update (profile read-only in MVP), no delete.
+ * The shared User resource on the commons pipeline (moved from the first
+ * vertical at T04a — DD-005 D2: users and credentials are identity
+ * concerns, defined once, consumed by every vertical).
+ *
+ * Operation matrix (first consumer's contract, adopted as the commons
+ * default): create (operator-only by consumer policy), get, list,
+ * setPassword (operator-only) — no update (profile read-only until a
+ * vertical needs otherwise), no delete.
  *
  * Credentials never touch this resource: SetPassword bcrypts server-side
- * into the app-owned credential store (see credentials.ts). The policy
- * module owns WHO may call what; this file only declares the operations.
+ * into the credential store (credential-store.ts). The consuming app's
+ * policy module owns WHO may call what; this file only declares the
+ * operations.
  */
 
-import bcrypt from "bcryptjs";
 import { create } from "@bufbuild/protobuf";
 import type {
   AuthorizationPolicy,
+  CallerExtractor,
   PipelineStep,
   ResourceEventPublisher,
   ResourceStore,
@@ -24,7 +30,7 @@ import {
   getOperation,
   listOperation,
 } from "@stigmer/resource-api";
-import { callerFromRequest } from "../../auth/caller.js";
+import type { CredentialStore } from "./credential-store.js";
 import {
   type GetUserRequest,
   type ListUsersRequest,
@@ -34,23 +40,20 @@ import {
   type User,
   UserSchema,
   UserService,
-} from "../../gen/stigmer/law/user/v1/user_pb.js";
-import type { CredentialStore } from "./credentials.js";
+} from "./gen/stigmer/identity/user/v1/user_pb.js";
+import { hashPassword } from "./password.js";
+import type { RefreshTokenStore } from "./refresh-token.js";
 
-/**
- * bcrypt cost factor: 10 is the bcryptjs default recommendation — ~100ms
- * per hash on current hardware, strong enough for a 15-user firm and fast
- * enough that operator provisioning and T04 login stay interactive.
- */
-const BCRYPT_ROUNDS = 10;
+export const USER_KIND = "User";
+export const USER_API_VERSION = "identity.stigmer.ai/v1";
 
 const normalizedEmail = (u: User): string => (u.spec?.email ?? "").trim().toLowerCase();
 
 /**
  * Email is stored lowercase so the natural-key unique constraint and every
  * lookup agree by construction (casing is not the user's problem); name
- * defaults to the email local-part (record model). Runs after
- * build-new-state, so it shapes exactly what gets persisted.
+ * defaults to the email local-part. Runs after build-new-state, so it
+ * shapes exactly what gets persisted.
  */
 const normalizeUserStep: PipelineStep<WriteContext<User>> = {
   name: "normalize-user",
@@ -64,16 +67,22 @@ const normalizeUserStep: PipelineStep<WriteContext<User>> = {
   },
 };
 
-export function userResource(deps: {
-  store: ResourceStore;
-  policy: AuthorizationPolicy;
-  publisher?: ResourceEventPublisher;
-  credentials: CredentialStore;
-}) {
+export interface UserResourceDeps {
+  readonly store: ResourceStore;
+  readonly policy: AuthorizationPolicy;
+  readonly publisher?: ResourceEventPublisher;
+  /** The app's caller seam — typically `createCallerResolver(...).fromConnect`. */
+  readonly caller: CallerExtractor;
+  readonly credentials: CredentialStore;
+  /** Required so SetPassword can revoke sessions (DD-005 D9). */
+  readonly refreshTokens: RefreshTokenStore;
+}
+
+export function userResource(deps: UserResourceDeps) {
   return defineResource({
     definition: {
-      kind: "User",
-      apiVersion: "law.stigmer.ai/v1",
+      kind: USER_KIND,
+      apiVersion: USER_API_VERSION,
       idPrefix: "user",
       schema: UserSchema,
       naturalKey: {
@@ -85,7 +94,7 @@ export function userResource(deps: {
       store: deps.store,
       policy: deps.policy,
       publisher: deps.publisher,
-      caller: callerFromRequest,
+      caller: deps.caller,
     },
     service: UserService,
     operations: {
@@ -113,13 +122,18 @@ export function userResource(deps: {
             id: ctx.input.id || undefined,
             naturalKey: ctx.input.email ? ctx.input.email.trim().toLowerCase() : undefined,
           });
-          const hash = await bcrypt.hash(ctx.input.password, BCRYPT_ROUNDS);
-          await deps.credentials.setPasswordHash(user.metadata?.id as string, hash);
+          const userId = user.metadata?.id as string;
+          await deps.credentials.setPasswordHash(userId, await hashPassword(ctx.input.password));
+          // DD-005 D9: with no user delete/disable in the contract, a
+          // password reset is the offboarding lever — it must also kill
+          // the sessions the old credential earned. The ≤1h access-token
+          // tail is the accepted remainder.
+          await deps.refreshTokens.revokeAllForUser(userId);
           return create(SetPasswordResponseSchema, {});
         },
       }),
-      // No update: profile is read-only in MVP (FR-USER-001 notes) — the
-      // service declares no such method, so the contract enforces it.
+      // No update: profile is read-only until a vertical needs otherwise —
+      // the service declares no such method, so the contract enforces it.
     },
   });
 }

@@ -1,7 +1,9 @@
 import http from "node:http";
 import { connectNodeAdapter } from "@connectrpc/connect-node";
+import type { ConnectRouter } from "@connectrpc/connect";
 import type { InProcessEventDispatcher, ResourceStore } from "@stigmer/resource-api";
-import type { CredentialStore } from "./domain/user/credentials.js";
+import { authService, type CredentialStore, type RefreshTokenStore } from "@stigmer/identity";
+import type { AuthKit } from "./auth/auth.js";
 import { registerTaskAssignmentHandler } from "./domain/notification/task-assignment-handler.js";
 import { createFileRoutes } from "./files/file-routes.js";
 import type { ObjectStore } from "./objectstore/object-store.js";
@@ -9,7 +11,10 @@ import { buildRoutes, createApp } from "./routes.js";
 
 export interface BackendDeps {
   readonly store: ResourceStore;
+  /** The composed authentication (auth/auth.ts): issuer + caller resolver. */
+  readonly auth: AuthKit;
   readonly credentials: CredentialStore;
+  readonly refreshTokens: RefreshTokenStore;
   readonly objectStore: ObjectStore;
   /**
    * The resource event dispatcher. Optional so narrow tests can boot
@@ -23,14 +28,17 @@ export interface BackendDeps {
  * Builds the HTTP server: health endpoint, the document byte routes
  * (upload/download — T03 D6), and every Connect route, with the event
  * subscribers wired to the SAME resource instances the routes serve —
- * one pipeline per resource, shared by every surface. Construction is
- * separated from listening so integration tests can boot the exact
- * production server on an ephemeral port.
+ * one pipeline per resource, shared by every surface. Both transports
+ * resolve callers through the SAME auth kit (one chain, N entrances).
+ * Construction is separated from listening so integration tests can boot
+ * the exact production server on an ephemeral port.
  */
 export function createBackendServer(deps: BackendDeps): http.Server {
   const app = createApp({
     store: deps.store,
+    caller: deps.auth.resolver.fromConnect,
     credentials: deps.credentials,
+    refreshTokens: deps.refreshTokens,
     publisher: deps.dispatcher,
   });
 
@@ -47,6 +55,7 @@ export function createBackendServer(deps: BackendDeps): http.Server {
 
   const fileRoutes = createFileRoutes({
     policy: app.policy,
+    caller: deps.auth.resolver.fromHttp,
     store: deps.store,
     objectStore: deps.objectStore,
     createDocument: app.resources.documents.invoke.create as NonNullable<
@@ -54,7 +63,23 @@ export function createBackendServer(deps: BackendDeps): http.Server {
     >,
   });
 
-  const connectHandler = connectNodeAdapter({ routes: buildRoutes(app.resources) });
+  // Login/Refresh/Logout/WhoAmI — identity-level, mounted beside the
+  // resources; the resource pipelines and the policy module are untouched
+  // by it (the auth surface proves identity, the policy governs actions).
+  const auth = authService({
+    store: deps.store,
+    credentials: deps.credentials,
+    refreshTokens: deps.refreshTokens,
+    issuer: deps.auth.issuer,
+    caller: deps.auth.resolver.fromConnect,
+  });
+
+  const connectHandler = connectNodeAdapter({
+    routes: (router: ConnectRouter) => {
+      buildRoutes(app.resources)(router);
+      auth.routes(router);
+    },
+  });
 
   return http.createServer((req, res) => {
     // Health answers before anything else and deliberately does NOT check
