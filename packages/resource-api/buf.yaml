@@ -1,9 +1,12 @@
-# Two modules: `proto` ships with the package (the envelope contract
-# consumers import); `testproto` is the fixture module for the commons' own
-# tests and never ships.
+# Two modules: `proto` is the envelope contract consumers import — it
+# ships with the npm package AND is published to the Buf Schema Registry
+# as buf.build/stigmer/resourceapi (consumers declare it as a buf dep;
+# nobody vendors these files). `testproto` is the fixture module for the
+# commons' own tests and never ships.
 version: v2
 modules:
   - path: proto
+    name: buf.build/stigmer/resourceapi
   - path: testproto
 deps:
   - buf.build/bufbuild/protovalidate
