@@ -1,0 +1,125 @@
+---
+description: Architecture standards for the Stigmer Apps monorepo — commons-vs-app placement, proto naming, licensing boundaries, and the customer-data confinement rule
+globs: packages/**/*.{ts,proto}, apps/**/*.{ts,proto}
+alwaysApply: false
+---
+
+# Stigmer Apps Architecture
+
+Stigmer Apps is one repository, many vertical products (the Odoo model):
+business applications (`apps/`) built on a shared TypeScript commons
+(`packages/`). Every line of code must answer one question: **"Would
+vertical #2 need this?"** Yes → it belongs in the commons (or is written so
+its extraction is mechanical). No → it belongs to exactly one app.
+
+## The Layered Architecture (Non-Negotiable)
+
+| Layer | Path | License | Knows about |
+|-------|------|---------|-------------|
+| Commons | `packages/resource-api` (and future `packages/*`) | Apache-2.0 | Nothing product-, domain-, or customer-specific — business-agnostic by contract |
+| Apps | `apps/<domain>/` (proto, backend, web, mcp-server) | AGPL-3.0-only | Its own domain + the commons |
+
+Dependencies flow downward only. Commons never import from apps. Apps
+never import from each other. A commons package's test suite runs
+standalone — a library only testable through a consuming product is a
+design failure.
+
+## Design Decisions
+
+**DD-A1 — The placement test.** Classify every new module at design time:
+commons / app / extraction seam. The commons grows from proven app code
+with a real consumer (the way `@stigmer/resource-api` grew from the first
+vertical), never from speculation. Premature extraction is as much a
+defect as domain leakage.
+
+**DD-A2 — The naming law (project DD-002).** Proto packages are
+`stigmer.<domain>.<resource>.v1`, apiVersions are `<domain>.stigmer.ai/v1`.
+Domain words name practice areas (`law`, `gym`, `clinic`) — never customer
+segments, never brands. The brand ("Stigmer Law") never enters the wire
+contract: apiVersions are stamped into every persisted row, and a brand in
+there turns a rebrand into a data migration.
+
+**DD-A3 — One proto definition, everywhere.** The envelope module is
+`buf.build/stigmer/resourceapi` on the BSR for external consumers; inside
+this repo every module resolves in-workspace through the single root
+`buf.yaml`. Nothing is vendored; nothing is pinned between siblings.
+Generated code is committed; `npm run codegen` from the root is the only
+way to produce it; CI fails on drift.
+
+**DD-A4 — No resource bypasses the pipeline.** Every resource is served
+through the commons pipeline (validate → load → authorize →
+duplicate-check → build → persist → publish). System-originated writes go
+through `systemOperations` + the in-process invoker — the full pipeline as
+the system principal, never a direct store write.
+
+**DD-A5 — One policy, N enforcement points.** Each app has exactly one
+authorization policy module, enforced at every transport entrance (Connect
+handlers AND plain-HTTP byte routes). Authorization is fail-closed: an
+operation without a declared policy does not run.
+
+**DD-A6 — Derived over stored.** Facts computable from persisted state are
+computed on read (page-shaped `deriveStatus`, grouped `countBy` — one
+query per page, never N+1). Stored lifecycle state has a single write path;
+spec updates must not be able to smuggle a state change.
+
+**DD-A7 — Events for cross-aggregate effects.** Cross-aggregate side
+effects ride the event bus (publish slot → dispatcher → handler →
+in-process invocation). Handlers are idempotent; dedup keys include the
+source version.
+
+**DD-A8 — Node-resolvable ESM (stigmer DD-018).** Relative imports carry
+explicit `.js` extensions under NodeNext resolution. Extension-less
+specifiers crash plain-Node consumers with `ERR_MODULE_NOT_FOUND` and
+bundler-only testing never catches it.
+
+**DD-A9 — The licensing boundary.** Commons are Apache-2.0 (anyone may
+build on them); apps are AGPL-3.0-only (copyleft blocks closed-SaaS
+competitors — the Frappe/ERPNext split). Every package declares its
+license in its own LICENSE file and package.json; the root LICENSE.md is
+the map. Code may move from an app into the commons only with a conscious
+relicensing decision by the owner.
+
+**DD-A10 — Customer-data confinement (project DD-003).** Customer-specific
+strings live ONLY under `_projects/` and `_changelog/`. Code, protos,
+fixtures, roles, rules, and docs stay publication-ready at all times —
+enforced by `scripts/check-customer-data.mjs` in CI (the two folders are
+excluded from its scan; everything else is not). Fixtures are fictional by
+construction: short fictional phones (`+91123456`), invented names. Never
+weaken the guard to make a failure go away; fix the data.
+
+**DD-A11 — Commons changes are versioned contracts.** `@stigmer/resource-api`
+is 0.x but its API is a contract with every app. Breaking changes land
+back-to-back with the consumer adaptation and a consumer-forced-changes
+list in the task record. A commons change that breaks an app it didn't
+adapt is incomplete work.
+
+## Dont-Dos
+
+1. **No domain knowledge in `packages/`.** Not a type name, not an example
+   in a doc comment, not a test fixture. The commons must read as if no
+   particular vertical exists.
+2. **No app-to-app imports.** Shared needs are commons candidates, never
+   cross-app reach-ins.
+3. **No direct store writes for resources.** The pipeline is the only
+   write path (DD-A4).
+4. **No hand-written types that duplicate generated ones.** The proto
+   contract is the source of truth; codegen produces the types.
+5. **No brand strings in protos, apiVersions, table names, headers, or
+   package scopes.** Brand lives in READMEs and marketing surfaces only
+   (DD-A2).
+6. **No customer strings outside `_projects/` and `_changelog/`** — and no
+   real-shaped test data anywhere (DD-A10).
+7. **No premature web-commons.** The shared UI package earns its existence
+   when the second vertical's web app exists; until then, app web code is
+   written extraction-ready but stays in the app.
+
+## Before Writing Any Code
+
+1. Commons or app? State the placement test's answer. (DD-A1)
+2. Does the proto contract come first, with domain-shaped naming? (DD-A2, DD-A3)
+3. Does every write path go through the pipeline with fail-closed
+   authorization? (DD-A4, DD-A5)
+4. Is derived state computed, not stored? (DD-A6)
+5. Are fixtures fictional and customer strings confined? (DD-A10)
+6. If the commons API changes: is every consumer adapted in the same
+   change, with the forced changes listed? (DD-A11)

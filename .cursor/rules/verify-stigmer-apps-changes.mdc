@@ -1,0 +1,56 @@
+---
+description: Action rule to run the relevant subset of the repo's checks based on which files were changed in the current session
+alwaysApply: false
+---
+
+# Rule: Verify Stigmer Apps Changes
+
+When triggered, analyze the current uncommitted or recently committed changes, map them to the relevant checks, and run only those. This avoids running the full CI gate when only a subset of the monorepo was touched.
+
+## Execution
+
+### Step 1: Identify changed files
+
+Run `git diff --name-only HEAD~1` (if the last commit is the session's work) or `git diff --name-only` (if uncommitted). Use whichever captures the session's changes. Combine both if needed.
+
+### Step 2: Map changes to checks
+
+Run every check whose row matches **any** changed file. All commands run from the repo root.
+
+| File pattern | Command | What it checks |
+|---|---|---|
+| Any change at all | `CUSTOMER_DENYLIST=... node scripts/check-customer-data.mjs` | Customer-data confinement (see note below) |
+| `**/*.proto`, `buf.yaml`, `*/buf.gen.yaml` | `npm run codegen && git diff --exit-code -- packages/resource-api/src/gen apps/law/backend/src/gen` | Committed generated code matches the protos (CI fails on drift) |
+| `packages/resource-api/src/**` | `npm run build -w @stigmer/resource-api && npm run typecheck && npm test -w @stigmer/resource-api` | Commons compiles, types hold repo-wide, commons tests pass |
+| `apps/law/backend/**` | `npm run build && npm run typecheck -w @law/backend && npm test -w @law/backend` | App compiles against the built commons and its acceptance tests pass |
+| `package.json` (any), `package-lock.json`, `tsconfig*` | `npm ci && npm run build && npm run typecheck` | Workspace wiring still resolves and compiles |
+| `.github/workflows/**` | Visual review only | No local runner for workflow changes |
+
+Ordering matters: **build the commons before typechecking or testing the app** — `@law/backend` resolves `@stigmer/resource-api` through the workspace link, whose exports point at `dist/`. The root `npm run build` already does this in the right order.
+
+When in doubt about whether a check is needed, include it — a few extra minutes of checking is better than a broken CI pipeline. The full gate is: guard → `npm run codegen` + drift check → `npm run build` → `npm run typecheck` → `npm test`.
+
+### Step 3: Run and report
+
+Report results clearly:
+
+```
+Verify Results:
+  ✅ customer-data guard          — passed
+  ✅ codegen drift                — zero drift
+  ✅ npm run build                — commons + app compiled
+  ✅ npm test -w @law/backend     — 87 tests passed
+```
+
+If a check fails, show the error output so the user can fix it.
+
+### Step 4: Handle pre-existing issues
+
+If failures appear in files **not** touched by the current session, note them as pre-existing and do not treat them as blockers. Known instance: the notification newest-first ordering assertion in `apps/law/backend/src/__tests__/task-notification.integration.test.ts` can tie on same-millisecond timestamps (project DD-003).
+
+## Notes
+
+- **The guard needs `CUSTOMER_DENYLIST`** (newline- or comma-separated customer terms; ask the owner — the list is a secret precisely because committing it would spell out the names it blocks). Without the env var the script hard-fails by design. If the terms are unavailable locally, note that the denylist layer runs in CI and verify the generic layer's patterns don't fire.
+- Integration tests need a running Docker daemon (Testcontainers: Postgres for both workspaces, MinIO for the document flow).
+- `npm run codegen` uses buf remote plugins — it needs network access.
+- There is no Makefile and no Bazel in this repo; npm scripts at the root are the single entry point for every check.

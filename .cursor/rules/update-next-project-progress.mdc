@@ -1,0 +1,555 @@
+# Rule: Update Next Project Progress
+
+**Type**: Action
+
+**Purpose**: Review conversation history, identify completed work, and update the appropriate Next Project documentation with progress, decisions, and learnings.
+
+**Usage**: Invoke this rule when:
+- Significant work has been completed during a conversation
+- A task, phase, or milestone is finished
+- Important decisions or learnings should be documented
+- You want to capture current progress in a project
+
+**Trigger**: `@update-next-project-progress`
+
+---
+
+## What This Rule Does
+
+1. **Reviews conversation history** to understand what work was completed
+2. **Identifies the relevant project** in `_projects/` (or asks if unclear)
+3. **Determines what type of update** is needed (checkpoint, reference doc, next-task, etc.)
+4. **Updates the appropriate files** following Next Project Framework standards
+5. **Creates new documentation** if needed (checkpoints, reference docs)
+
+---
+
+## Execution Steps
+
+### Step 1: Analyze Conversation History
+
+**Extract from conversation**:
+- What tasks were completed?
+- What features were implemented?
+- What decisions were made?
+- What problems were solved?
+- What was learned (wrong assumptions, gotchas)?
+- What's the current status?
+- What's next?
+
+**Identify**:
+- Technical changes (files modified, features added)
+- Architectural decisions
+- Design patterns used
+- Performance improvements
+- Bug fixes
+- Testing outcomes
+
+### Step 2: Identify Target Project
+
+**Look for clues**:
+- Project name mentioned in conversation
+- Files modified (check which project they relate to)
+- Recent `_projects/` folders with relevant context
+
+**If unclear**:
+- List recent projects in `_projects/YYYY-MM/`
+- Ask user which project this work relates to
+- If it's new work, ask if a new project should be created
+
+**Command to find recent projects**:
+\`\`\`bash
+find _projects -type d -name "????????.??.+([!.md])" -maxdepth 2 | sort -r | head -10
+\`\`\`
+
+### Step 3: Determine Update Type
+
+Based on what happened, choose update type:
+
+| What Happened | Update Type | Target File |
+|---------------|-------------|-------------|
+| Completed a task/phase/milestone | Checkpoint | \`checkpoints/YYYY-MM-DD-description.md\` |
+| Significant daily progress | Checkpoint | \`checkpoints/YYYY-MM-DD-day-N-summary.md\` |
+| Made architectural decision | Design Decision | \`design-decisions/decision-name.md\` |
+| Created technical design | Reference | \`reference/description.md\` |
+| Discovered wrong assumption | Learning | \`wrong-assumptions/description.md\` |
+| Found anti-pattern to avoid | Anti-pattern | \`dont-dos/description.md\` |
+| Work in progress (status update) | Next Task | \`next-task.md\` |
+| Multiple types | Multiple files | Create as needed |
+
+
+### Step 4: Update or Create Files
+
+#### For Checkpoints (Milestones/Completions)
+
+**Create**: `checkpoints/YYYY-MM-DD-description.md`
+
+**Template**:
+```markdown
+# [Checkpoint Title]
+
+**Date**: YYYY-MM-DD  
+**Status**: ✅ Complete
+
+## Summary
+
+[2-3 sentence summary of what was achieved]
+
+## What Was Done
+
+- [Specific accomplishment 1]
+- [Specific accomplishment 2]
+- [Specific accomplishment 3]
+
+## Technical Details
+
+[Key technical changes, implementation notes]
+
+## Decisions Made
+
+[Any important decisions during this work]
+
+## Challenges Overcome
+
+[Problems encountered and how they were solved]
+
+## Next Steps
+
+[What comes after this checkpoint]
+
+## Files Modified
+
+[List of key files changed, if relevant]
+```
+
+#### For Next Task Updates (Resume File)
+
+**Update**: `next-task.md`
+
+**Template**:
+```markdown
+# Next Task - [Project Name]
+
+**Last Updated**: YYYY-MM-DD HH:MM  
+**Current Status**: [In Progress / Blocked / Ready to Continue]
+
+## Where We Are
+
+[1-2 sentences about current state]
+
+## What Was Just Done
+
+[Quick summary of recent work from conversation]
+
+## What's Next
+
+1. [Next immediate task]
+2. [Following task]
+3. [After that]
+
+## Quick Context
+
+[Any context needed to resume work]
+
+## Related Files
+
+- `path/to/file1.ext` - [Why relevant]
+- `path/to/file2.ext` - [Why relevant]
+
+## Blockers / Questions
+
+[Any issues or open questions]
+```
+
+#### For Reference Documentation
+
+**Create**: `reference/description.md`
+
+**Template**:
+```markdown
+# [Topic/Design Name]
+
+## Overview
+
+[What this is about]
+
+## Background
+
+[Why this was needed, context]
+
+## Technical Details
+
+[Implementation specifics, architecture, patterns used]
+
+## Examples
+
+[Code examples, usage patterns]
+
+## Related
+
+- [Link to related docs]
+- [Link to implementation]
+```
+
+#### For Design Decisions
+
+**Create**: `design-decisions/decision-description.md`
+
+**Template**:
+```markdown
+# Decision: [Decision Title]
+
+**Date**: YYYY-MM-DD  
+**Status**: Accepted
+
+## Context
+
+[What problem or question led to this decision]
+
+## Decision
+
+We decided to [the decision].
+
+## Rationale
+
+[Why this decision was made]
+
+1. **[Reason 1]** - [Explanation]
+2. **[Reason 2]** - [Explanation]
+3. **[Reason 3]** - [Explanation]
+
+## Alternatives Considered
+
+- **[Alternative 1]**: [Why not chosen]
+- **[Alternative 2]**: [Why not chosen]
+
+## Consequences
+
+**Positive**:
+- [Benefit 1]
+- [Benefit 2]
+
+**Negative**:
+- [Trade-off 1]
+- [Trade-off 2]
+
+## When to Reconsider
+
+[Conditions that would invalidate this decision]
+```
+
+#### For Wrong Assumptions / Learnings
+
+**Create**: `wrong-assumptions/description.md`
+
+**Template**:
+```markdown
+# Wrong Assumption: [What We Thought]
+
+**Date**: YYYY-MM-DD
+
+## What We Thought
+
+[The incorrect assumption]
+
+## What's Actually True
+
+[The correct understanding]
+
+## How We Discovered This
+
+[How this was learned]
+
+## Impact
+
+[What this affected, cost of the assumption]
+
+## Lesson Learned
+
+[What to remember for future]
+
+## How to Avoid
+
+[Guidance for avoiding this mistake]
+```
+
+### Step 5: Update Project README
+
+After creating/updating docs, ensure `README.md` reflects current status:
+
+```markdown
+# Project: [Name]
+
+**Status**: 🚧 In Progress / ✅ Complete / ⏸️ Paused  
+**Last Updated**: YYYY-MM-DD
+
+## Quick Links
+
+- [Next Task](next-task.md) - Resume here
+- [Get Started](get-started.md) - Quick start guide
+- [Tasks](tasks/) - Task tracking
+- [Checkpoints](checkpoints/) - Milestones
+- [Reference](reference/) - Technical docs
+
+## Current Status
+
+[2-3 sentences about where things stand]
+
+## Latest Updates
+
+- **YYYY-MM-DD**: [Recent checkpoint/progress]
+- **YYYY-MM-DD**: [Previous update]
+
+## What's Working
+
+- [Completed feature 1]
+- [Completed feature 2]
+
+## What's Next
+
+1. [Next priority]
+2. [Following priority]
+```
+
+---
+
+## Documentation Standards (Quick Reference)
+
+### Folder Structure
+
+```
+_projects/YYYY-MM/YYYYMMDD.NN.project-name/
+├── README.md                    # Project overview
+├── next-task.md                # Quick resume
+├── tasks/                      # Task tracking (T##_#_*.md)
+├── checkpoints/                # Milestones (YYYY-MM-DD-*.md)
+├── reference/                  # Technical docs
+├── design-decisions/           # ADRs (optional)
+├── wrong-assumptions/          # Learnings (optional)
+└── dont-dos/                   # Anti-patterns (optional)
+```
+
+### File Naming
+
+- **Always lowercase-hyphenated**: `my-file-name.md`
+- **Checkpoints with dates**: `YYYY-MM-DD-description.md`
+- **Exception**: `README.md` (uppercase by convention)
+
+### Where Files Go
+
+| Content Type | Folder |
+|--------------|--------|
+| Milestone/completion | `checkpoints/` |
+| Technical design | `reference/` |
+| Architecture decision | `design-decisions/` |
+| Wrong assumption | `wrong-assumptions/` |
+| Task plan | `tasks/` |
+| Resume/status | `next-task.md` (root) |
+
+---
+
+## Example Workflow
+
+### Scenario: Just completed Phase 1 of agent execution refactor
+
+**Step 1 - Analyze**:
+- Completed: Runtime execution architecture
+- Modified: 15 files in `backend/agentfleet/`
+- Decision: Use claim-check pattern
+- Learned: Temporal activities need workflow context
+
+**Step 2 - Identify Project**:
+- Project: `_projects/2026-01/20260108.01.agent-runtime-refactor/`
+
+**Step 3 - Determine Updates**:
+- Create checkpoint for phase completion
+- Create reference doc for architecture
+- Create design decision for claim-check pattern
+- Create wrong assumption doc for activity context issue
+- Update next-task.md with current status
+
+**Step 4 - Create Files**:
+```bash
+# Checkpoint
+checkpoints/2026-01-10-phase-1-runtime-architecture-complete.md
+
+# Reference
+reference/phase-1-runtime-execution-architecture.md
+
+# Design decision
+design-decisions/use-claim-check-pattern.md
+
+# Learning
+wrong-assumptions/temporal-activities-workflow-context.md
+
+# Update resume
+next-task.md
+```
+
+**Step 5 - Update README**:
+- Mark Phase 1 as complete
+- Add latest checkpoint to updates
+- Update "What's Next" with Phase 2 tasks
+
+
+---
+
+## Smart Defaults
+
+### When to Create Multiple Files
+
+If conversation covered multiple significant topics:
+- ✅ Create separate files for distinct topics
+- ✅ One checkpoint for overall milestone
+- ✅ Multiple reference docs for different technical areas
+- ❌ Don't create one giant file with everything
+
+### When to Update Existing Files
+
+- ✅ Update `next-task.md` if it's a status update
+- ✅ Update `README.md` to reflect current state
+- ✅ Append to existing checkpoint if same milestone
+- ❌ Don't modify old checkpoints (they're historical records)
+
+### File Size Guidelines
+
+- **Checkpoints**: 200-500 words (concise milestone summary)
+- **Reference docs**: 500-2000 words (detailed but focused)
+- **next-task.md**: Under 200 words (quick resume)
+- **README.md**: Under 300 words (overview only)
+
+---
+
+## Conversation Clues to Look For
+
+### Completion Indicators
+- "We finished..."
+- "Completed the..."
+- "All tests passing"
+- "Phase X is done"
+- "Successfully implemented..."
+
+### Decision Indicators
+- "We decided to..."
+- "Chose X over Y because..."
+- "Going with this approach..."
+- "After considering..."
+
+### Learning Indicators
+- "Turns out..."
+- "Actually, X doesn't work..."
+- "Discovered that..."
+- "Gotcha: ..."
+- "This was wrong..."
+
+### Status Indicators
+- "Currently working on..."
+- "Next up is..."
+- "Blocked on..."
+- "Ready to continue with..."
+
+---
+
+## Quality Checklist
+
+Before finishing, verify:
+
+- [ ] Conversation history fully analyzed
+- [ ] Correct project identified (or created)
+- [ ] Appropriate file types created/updated
+- [ ] All files follow naming conventions
+- [ ] Content is grounded in what actually happened (not speculation)
+- [ ] Technical details are accurate
+- [ ] README.md reflects current status
+- [ ] next-task.md updated for easy resume
+- [ ] No important work left undocumented
+
+---
+
+## Edge Cases
+
+### No Clear Project
+
+**If conversation doesn't relate to existing project**:
+1. Ask user if this should be a new project
+2. If yes, use `@start-stigmer-apps-new-project` to create structure
+3. If no, ask which project it relates to
+4. If standalone work, create quick note in `_projects/standalone/`
+
+### Multiple Projects
+
+**If conversation touched multiple projects**:
+1. Identify which projects were affected
+2. Create appropriate updates in each project
+3. Keep updates focused (don't duplicate)
+4. Cross-reference if needed
+
+### Trivial Updates
+
+**If conversation was minor (quick bug fix, small tweak)**:
+- Just update `next-task.md` with status
+- Don't create checkpoint unless truly milestone-worthy
+- Consider if it even needs documentation
+
+### Large Conversation
+
+**If conversation covered many topics**:
+1. Group related work together
+2. Create multiple focused files (better than one giant file)
+3. Prioritize significant accomplishments
+4. Summarize minor points
+
+---
+
+## Interactive Prompts
+
+### If Project Unclear
+
+```
+I see work was done on [topic], but I'm not sure which project this belongs to.
+
+Recent projects:
+1. 20260108.01.agent-runtime-refactor
+2. 20260105.02.workflow-execution-improvements
+3. 20260103.01.api-redesign
+
+Which project should I update? (or 'new' to create a new project)
+```
+
+### If Update Type Unclear
+
+```
+I see [work description]. How should I document this?
+
+Options:
+1. Checkpoint (milestone complete)
+2. Reference doc (technical details)
+3. Just update next-task.md (status update)
+4. Multiple files (complex work)
+
+Which approach?
+```
+
+---
+
+## Success Criteria
+
+This rule succeeds when:
+- ✅ All significant work from conversation is documented
+- ✅ Documentation is in the right project
+- ✅ Files are in appropriate folders with correct naming
+- ✅ Content is clear, concise, and grounded in reality
+- ✅ Easy to resume work from `next-task.md`
+- ✅ Historical record preserved in checkpoints
+- ✅ Learnings captured for future reference
+
+---
+
+## Related Rules
+
+- `@start-stigmer-apps-new-project` - Create new Next Project structure
+- `@commit-stigmer-apps-changes` - Commit documentation updates
+
+---
+
+**Remember**: This rule is about capturing what actually happened in a way that helps you (and future you) understand the journey, decisions, and current state. Write like you're leaving notes for yourself when you return tomorrow.
