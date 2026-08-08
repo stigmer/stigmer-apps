@@ -16,25 +16,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          path: lawfirm-assistant
+          path: stigmer-law
       - uses: actions/checkout@v4
         with:
           repository: stigmer/ts-commons
           path: ts-commons
       - uses: actions/setup-node@v4
         with:
-          node-version-file: lawfirm-assistant/.nvmrc
+          node-version-file: stigmer-law/.nvmrc
 
       - name: Build ts-commons (linked dependency)
         working-directory: ts-commons
         run: npm ci && npm run build
 
       - name: Install
-        working-directory: lawfirm-assistant
+        working-directory: stigmer-law
         run: npm ci
 
       - name: Vendored proto drift check
-        working-directory: lawfirm-assistant
+        working-directory: stigmer-law
         # proto-vendor/ must be byte-identical to the envelope protos the
         # installed @stigmer/resource-api ships — vendoring exists only
         # because buf cannot resolve imports from node_modules, and it must
@@ -42,7 +42,7 @@ jobs:
         run: diff -r proto-vendor node_modules/@stigmer/resource-api/proto
 
       - name: Codegen drift check
-        working-directory: lawfirm-assistant
+        working-directory: stigmer-law
         # Generated code is committed for reviewability; regenerating must
         # be a no-op or someone edited generated files (or forgot to run
         # codegen after a proto change).
@@ -51,13 +51,13 @@ jobs:
           git diff --exit-code -- backend/src/gen
 
       - name: Typecheck
-        working-directory: lawfirm-assistant
+        working-directory: stigmer-law
         run: npm run typecheck
 
       - name: Test
-        working-directory: lawfirm-assistant
+        working-directory: stigmer-law
         run: npm test
 
       - name: Build
-        working-directory: lawfirm-assistant
+        working-directory: stigmer-law
         run: npm run build

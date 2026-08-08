@@ -1,9 +1,19 @@
-# lawfirm-assistant
+# Stigmer Law
 
-Case management for law firms — a TypeScript system of record with WhatsApp
-Ops layered on top. Customer zero is onboarded by configuration only; the
-codebase contains zero customer-specific strings by design (a code edit
-during onboarding means the design failed its own test).
+Case management for law firms, built on [Stigmer](https://github.com/stigmer/stigmer)
+— a TypeScript system of record with WhatsApp Ops layered on top. Cases,
+tasks, notes, documents, and hearing reminders in a real web app; the
+firm's staff work it over WhatsApp.
+
+Stigmer Law is a vertical product **built on** the Stigmer platform, not
+an edition of the platform itself (that's [`stigmer`](https://github.com/stigmer/stigmer)
+and [`stigmer-cloud`](https://github.com/stigmer/stigmer-cloud)).
+
+Every firm runs its own physically isolated instance. Onboarding a firm is
+configuration only — manifests, secrets, and channel bindings live
+**outside this repository**; the codebase contains zero customer-specific
+strings by design (a code edit during onboarding means the design failed
+its own test).
 
 Built on [`@stigmer/resource-api`](https://github.com/stigmer/ts-commons)
 (proto-first resource pipeline: validate → load → authorize → duplicate
@@ -14,7 +24,7 @@ pipeline; none bypasses it.
 
 | Path | Contents |
 |---|---|
-| `proto/` | Proto contracts (source of truth; TypeScript types are generated) |
+| `proto/` | Proto contracts (source of truth; TypeScript types are generated). Package convention: `stigmer.lawfirm.<resource>.v1` |
 | `proto-vendor/` | Byte-for-byte copy of the `@stigmer/resource-api` envelope protos (CI-checked against the installed package) |
 | `backend/` | Connect-RPC backend: resource definitions on the commons pipeline, per-resource Postgres migrations, acceptance tests |
 
@@ -22,9 +32,8 @@ pipeline; none bypasses it.
 
 Requires Node 22, Docker (for integration tests), and the sibling checkout
 of [`stigmer/ts-commons`](https://github.com/stigmer/ts-commons) at
-`../ts-commons` (the deterministic `~/scm/github.com/stigmer/` layout) —
-`@stigmer/resource-api` is consumed via a `file:` link until it is
-published to npm.
+`../ts-commons` — `@stigmer/resource-api` is consumed via a `file:` link
+until it is published to npm.
 
 ```bash
 # once: build the commons the backend links against
@@ -38,9 +47,8 @@ npm test            # integration tests boot real Postgres via Testcontainers
 npm run build
 ```
 
-## Quality bar
+## License
 
-Tests ship with features — every record-model rule in the MVP scope
-contract is a testable acceptance statement. Errors are UX: messages name
-the resource and the offending value. Comments carry rationale, not
-narration.
+[AGPL-3.0](LICENSE). The platform ([Stigmer](https://github.com/stigmer/stigmer))
+and the commons ([`@stigmer/resource-api`](https://github.com/stigmer/ts-commons))
+are Apache-2.0; the vertical app is copyleft by choice.
