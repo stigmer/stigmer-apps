@@ -29,7 +29,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file stigmer/law/case/v1/case.proto.
  */
 export const file_stigmer_law_case_v1_case: GenFile = /*@__PURE__*/
-  fileDesc("Ch5zdGlnbWVyL2xhdy9jYXNlL3YxL2Nhc2UucHJvdG8SE3N0aWdtZXIubGF3LmNhc2UudjEiywEKBENhc2USEwoLYXBpX3ZlcnNpb24YASABKAkSDAoEa2luZBgCIAEoCRI6CghtZXRhZGF0YRgDIAEoCzIoLnN0aWdtZXIucmVzb3VyY2VhcGkudjEuUmVzb3VyY2VNZXRhZGF0YRIzCgRzcGVjGAQgASgLMh0uc3RpZ21lci5sYXcuY2FzZS52MS5DYXNlU3BlY0IGukgDyAEBEi8KBnN0YXR1cxgFIAEoCzIfLnN0aWdtZXIubGF3LmNhc2UudjEuQ2FzZVN0YXR1cyLZAQoIQ2FzZVNwZWMSHAoLY2FzZV9udW1iZXIYASABKAlCB7pIBHICEAESHAoLY2xpZW50X25hbWUYAiABKAlCB7pIBHICEAESGgoJY2FzZV90eXBlGAMgASgJQge6SARyAhABEiMKEmFzc2lnbmVkX2xhd3llcl9pZBgEIAEoCUIHukgEcgIQARI6ChFuZXh0X2hlYXJpbmdfZGF0ZRgFIAEoCUIaukgXchUyE15cZHs0fS1cZHsyfS1cZHsyfSRIAIgBAUIUChJfbmV4dF9oZWFyaW5nX2RhdGUiJAoKQ2FzZVN0YXR1cxIWCg5kb2N1bWVudF9jb3VudBgBIAEoBSIxCg5HZXRDYXNlUmVxdWVzdBIKCgJpZBgBIAEoCRITCgtjYXNlX251bWJlchgCIAEoCSJOChBMaXN0Q2FzZXNSZXF1ZXN0EhwKCXBhZ2Vfc2l6ZRgBIAEoBUIJukgGGgQYZCgAEhwKC3BhZ2Vfb2Zmc2V0GAIgASgFQge6SAQaAigAIlIKEUxpc3RDYXNlc1Jlc3BvbnNlEigKBWl0ZW1zGAEgAygLMhkuc3RpZ21lci5sYXcuY2FzZS52MS5DYXNlEhMKC3RvdGFsX2NvdW50GAIgASgDMqsCCgtDYXNlU2VydmljZRI+CgZDcmVhdGUSGS5zdGlnbWVyLmxhdy5jYXNlLnYxLkNhc2UaGS5zdGlnbWVyLmxhdy5jYXNlLnYxLkNhc2USPgoGVXBkYXRlEhkuc3RpZ21lci5sYXcuY2FzZS52MS5DYXNlGhkuc3RpZ21lci5sYXcuY2FzZS52MS5DYXNlEkUKA0dldBIjLnN0aWdtZXIubGF3LmNhc2UudjEuR2V0Q2FzZVJlcXVlc3QaGS5zdGlnbWVyLmxhdy5jYXNlLnYxLkNhc2USVQoETGlzdBIlLnN0aWdtZXIubGF3LmNhc2UudjEuTGlzdENhc2VzUmVxdWVzdBomLnN0aWdtZXIubGF3LmNhc2UudjEuTGlzdENhc2VzUmVzcG9uc2ViBnByb3RvMw", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
+  fileDesc("Ch5zdGlnbWVyL2xhdy9jYXNlL3YxL2Nhc2UucHJvdG8SE3N0aWdtZXIubGF3LmNhc2UudjEiywEKBENhc2USEwoLYXBpX3ZlcnNpb24YASABKAkSDAoEa2luZBgCIAEoCRI6CghtZXRhZGF0YRgDIAEoCzIoLnN0aWdtZXIucmVzb3VyY2VhcGkudjEuUmVzb3VyY2VNZXRhZGF0YRIzCgRzcGVjGAQgASgLMh0uc3RpZ21lci5sYXcuY2FzZS52MS5DYXNlU3BlY0IGukgDyAEBEi8KBnN0YXR1cxgFIAEoCzIfLnN0aWdtZXIubGF3LmNhc2UudjEuQ2FzZVN0YXR1cyLZAQoIQ2FzZVNwZWMSHAoLY2FzZV9udW1iZXIYASABKAlCB7pIBHICEAESHAoLY2xpZW50X25hbWUYAiABKAlCB7pIBHICEAESGgoJY2FzZV90eXBlGAMgASgJQge6SARyAhABEiMKEmFzc2lnbmVkX2xhd3llcl9pZBgEIAEoCUIHukgEcgIQARI6ChFuZXh0X2hlYXJpbmdfZGF0ZRgFIAEoCUIaukgXchUyE15cZHs0fS1cZHsyfS1cZHsyfSRIAIgBAUIUChJfbmV4dF9oZWFyaW5nX2RhdGUiJAoKQ2FzZVN0YXR1cxIWCg5kb2N1bWVudF9jb3VudBgBIAEoBSIxCg5HZXRDYXNlUmVxdWVzdBIKCgJpZBgBIAEoCRITCgtjYXNlX251bWJlchgCIAEoCSKQAQoQTGlzdENhc2VzUmVxdWVzdBIcCglwYWdlX3NpemUYASABKAVCCbpIBhoEGGQoABIcCgtwYWdlX29mZnNldBgCIAEoBUIHukgEGgIoABImChNoZWFyaW5nX3dpdGhpbl9kYXlzGAMgASgFQgm6SAYaBBhaKAASGAoQdW5zY2hlZHVsZWRfb25seRgEIAEoCCJSChFMaXN0Q2FzZXNSZXNwb25zZRIoCgVpdGVtcxgBIAMoCzIZLnN0aWdtZXIubGF3LmNhc2UudjEuQ2FzZRITCgt0b3RhbF9jb3VudBgCIAEoAzKrAgoLQ2FzZVNlcnZpY2USPgoGQ3JlYXRlEhkuc3RpZ21lci5sYXcuY2FzZS52MS5DYXNlGhkuc3RpZ21lci5sYXcuY2FzZS52MS5DYXNlEj4KBlVwZGF0ZRIZLnN0aWdtZXIubGF3LmNhc2UudjEuQ2FzZRoZLnN0aWdtZXIubGF3LmNhc2UudjEuQ2FzZRJFCgNHZXQSIy5zdGlnbWVyLmxhdy5jYXNlLnYxLkdldENhc2VSZXF1ZXN0Ghkuc3RpZ21lci5sYXcuY2FzZS52MS5DYXNlElUKBExpc3QSJS5zdGlnbWVyLmxhdy5jYXNlLnYxLkxpc3RDYXNlc1JlcXVlc3QaJi5zdGlnbWVyLmxhdy5jYXNlLnYxLkxpc3RDYXNlc1Jlc3BvbnNlYgZwcm90bzM", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
 
 /**
  * @generated from message stigmer.law.case.v1.Case
@@ -182,6 +182,29 @@ export type ListCasesRequest = Message<"stigmer.law.case.v1.ListCasesRequest"> &
    * @generated from field: int32 page_offset = 2;
    */
   pageOffset: number;
+
+  /**
+   * Named list predicate (T05): cases whose next hearing falls within
+   * [today, today + N] in the firm's timezone, both ends inclusive. Past
+   * hearing dates and cases with no hearing scheduled never match. 0
+   * means no narrowing; capped at 90 — "upcoming" is an operational
+   * horizon, not a report (the caller composes wider questions from the
+   * full list).
+   *
+   * @generated from field: int32 hearing_within_days = 3;
+   */
+  hearingWithinDays: number;
+
+  /**
+   * Named list predicate (T05): cases with NO next hearing scheduled —
+   * the matters-needing-attention question a date range cannot express
+   * by definition. Mutually exclusive with hearing_within_days (a case
+   * cannot be both inside a window and dateless); setting both is
+   * INVALID_ARGUMENT.
+   *
+   * @generated from field: bool unscheduled_only = 4;
+   */
+  unscheduledOnly: boolean;
 };
 
 /**

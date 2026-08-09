@@ -45,8 +45,15 @@ export type {
 export { InProcessEventDispatcher, NOOP_PUBLISHER } from "./publisher.js";
 
 // Store port + in-memory implementation
-export type { ListQuery, ListResult, ResourceStore } from "./store/store.js";
-export { DuplicateNaturalKeyError } from "./store/store.js";
+export type {
+  FilterValue,
+  ListQuery,
+  ListResult,
+  NormalizedFilter,
+  RangeBound,
+  ResourceStore,
+} from "./store/store.js";
+export { DuplicateNaturalKeyError, normalizeFilterValue } from "./store/store.js";
 export type { MemoryKindConfig } from "./store/memory-store.js";
 export { MemoryResourceStore } from "./store/memory-store.js";
 
@@ -64,6 +71,8 @@ export type {
   CustomOperationOptions,
   DefinedResource,
   GetOperationOptions,
+  Invokable,
+  InvokerFor,
   ListOperationOptions,
   OperationBinding,
   ReadContext,

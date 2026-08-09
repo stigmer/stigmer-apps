@@ -84,6 +84,42 @@ message GetTaskRequest {
   string id = 1 [(buf.validate.field).string.min_len = 1];
 }
 
+// Named list predicates (T05) — the server defines what each means and
+// implements it exactly once, beside the derivation it must agree with.
+// Deliberately NOT a field+operator grammar: a caller who can assemble
+// arbitrary predicates can assemble one the derivation does not
+// implement, and then a count and the list it opens disagree (the
+// platform's channel-conversation filter records the same reasoning).
+enum TaskListFilter {
+  // No narrowing.
+  TASK_LIST_FILTER_UNSPECIFIED = 0;
+  // Not finished: state OPEN or IN_PROGRESS.
+  TASK_LIST_FILTER_OPEN = 1;
+  // Open AND the due date has passed in the firm's timezone — the exact
+  // rule that derives status.overdue, shared from one module and pinned
+  // by an agreement test.
+  TASK_LIST_FILTER_OVERDUE = 2;
+}
+
+// Whose tasks a list request means (T05). The pre-T05 contract's silent
+// default — no case_id and no assignee_id means "My Tasks" — made a
+// firm-wide question UNEXPRESSABLE: there was no request shape meaning
+// "everyone's tasks", so a firm overview would have quietly reported
+// only the caller's own counts. Widening the view is now a visible,
+// deliberate act in the request, never a side effect of which filters
+// happen to be set.
+enum TaskListScope {
+  // The contract's default: behaves exactly like MINE.
+  TASK_LIST_SCOPE_UNSPECIFIED = 0;
+  // The caller's own assignments (when no explicit case/assignee filter
+  // is set — an explicit filter already names its scope).
+  TASK_LIST_SCOPE_MINE = 1;
+  // The whole firm's tasks. Permitted by the MVP policy (FR-USER-001:
+  // every firm member sees everything); scoping enforcement, when
+  // per-case access lands, happens in the policy module — not here.
+  TASK_LIST_SCOPE_FIRM = 2;
+}
+
 message ListTasksRequest {
   // Defaults to 20 (the contract's page size), capped at 100.
   int32 page_size = 1 [(buf.validate.field).int32 = {
@@ -92,11 +128,15 @@ message ListTasksRequest {
   }];
   int32 page_offset = 2 [(buf.validate.field).int32.gte = 0];
 
-  // Filters. When NEITHER is set the list defaults to the caller's own
-  // assignments — "My Tasks" (FR-TASK scope contract). case_id serves the
-  // case detail view; assignee_id serves an explicit person view.
+  // Filters. When neither is set (and scope is not FIRM) the list
+  // defaults to the caller's own assignments — "My Tasks" (FR-TASK scope
+  // contract). case_id serves the case detail view; assignee_id serves
+  // an explicit person view.
   string case_id = 3;
   string assignee_id = 4;
+
+  TaskListFilter filter = 5 [(buf.validate.field).enum.defined_only = true];
+  TaskListScope scope = 6 [(buf.validate.field).enum.defined_only = true];
 }
 
 message ListTasksResponse {

@@ -26,8 +26,9 @@ resource, credential storage, and the authenticator chain — DD-005).
 | Path | Contents |
 |---|---|
 | `proto/` | Proto contracts (source of truth; TypeScript types are generated). Package convention: `stigmer.law.<resource>.v1` (the domain, never the customer segment or the brand). The envelope (`stigmer/resourceapi/*`) and identity (`stigmer/identity/*`) contracts resolve in-workspace through the root `buf.yaml` |
-| `backend/` | Connect-RPC backend: resource definitions on the commons pipeline, the app's Postgres migrations (composed after `@stigmer/identity`'s as ordered migration sources), acceptance tests |
+| `backend/` | Connect-RPC backend: resource definitions on the commons pipeline, the app's Postgres migrations (composed after `@stigmer/identity`'s as ordered migration sources), the MCP channel entrance (`src/mcp/`), acceptance tests |
 | `deploy/infra-charts/` | The reusable per-firm infrastructure chart (`stigmer-law-firm-stack`, DD-004) — one install provisions a firm's namespace, Postgres, document bucket, AND the running app; its README is the firm onboarding runbook (T06) |
+| `deploy/stigmer/` | Generic Stigmer manifest templates for the firm's WhatsApp assistant (agent, MCP registration, environment, channel — T05); per-firm concretions live in the private ops repo |
 
 ## Development
 
@@ -88,6 +89,31 @@ buf curl --schema . -H "Authorization: Bearer $OPERATOR_KEY" \
 3. That user signs into the web app and works normally; further accounts
    are created the same way (no self-registration; password reset is an
    operator action — T01 owner decision 1).
+
+## The WhatsApp assistant (T05, DD-008)
+
+The backend runs a second listener — the **MCP channel entrance**
+(`backend/src/mcp/`, default port 8081, cluster-internal only in
+deployment) — serving seven tools to the firm's agent on the Stigmer
+platform: `my_open_tasks`, `find_tasks`, `get_case`,
+`upcoming_hearings`, `firm_overview`, `update_task_status`,
+`add_case_note`.
+
+The arrangement that matters: the agent platform verifies the WhatsApp
+sender with Meta and asserts the number in headers (never through the
+model); the entrance verifies its shared secret in constant time, then
+resolves the number to a firm member by exact E.164 match
+(`@stigmer/identity`'s channel resolver — a user's `phone` is their
+binding), and the tool runs **as that member through the same resource
+pipelines the web app uses**. One policy module governs every surface;
+there is no tool-permission table to drift. The trust model — whoever
+holds the shared secret can assert any member's identity — is DD-008,
+pinned by a test, and the reason the listener gets no public exposure.
+
+Dev loop: `npx tsx src/e2e/serve.ts` (from `backend/`) boots the real
+server pair with fictional seed data and prints a ready-to-paste smoke
+command; `scripts/mcp-smoke.ts` drives any MCP entrance (local or
+deployed) read-only, the way a deploy is accepted.
 
 ## License
 

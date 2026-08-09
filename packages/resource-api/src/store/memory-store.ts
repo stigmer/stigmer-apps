@@ -12,6 +12,8 @@ import {
   DuplicateNaturalKeyError,
   type ListQuery,
   type ListResult,
+  type NormalizedFilter,
+  normalizeFilterValue,
   type ResourceStore,
 } from "./store.js";
 
@@ -88,7 +90,8 @@ export class MemoryResourceStore implements ResourceStore {
     if (query.filter) {
       for (const [field, value] of Object.entries(query.filter)) {
         const path = this.#fieldPath(kind, field);
-        rows = rows.filter((r) => this.#jsonValue(kind, r, path) === value);
+        const condition = normalizeFilterValue(field, value);
+        rows = rows.filter((r) => matchesCondition(this.#jsonValue(kind, r, path), condition));
       }
     }
 
@@ -98,15 +101,27 @@ export class MemoryResourceStore implements ResourceStore {
       // Lexicographic comparison over the JSON-scalar text — correct for
       // the port's supported order fields (plain strings, ISO dates, and
       // RFC3339 timestamps all sort chronologically as text). Matches the
-      // Postgres adapter's text generated columns.
+      // Postgres adapter's text generated columns. Ties (including both
+      // unset) fall through to id ASC, mirroring the Postgres adapter's
+      // unconditional `, id ASC` — without it, equal keys page by
+      // insertion order here and by ULID there, and the divergence only
+      // shows up as a page-boundary flake.
       rows.sort((a, b) => {
         const av = this.#jsonValue(kind, a, path);
         const bv = this.#jsonValue(kind, b, path);
-        if (av === undefined && bv === undefined) return 0;
-        if (av === undefined) return nulls === "last" ? 1 : -1;
-        if (bv === undefined) return nulls === "last" ? -1 : 1;
-        const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-        return direction === "asc" ? cmp : -cmp;
+        let primary = 0;
+        if (av === undefined && bv !== undefined) {
+          primary = nulls === "last" ? 1 : -1;
+        } else if (bv === undefined && av !== undefined) {
+          primary = nulls === "last" ? -1 : 1;
+        } else if (av !== undefined && bv !== undefined) {
+          const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+          primary = direction === "asc" ? cmp : -cmp;
+        }
+        if (primary !== 0) return primary;
+        const aid = a.metadata?.id ?? "";
+        const bid = b.metadata?.id ?? "";
+        return aid < bid ? -1 : aid > bid ? 1 : 0;
       });
     }
 
@@ -201,5 +216,38 @@ export class MemoryResourceStore implements ResourceStore {
     if (typeof node === "string") return node === "" ? undefined : node;
     if (typeof node === "boolean" || typeof node === "number") return String(node);
     return undefined;
+  }
+}
+
+/**
+ * One condition against one rendered value. `undefined` is "the field is
+ * absent" — it satisfies only `absent`, exactly as a NULL generated
+ * column behaves under the Postgres adapter's SQL (`IS NULL` matches;
+ * `=`, `= ANY`, and every comparison are false against NULL).
+ */
+function matchesCondition(actual: string | undefined, condition: NormalizedFilter): boolean {
+  switch (condition.op) {
+    case "eq":
+      return actual === condition.value;
+    case "in":
+      return actual !== undefined && condition.values.includes(actual);
+    case "range":
+      return (
+        actual !== undefined &&
+        condition.bounds.every(({ cmp, value }) => {
+          switch (cmp) {
+            case "gte":
+              return actual >= value;
+            case "gt":
+              return actual > value;
+            case "lte":
+              return actual <= value;
+            case "lt":
+              return actual < value;
+          }
+        })
+      );
+    case "absent":
+      return actual === undefined;
   }
 }

@@ -34,7 +34,8 @@
 #                                            operator-generated secret
 #                                            after the first install)
 #   stigmer-law-<firm>-auth-keys            (key_value: jwt-private-key,
-#                                            operator-key-sha256 — from
+#                                            operator-key-sha256,
+#                                            mcp-shared-secret — from
 #                                            scripts/generate-auth-secrets.mjs)
 # The platform validates every reference exists at apply time, so the
 # secrets must be applied BEFORE this chart is installed (fail-closed).
@@ -133,6 +134,13 @@ spec:
             value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-auth-keys/jwt-private-key
           - name: AUTH_OPERATOR_KEY_SHA256
             value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-auth-keys/operator-key-sha256
+          # The MCP channel entrance's bearer secret (T05, DD-008): the
+          # agent platform presents it on every tool call, and it is the
+          # ENTIRE authorization boundary for asserted channel
+          # identities — which is why the mcp port below never gets
+          # ingress. Same value lives in the firm's Stigmer environment.
+          - name: MCP_SHARED_SECRET
+            value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-auth-keys/mcp-shared-secret
       # All three probes hit /healthz, which answers before auth and
       # deliberately does NOT touch the database (server.ts): a store
       # outage must degrade requests, not restart or de-route the pod —
@@ -174,6 +182,20 @@ spec:
           servicePort: 80
           containerPort: 8080
           isIngressPort: true
+        # The MCP channel entrance (T05, DD-008): cluster-internal ONLY.
+        # The agent sandboxes share this cluster (verified live — the
+        # isc-mcp arrangement), so the tool surface needs no public
+        # exposure at all; a shared-secret boundary behind a public
+        # hostname would be strictly weaker. Reached at
+        # http://<this-deployment>.<namespace>.svc.cluster.local:8081/mcp
+        # (the stigmer-service multi-port precedent: every declared port
+        # lands on the ClusterIP service, ingress or not).
+        - name: mcp
+          appProtocol: http
+          networkProtocol: TCP
+          servicePort: 8081
+          containerPort: 8081
+          isIngressPort: false
   ingress:
     enabled: true
     # Single label under the platform domain: the certificate issuer is

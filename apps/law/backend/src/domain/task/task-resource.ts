@@ -30,7 +30,10 @@ import {
   type GetTaskRequest,
   type ListTasksRequest,
   ListTasksResponseSchema,
+  type ListTasksResponse,
   type Task,
+  TaskListFilter,
+  TaskListScope,
   TaskPriority,
   TaskSchema,
   TaskService,
@@ -39,17 +42,8 @@ import {
   type UpdateTaskStatusRequest,
 } from "../../gen/stigmer/law/task/v1/task_pb.js";
 import type { Case } from "../../gen/stigmer/law/case/v1/case_pb.js";
-
-/**
- * "Today" for overdue derivation, in the firm's timezone (Asia/Kolkata —
- * the same clock the hearing-reminder schedule uses, DD-001). A UTC
- * server would otherwise flip tasks overdue at 05:30 the previous
- * evening, firm time. en-CA formats as YYYY-MM-DD, comparable to the
- * stored calendar dates as text.
- */
-function todayInFirmTimezone(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
-}
+import { todayInFirmTimezone } from "../firm-clock.js";
+import { isOverdue, openStatesFilter, overdueFilter } from "./overdue.js";
 
 /**
  * Domain defaults (record model): a stored row always carries a concrete
@@ -117,13 +111,14 @@ export function taskResource(deps: {
         ];
         const cases = await deps.store.getByIds("Case", caseIds);
         for (const task of tasks) {
-          const dueDate = task.spec?.dueDate;
           const state = task.status?.state ?? TaskState.UNSPECIFIED;
           const referenced = cases.get(task.spec?.caseId ?? "") as Case | undefined;
           task.status = create(TaskStatusSchema, {
             state,
-            overdue:
-              dueDate !== undefined && dueDate < today && state !== TaskState.CLOSED,
+            // The one overdue rule (overdue.ts) — the OVERDUE list
+            // predicate filters on the same module, and the agreement
+            // test pins that they answer identically.
+            overdue: isOverdue(task.spec?.dueDate, state, today),
             // A dangling reference (case rows are never deleted in MVP,
             // but the field is best-effort display data) renders empty
             // rather than failing the read.
@@ -160,22 +155,39 @@ export function taskResource(deps: {
       get: getOperation<Task, GetTaskRequest>({
         ref: (req) => ({ id: req.id }),
       }),
-      list: listOperation<Task, ListTasksRequest, unknown>({
+      list: listOperation<Task, ListTasksRequest, ListTasksResponse>({
         // The list contract: soonest due first, dateless last.
         orderBy: { field: "dueDate", direction: "asc", nulls: "last" },
-        query: (req, caller) => ({
-          pageSize: req.pageSize,
-          pageOffset: req.pageOffset,
-          // No explicit filter means "My Tasks" (scope contract): the
-          // caller-scoped default the D2 seam exists for.
-          filter:
-            req.caseId || req.assigneeId
-              ? {
-                  ...(req.caseId ? { caseId: req.caseId } : {}),
-                  ...(req.assigneeId ? { assigneeId: req.assigneeId } : {}),
-                }
-              : { assigneeId: caller.id },
-        }),
+        query: (req, caller) => {
+          // Scope first. An explicit case/assignee filter names its own
+          // scope; otherwise "My Tasks" is the contract's default, and
+          // FIRM must be asked for by name (T05) — before the scope
+          // field existed, a firm-wide question was unexpressable and a
+          // firm overview would have silently counted only the caller's
+          // own work.
+          const explicit = req.caseId || req.assigneeId;
+          const scope = explicit
+            ? {
+                ...(req.caseId ? { caseId: req.caseId } : {}),
+                ...(req.assigneeId ? { assigneeId: req.assigneeId } : {}),
+              }
+            : req.scope === TaskListScope.FIRM
+              ? {}
+              : { assigneeId: caller.id };
+          // Then the named predicate — implemented here exactly once,
+          // sharing the overdue module with the derivation.
+          const predicate =
+            req.filter === TaskListFilter.OPEN
+              ? openStatesFilter()
+              : req.filter === TaskListFilter.OVERDUE
+                ? overdueFilter(todayInFirmTimezone())
+                : {};
+          return {
+            pageSize: req.pageSize,
+            pageOffset: req.pageOffset,
+            filter: { ...scope, ...predicate },
+          };
+        },
         respond: (items, totalCount) =>
           create(ListTasksResponseSchema, { items, totalCount: BigInt(totalCount) }),
       }),

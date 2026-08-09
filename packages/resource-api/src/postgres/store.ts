@@ -33,6 +33,7 @@ import {
   DuplicateNaturalKeyError,
   type ListQuery,
   type ListResult,
+  normalizeFilterValue,
   type ResourceStore,
 } from "../store/store.js";
 
@@ -130,8 +131,36 @@ export class PostgresResourceStore implements ResourceStore {
     const where: string[] = [];
     const params: unknown[] = [];
     for (const [field, value] of Object.entries(query.filter ?? {})) {
-      params.push(value);
-      where.push(`${this.#column(kind, config, field)} = $${params.length}`);
+      const column = this.#column(kind, config, field);
+      // normalizeFilterValue lives on the port so a malformed filter fails
+      // with the same error here and in the memory fake. Values are always
+      // bound parameters; only the registered column name reaches the SQL.
+      const condition = normalizeFilterValue(field, value);
+      switch (condition.op) {
+        case "eq":
+          params.push(condition.value);
+          where.push(`${column} = $${params.length}`);
+          break;
+        case "in":
+          // `= ANY('{}')` is false: an empty set matches nothing, which is
+          // the contract (and what the fake's `[].includes` yields).
+          params.push([...condition.values]);
+          where.push(`${column} = ANY($${params.length}::text[])`);
+          break;
+        case "range":
+          for (const bound of condition.bounds) {
+            params.push(bound.value);
+            const sqlCmp =
+              bound.cmp === "gte" ? ">=" : bound.cmp === "gt" ? ">" : bound.cmp === "lte" ? "<=" : "<";
+            where.push(`${column} ${sqlCmp} $${params.length}`);
+          }
+          break;
+        case "absent":
+          // Absent from the stored proto3 JSON ⇒ the generated column is
+          // NULL (rows where the field is set never match, including "").
+          where.push(`${column} IS NULL`);
+          break;
+      }
     }
     const whereSql = where.length > 0 ? ` WHERE ${where.join(" AND ")}` : "";
 

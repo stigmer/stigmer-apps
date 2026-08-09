@@ -21,6 +21,16 @@ export {
 export type { CallerResolver } from "./transport.js";
 export { createCallerResolver } from "./transport.js";
 
+// Channel identity (T05): verified channel sender → user-kind principal.
+// A separate seam, deliberately NOT part of the authenticator chain —
+// consumed only behind a channel entrance's own gate (see the module doc).
+export type {
+  ChannelIdentity,
+  ChannelIdentityResolver,
+  ChannelResolution,
+} from "./channel-identity.js";
+export { createChannelIdentityResolver, WHATSAPP_PHONE_KIND } from "./channel-identity.js";
+
 // Tokens & keys
 export type { AccessTokenIssuer } from "./token.js";
 export { ACCESS_TOKEN_TTL_SECONDS, TOKEN_ISSUER, createAccessTokenIssuer } from "./token.js";

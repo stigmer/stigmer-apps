@@ -15,7 +15,14 @@ One install brings up a complete firm:
 | `templates/namespace.yaml` | `KubernetesNamespace` | The firm's namespace (`{org}-{env}-law-{firm}`) — isolation is physical, offboarding is a single-namespace teardown |
 | `templates/postgres.yaml` | `KubernetesPostgres` | The firm's system of record (database `law`, role `law_app`), alone in the firm's namespace, no public endpoint |
 | `templates/r2-bucket-documents.yaml` | `CloudflareR2Bucket` | The firm's private document bucket (`{org}-law-{firm}-documents-{env}`), consumed as plain S3 via the `OBJECT_STORE_*` env contract |
-| `templates/deployment.yaml` | `KubernetesDeployment` | The backend + same-origin web app, one public hostname, probes on `/healthz` |
+| `templates/deployment.yaml` | `KubernetesDeployment` | The backend + same-origin web app on one public hostname (probes on `/healthz`), plus the MCP channel entrance on a second, **cluster-internal-only** port (T05, DD-008) |
+
+The MCP entrance is deliberately not public: the agent platform's
+sandboxes share the firm's cluster, so the tool surface is reached at
+`http://{org}-{env}-law-{firm}-backend.{org}-{env}-law-{firm}.svc.cluster.local:8081/mcp`
+and a shared-secret boundary never faces the internet. That URL is what
+the firm's Stigmer `McpServer` manifest points at
+(`apps/law/deploy/stigmer/`).
 
 ## The release model (T06 topology)
 
@@ -44,7 +51,7 @@ platform validates the references at apply time, so all three must be
 |---|---|---|
 | `stigmer-law-<firm>-r2-credentials` | key_value | `access-key-id`, `secret-access-key` — a Cloudflare R2 API token scoped to only this firm's bucket (dashboard-created; revoking it offboards one firm) |
 | `stigmer-law-<firm>-postgres-credentials` | string | The `law_app` password. Exists only AFTER the first install provisions Postgres: copy it from the operator-generated Kubernetes secret `law-app.db-{org}-{env}-law-{firm}-postgres.credentials.postgresql.acid.zalan.do` (the operator hyphenates the role name in the secret's name) |
-| `stigmer-law-<firm>-auth-keys` | key_value | `jwt-private-key`, `operator-key-sha256` — from `node scripts/generate-auth-secrets.mjs` (repo root); the raw `opk_` key stays with the operator |
+| `stigmer-law-<firm>-auth-keys` | key_value | `jwt-private-key`, `operator-key-sha256`, `mcp-shared-secret` — from `node scripts/generate-auth-secrets.mjs` (repo root); the raw `opk_` key stays with the operator, and the MCP secret ALSO goes into the firm's Stigmer environment (the agent platform presents it on tool calls — DD-008: whoever holds it can assert any lawyer's identity) |
 
 Everything non-secret (bucket name, R2 endpoint, Postgres endpoint,
 database, user) is **derived inside the templates** from the same

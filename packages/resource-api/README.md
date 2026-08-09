@@ -18,6 +18,22 @@ typed request context and a compile-time operation declaration
 (`defineResource`), where an operation absent from the declaration answers
 `UNIMPLEMENTED` by construction.
 
+Two seams completed by the first vertical's agent surface (T05):
+
+- **The invoker**: every declared operation — not just create/update —
+  is reachable on `DefinedResource.invoke` as a typed, transport-free
+  async function taking an explicit `CallerPrincipal`. In-process
+  surfaces (event handlers, an app's MCP entrance) pass a *principal*,
+  never a materialised credential — a credential can leak; a principal
+  passed in-process cannot.
+- **The filter vocabulary**: `ListQuery.filter` values are a CLOSED
+  union — equality, set membership, range, absent — AND-only, with
+  deliberately no negation and no OR (the port doc in
+  `src/store/store.ts` records why, including the parents' NULL
+  footgun). Consumers expose NAMED predicates on their wire contracts
+  and compile them to this vocabulary; a caller-facing field+operator
+  grammar is the drift this design exists to prevent.
+
 ## Entry points
 
 | Import | Contents |

@@ -24,6 +24,7 @@ import {
   CaseNoteSchema,
   CaseNoteService,
   type ListCaseNotesRequest,
+  type ListCaseNotesResponse,
   ListCaseNotesResponseSchema,
 } from "../../gen/stigmer/law/casenote/v1/casenote_pb.js";
 
@@ -53,7 +54,7 @@ export function caseNoteResource(deps: {
           ]),
         ],
       }),
-      list: listOperation<CaseNote, ListCaseNotesRequest, unknown>({
+      list: listOperation<CaseNote, ListCaseNotesRequest, ListCaseNotesResponse>({
         // Newest first (record model) — the metadata-backed column (D5).
         orderBy: { field: "createdAt", direction: "desc", nulls: "last" },
         query: (req) => ({

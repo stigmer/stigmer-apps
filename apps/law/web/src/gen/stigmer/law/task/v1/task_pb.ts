@@ -24,7 +24,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file stigmer/law/task/v1/task.proto.
  */
 export const file_stigmer_law_task_v1_task: GenFile = /*@__PURE__*/
-  fileDesc("Ch5zdGlnbWVyL2xhdy90YXNrL3YxL3Rhc2sucHJvdG8SE3N0aWdtZXIubGF3LnRhc2sudjEiywEKBFRhc2sSEwoLYXBpX3ZlcnNpb24YASABKAkSDAoEa2luZBgCIAEoCRI6CghtZXRhZGF0YRgDIAEoCzIoLnN0aWdtZXIucmVzb3VyY2VhcGkudjEuUmVzb3VyY2VNZXRhZGF0YRIzCgRzcGVjGAQgASgLMh0uc3RpZ21lci5sYXcudGFzay52MS5UYXNrU3BlY0IGukgDyAEBEi8KBnN0YXR1cxgFIAEoCzIfLnN0aWdtZXIubGF3LnRhc2sudjEuVGFza1N0YXR1cyL9AQoIVGFza1NwZWMSGAoHY2FzZV9pZBgBIAEoCUIHukgEcgIQARIZCgV0aXRsZRgCIAEoCUIKukgHcgUQARjIARITCgtkZXNjcmlwdGlvbhgDIAEoCRIYCgthc3NpZ25lZV9pZBgEIAEoCUgAiAEBEjEKCGR1ZV9kYXRlGAUgASgJQhq6SBdyFTITXlxkezR9LVxkezJ9LVxkezJ9JEgBiAEBEj0KCHByaW9yaXR5GAYgASgOMiEuc3RpZ21lci5sYXcudGFzay52MS5UYXNrUHJpb3JpdHlCCLpIBYIBAhABQg4KDF9hc3NpZ25lZV9pZEILCglfZHVlX2RhdGUiYQoKVGFza1N0YXR1cxItCgVzdGF0ZRgBIAEoDjIeLnN0aWdtZXIubGF3LnRhc2sudjEuVGFza1N0YXRlEg8KB292ZXJkdWUYAiABKAgSEwoLY2FzZV9udW1iZXIYAyABKAkiJQoOR2V0VGFza1JlcXVlc3QSEwoCaWQYASABKAlCB7pIBHICEAEidAoQTGlzdFRhc2tzUmVxdWVzdBIcCglwYWdlX3NpemUYASABKAVCCbpIBhoEGGQoABIcCgtwYWdlX29mZnNldBgCIAEoBUIHukgEGgIoABIPCgdjYXNlX2lkGAMgASgJEhMKC2Fzc2lnbmVlX2lkGAQgASgJIlIKEUxpc3RUYXNrc1Jlc3BvbnNlEigKBWl0ZW1zGAEgAygLMhkuc3RpZ21lci5sYXcudGFzay52MS5UYXNrEhMKC3RvdGFsX2NvdW50GAIgASgDImkKF1VwZGF0ZVRhc2tTdGF0dXNSZXF1ZXN0EhMKAmlkGAEgASgJQge6SARyAhABEjkKBXN0YXRlGAIgASgOMh4uc3RpZ21lci5sYXcudGFzay52MS5UYXNrU3RhdGVCCrpIB4IBBBABIAAqdgoMVGFza1ByaW9yaXR5Eh0KGVRBU0tfUFJJT1JJVFlfVU5TUEVDSUZJRUQQABIVChFUQVNLX1BSSU9SSVRZX0xPVxABEhgKFFRBU0tfUFJJT1JJVFlfTUVESVVNEAISFgoSVEFTS19QUklPUklUWV9ISUdIEAMqbwoJVGFza1N0YXRlEhoKFlRBU0tfU1RBVEVfVU5TUEVDSUZJRUQQABITCg9UQVNLX1NUQVRFX09QRU4QARIaChZUQVNLX1NUQVRFX0lOX1BST0dSRVNTEAISFQoRVEFTS19TVEFURV9DTE9TRUQQAzKEAwoLVGFza1NlcnZpY2USPgoGQ3JlYXRlEhkuc3RpZ21lci5sYXcudGFzay52MS5UYXNrGhkuc3RpZ21lci5sYXcudGFzay52MS5UYXNrEj4KBlVwZGF0ZRIZLnN0aWdtZXIubGF3LnRhc2sudjEuVGFzaxoZLnN0aWdtZXIubGF3LnRhc2sudjEuVGFzaxJXCgxVcGRhdGVTdGF0dXMSLC5zdGlnbWVyLmxhdy50YXNrLnYxLlVwZGF0ZVRhc2tTdGF0dXNSZXF1ZXN0Ghkuc3RpZ21lci5sYXcudGFzay52MS5UYXNrEkUKA0dldBIjLnN0aWdtZXIubGF3LnRhc2sudjEuR2V0VGFza1JlcXVlc3QaGS5zdGlnbWVyLmxhdy50YXNrLnYxLlRhc2sSVQoETGlzdBIlLnN0aWdtZXIubGF3LnRhc2sudjEuTGlzdFRhc2tzUmVxdWVzdBomLnN0aWdtZXIubGF3LnRhc2sudjEuTGlzdFRhc2tzUmVzcG9uc2ViBnByb3RvMw", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
+  fileDesc("Ch5zdGlnbWVyL2xhdy90YXNrL3YxL3Rhc2sucHJvdG8SE3N0aWdtZXIubGF3LnRhc2sudjEiywEKBFRhc2sSEwoLYXBpX3ZlcnNpb24YASABKAkSDAoEa2luZBgCIAEoCRI6CghtZXRhZGF0YRgDIAEoCzIoLnN0aWdtZXIucmVzb3VyY2VhcGkudjEuUmVzb3VyY2VNZXRhZGF0YRIzCgRzcGVjGAQgASgLMh0uc3RpZ21lci5sYXcudGFzay52MS5UYXNrU3BlY0IGukgDyAEBEi8KBnN0YXR1cxgFIAEoCzIfLnN0aWdtZXIubGF3LnRhc2sudjEuVGFza1N0YXR1cyL9AQoIVGFza1NwZWMSGAoHY2FzZV9pZBgBIAEoCUIHukgEcgIQARIZCgV0aXRsZRgCIAEoCUIKukgHcgUQARjIARITCgtkZXNjcmlwdGlvbhgDIAEoCRIYCgthc3NpZ25lZV9pZBgEIAEoCUgAiAEBEjEKCGR1ZV9kYXRlGAUgASgJQhq6SBdyFTITXlxkezR9LVxkezJ9LVxkezJ9JEgBiAEBEj0KCHByaW9yaXR5GAYgASgOMiEuc3RpZ21lci5sYXcudGFzay52MS5UYXNrUHJpb3JpdHlCCLpIBYIBAhABQg4KDF9hc3NpZ25lZV9pZEILCglfZHVlX2RhdGUiYQoKVGFza1N0YXR1cxItCgVzdGF0ZRgBIAEoDjIeLnN0aWdtZXIubGF3LnRhc2sudjEuVGFza1N0YXRlEg8KB292ZXJkdWUYAiABKAgSEwoLY2FzZV9udW1iZXIYAyABKAkiJQoOR2V0VGFza1JlcXVlc3QSEwoCaWQYASABKAlCB7pIBHICEAEi8AEKEExpc3RUYXNrc1JlcXVlc3QSHAoJcGFnZV9zaXplGAEgASgFQgm6SAYaBBhkKAASHAoLcGFnZV9vZmZzZXQYAiABKAVCB7pIBBoCKAASDwoHY2FzZV9pZBgDIAEoCRITCgthc3NpZ25lZV9pZBgEIAEoCRI9CgZmaWx0ZXIYBSABKA4yIy5zdGlnbWVyLmxhdy50YXNrLnYxLlRhc2tMaXN0RmlsdGVyQgi6SAWCAQIQARI7CgVzY29wZRgGIAEoDjIiLnN0aWdtZXIubGF3LnRhc2sudjEuVGFza0xpc3RTY29wZUIIukgFggECEAEiUgoRTGlzdFRhc2tzUmVzcG9uc2USKAoFaXRlbXMYASADKAsyGS5zdGlnbWVyLmxhdy50YXNrLnYxLlRhc2sSEwoLdG90YWxfY291bnQYAiABKAMiaQoXVXBkYXRlVGFza1N0YXR1c1JlcXVlc3QSEwoCaWQYASABKAlCB7pIBHICEAESOQoFc3RhdGUYAiABKA4yHi5zdGlnbWVyLmxhdy50YXNrLnYxLlRhc2tTdGF0ZUIKukgHggEEEAEgACp2CgxUYXNrUHJpb3JpdHkSHQoZVEFTS19QUklPUklUWV9VTlNQRUNJRklFRBAAEhUKEVRBU0tfUFJJT1JJVFlfTE9XEAESGAoUVEFTS19QUklPUklUWV9NRURJVU0QAhIWChJUQVNLX1BSSU9SSVRZX0hJR0gQAypvCglUYXNrU3RhdGUSGgoWVEFTS19TVEFURV9VTlNQRUNJRklFRBAAEhMKD1RBU0tfU1RBVEVfT1BFThABEhoKFlRBU0tfU1RBVEVfSU5fUFJPR1JFU1MQAhIVChFUQVNLX1NUQVRFX0NMT1NFRBADKmsKDlRhc2tMaXN0RmlsdGVyEiAKHFRBU0tfTElTVF9GSUxURVJfVU5TUEVDSUZJRUQQABIZChVUQVNLX0xJU1RfRklMVEVSX09QRU4QARIcChhUQVNLX0xJU1RfRklMVEVSX09WRVJEVUUQAipkCg1UYXNrTGlzdFNjb3BlEh8KG1RBU0tfTElTVF9TQ09QRV9VTlNQRUNJRklFRBAAEhgKFFRBU0tfTElTVF9TQ09QRV9NSU5FEAESGAoUVEFTS19MSVNUX1NDT1BFX0ZJUk0QAjKEAwoLVGFza1NlcnZpY2USPgoGQ3JlYXRlEhkuc3RpZ21lci5sYXcudGFzay52MS5UYXNrGhkuc3RpZ21lci5sYXcudGFzay52MS5UYXNrEj4KBlVwZGF0ZRIZLnN0aWdtZXIubGF3LnRhc2sudjEuVGFzaxoZLnN0aWdtZXIubGF3LnRhc2sudjEuVGFzaxJXCgxVcGRhdGVTdGF0dXMSLC5zdGlnbWVyLmxhdy50YXNrLnYxLlVwZGF0ZVRhc2tTdGF0dXNSZXF1ZXN0Ghkuc3RpZ21lci5sYXcudGFzay52MS5UYXNrEkUKA0dldBIjLnN0aWdtZXIubGF3LnRhc2sudjEuR2V0VGFza1JlcXVlc3QaGS5zdGlnbWVyLmxhdy50YXNrLnYxLlRhc2sSVQoETGlzdBIlLnN0aWdtZXIubGF3LnRhc2sudjEuTGlzdFRhc2tzUmVxdWVzdBomLnN0aWdtZXIubGF3LnRhc2sudjEuTGlzdFRhc2tzUmVzcG9uc2ViBnByb3RvMw", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
 
 /**
  * @generated from message stigmer.law.task.v1.Task
@@ -193,9 +193,10 @@ export type ListTasksRequest = Message<"stigmer.law.task.v1.ListTasksRequest"> &
   pageOffset: number;
 
   /**
-   * Filters. When NEITHER is set the list defaults to the caller's own
-   * assignments — "My Tasks" (FR-TASK scope contract). case_id serves the
-   * case detail view; assignee_id serves an explicit person view.
+   * Filters. When neither is set (and scope is not FIRM) the list
+   * defaults to the caller's own assignments — "My Tasks" (FR-TASK scope
+   * contract). case_id serves the case detail view; assignee_id serves
+   * an explicit person view.
    *
    * @generated from field: string case_id = 3;
    */
@@ -205,6 +206,16 @@ export type ListTasksRequest = Message<"stigmer.law.task.v1.ListTasksRequest"> &
    * @generated from field: string assignee_id = 4;
    */
   assigneeId: string;
+
+  /**
+   * @generated from field: stigmer.law.task.v1.TaskListFilter filter = 5;
+   */
+  filter: TaskListFilter;
+
+  /**
+   * @generated from field: stigmer.law.task.v1.TaskListScope scope = 6;
+   */
+  scope: TaskListScope;
 };
 
 /**
@@ -325,6 +336,90 @@ export enum TaskState {
  */
 export const TaskStateSchema: GenEnum<TaskState> = /*@__PURE__*/
   enumDesc(file_stigmer_law_task_v1_task, 1);
+
+/**
+ * Named list predicates (T05) — the server defines what each means and
+ * implements it exactly once, beside the derivation it must agree with.
+ * Deliberately NOT a field+operator grammar: a caller who can assemble
+ * arbitrary predicates can assemble one the derivation does not
+ * implement, and then a count and the list it opens disagree (the
+ * platform's channel-conversation filter records the same reasoning).
+ *
+ * @generated from enum stigmer.law.task.v1.TaskListFilter
+ */
+export enum TaskListFilter {
+  /**
+   * No narrowing.
+   *
+   * @generated from enum value: TASK_LIST_FILTER_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Not finished: state OPEN or IN_PROGRESS.
+   *
+   * @generated from enum value: TASK_LIST_FILTER_OPEN = 1;
+   */
+  OPEN = 1,
+
+  /**
+   * Open AND the due date has passed in the firm's timezone — the exact
+   * rule that derives status.overdue, shared from one module and pinned
+   * by an agreement test.
+   *
+   * @generated from enum value: TASK_LIST_FILTER_OVERDUE = 2;
+   */
+  OVERDUE = 2,
+}
+
+/**
+ * Describes the enum stigmer.law.task.v1.TaskListFilter.
+ */
+export const TaskListFilterSchema: GenEnum<TaskListFilter> = /*@__PURE__*/
+  enumDesc(file_stigmer_law_task_v1_task, 2);
+
+/**
+ * Whose tasks a list request means (T05). The pre-T05 contract's silent
+ * default — no case_id and no assignee_id means "My Tasks" — made a
+ * firm-wide question UNEXPRESSABLE: there was no request shape meaning
+ * "everyone's tasks", so a firm overview would have quietly reported
+ * only the caller's own counts. Widening the view is now a visible,
+ * deliberate act in the request, never a side effect of which filters
+ * happen to be set.
+ *
+ * @generated from enum stigmer.law.task.v1.TaskListScope
+ */
+export enum TaskListScope {
+  /**
+   * The contract's default: behaves exactly like MINE.
+   *
+   * @generated from enum value: TASK_LIST_SCOPE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * The caller's own assignments (when no explicit case/assignee filter
+   * is set — an explicit filter already names its scope).
+   *
+   * @generated from enum value: TASK_LIST_SCOPE_MINE = 1;
+   */
+  MINE = 1,
+
+  /**
+   * The whole firm's tasks. Permitted by the MVP policy (FR-USER-001:
+   * every firm member sees everything); scoping enforcement, when
+   * per-case access lands, happens in the policy module — not here.
+   *
+   * @generated from enum value: TASK_LIST_SCOPE_FIRM = 2;
+   */
+  FIRM = 2,
+}
+
+/**
+ * Describes the enum stigmer.law.task.v1.TaskListScope.
+ */
+export const TaskListScopeSchema: GenEnum<TaskListScope> = /*@__PURE__*/
+  enumDesc(file_stigmer_law_task_v1_task, 3);
 
 /**
  * @generated from service stigmer.law.task.v1.TaskService

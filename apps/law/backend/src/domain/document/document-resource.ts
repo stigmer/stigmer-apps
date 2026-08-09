@@ -25,6 +25,7 @@ import {
   DocumentService,
   type GetDocumentRequest,
   type ListDocumentsRequest,
+  type ListDocumentsResponse,
   ListDocumentsResponseSchema,
 } from "../../gen/stigmer/law/document/v1/document_pb.js";
 
@@ -50,7 +51,7 @@ export function documentResource(deps: {
       get: getOperation<Document, GetDocumentRequest>({
         ref: (req) => ({ id: req.id }),
       }),
-      list: listOperation<Document, ListDocumentsRequest, unknown>({
+      list: listOperation<Document, ListDocumentsRequest, ListDocumentsResponse>({
         orderBy: { field: "createdAt", direction: "desc", nulls: "last" },
         query: (req) => ({
           pageSize: req.pageSize,

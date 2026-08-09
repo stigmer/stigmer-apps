@@ -75,6 +75,18 @@ export interface BackendConfig {
   };
   /** Authentication (DD-005): signing keys + operator key hash. */
   readonly auth: AuthConfig;
+  /**
+   * The MCP channel entrance (T05, DD-008): a second listener serving
+   * the agent platform's tool calls, guarded by a shared secret that is
+   * THE authorization boundary for asserted channel identities — which
+   * is why there is no insecure mode and no default.
+   */
+  readonly mcp: {
+    /** MCP listen port (cluster-internal; never the ingress port). */
+    readonly port: number;
+    /** Bearer secret the agent platform presents. Min 32 chars. */
+    readonly sharedSecret: string;
+  };
 }
 
 export function loadConfigFromEnv(
@@ -126,6 +138,22 @@ export function loadConfigFromEnv(
     );
   }
 
+  const mcpPortRaw = env.MCP_PORT ?? "8081";
+  const mcpPort = Number(mcpPortRaw);
+  if (!Number.isInteger(mcpPort) || mcpPort < 1 || mcpPort > 65535) {
+    problems.push(`MCP_PORT must be an integer in 1-65535, got '${mcpPortRaw}'`);
+  } else if (mcpPort === port) {
+    problems.push(`MCP_PORT must differ from PORT (both are '${mcpPortRaw}')`);
+  }
+
+  const mcpSharedSecret = env.MCP_SHARED_SECRET ?? "";
+  if (mcpSharedSecret.length < 32) {
+    problems.push(
+      "MCP_SHARED_SECRET is required, min 32 chars (whoever holds it can assert any " +
+        "user's channel identity — DD-008; there is no insecure mode)",
+    );
+  }
+
   if (problems.length > 0) {
     throw new Error(`Invalid backend configuration:\n- ${problems.join("\n- ")}`);
   }
@@ -145,6 +173,10 @@ export function loadConfigFromEnv(
       privateKeyBase64,
       previousPublicKeyBase64: env.AUTH_JWT_PREVIOUS_PUBLIC_KEY,
       operatorKeySha256Hex,
+    },
+    mcp: {
+      port: mcpPort,
+      sharedSecret: mcpSharedSecret,
     },
   };
 }

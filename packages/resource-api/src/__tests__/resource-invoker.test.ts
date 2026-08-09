@@ -10,8 +10,12 @@ import { Code, ConnectError, createClient, createRouterTransport } from "@connec
 import { describe, expect, it, vi } from "vitest";
 import {
   type GetWidgetRequest,
+  GetWidgetRequestSchema,
   type ListWidgetsRequest,
+  ListWidgetsRequestSchema,
+  type ListWidgetsResponse,
   ListWidgetsResponseSchema,
+  RetireWidgetRequestSchema,
   type Widget,
   WidgetSchema,
   WidgetService,
@@ -255,6 +259,90 @@ describe("reference-exists step (D3)", () => {
       asCaller("u1"),
     );
     expect(owned.spec?.ownerId).toBe(owner.metadata?.id);
+  });
+});
+
+describe("the completed invoke surface (T05): get, list, custom", () => {
+  it("invoke.get runs load → authorize → derive, exactly like the wire", async () => {
+    const store = widgetMemoryStore();
+    const resource = widgetResource({ store });
+    const created = await resource.invoke.create!(
+      widgetInput({ serialNumber: "SN-G", name: "gadget" }),
+      { id: "u1", kind: "user" },
+    );
+
+    const fetched = await resource.invoke.get(
+      create(GetWidgetRequestSchema, { id: created.metadata?.id ?? "" }),
+      { id: "u1", kind: "user" },
+    );
+    expect(fetched.spec?.serialNumber).toBe("SN-G");
+    // Derivation ran (nameLength is derived-on-read, never stored).
+    expect(fetched.status?.nameLength).toBe(6);
+
+    await expectCode(
+      resource.invoke.get(create(GetWidgetRequestSchema, { id: "wdg_ghost" }), { id: "u1", kind: "user" }),
+      Code.NotFound,
+    );
+  });
+
+  it("invoke.list applies the caller-scoped query with the EXPLICIT principal", async () => {
+    const store = widgetMemoryStore();
+    const resource = defineResource({
+      definition: definition({ store }),
+      service: WidgetService,
+      operations: {
+        create: createOperation<Widget>(),
+        list: listOperation<Widget, ListWidgetsRequest, ListWidgetsResponse>({
+          orderBy: { field: "createdAt", direction: "asc", nulls: "last" },
+          query: (req, caller) => ({
+            pageSize: req.pageSize,
+            filter: { ownerId: req.ownerId || caller.id },
+          }),
+          respond: (items, totalCount) =>
+            create(ListWidgetsResponseSchema, { items, totalCount: BigInt(totalCount) }),
+        }),
+      },
+    });
+    await resource.invoke.create(widgetInput({ serialNumber: "SN-A", ownerId: "alice" }), { id: "alice", kind: "user" });
+    await resource.invoke.create(widgetInput({ serialNumber: "SN-B", ownerId: "bob" }), { id: "bob", kind: "user" });
+
+    // "Mine" resolves from the passed principal — the exact property the
+    // MCP gate's argument-free my_open_tasks stands on.
+    const mine = await resource.invoke.list(create(ListWidgetsRequestSchema, {}), { id: "alice", kind: "user" });
+    expect(mine.items.map((w) => w.spec?.serialNumber)).toEqual(["SN-A"]);
+    expect(mine.totalCount).toBe(1n);
+  });
+
+  it("invoke of a named custom operation keeps the fail-closed authorization and audit stamping", async () => {
+    const store = widgetMemoryStore();
+    const resource = widgetResource({ store });
+    const created = await resource.invoke.create!(widgetInput({ serialNumber: "SN-R" }), { id: "u1", kind: "user" });
+
+    const retired = await resource.invoke.retire(
+      create(RetireWidgetRequestSchema, { id: created.metadata?.id ?? "" }),
+      { id: "u2", kind: "user" },
+    );
+    expect(retired.status?.retired).toBe(true);
+    // Mutation audit is attributed to the passed principal, not a shim.
+    expect(retired.metadata?.updatedBy?.id).toBe("u2");
+    expect(retired.metadata?.version).toBe(2n);
+
+    // Policy denial still lands as PERMISSION_DENIED in-process.
+    const denyAll: AuthorizationPolicy = { authorize: () => deny("nobody may retire") };
+    const guarded = widgetResource({ store: widgetMemoryStore(), policy: denyAll });
+    const w = create(WidgetSchema, { spec: { serialNumber: "SN-X", name: "x" } });
+    await expectCode(guarded.invoke.create!(w, { id: "u1", kind: "user" }), Code.PermissionDenied);
+  });
+
+  it("validation holds on the in-process read path too", async () => {
+    const resource = widgetResource({ store: widgetMemoryStore() });
+    // GetWidgetRequest with neither id nor serial number: the ref guard
+    // answers INVALID_ARGUMENT, same as the wire.
+    await expectCode(
+      resource.invoke.get(create(GetWidgetRequestSchema, {}), { id: "u1", kind: "user" }),
+      Code.InvalidArgument,
+      /id or serial number/,
+    );
   });
 });
 

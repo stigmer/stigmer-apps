@@ -1,0 +1,35 @@
+# The WhatsApp binding — TEMPLATE (T05).
+#
+# ORDER MATTERS, and it is the one step manifests cannot do: applying
+# this file does NOT install the number. The number is bound in the
+# console first (Agent → Channels → Connect to WhatsApp, against the
+# org's ChannelApp); the verified phone_number_id lands in status and
+# THEN this manifest binds cleanly. Applying before the console install
+# was exactly what blocked the reference deployment's last mile.
+#
+# proactive_messaging_enabled stays false until the hearing-reminder
+# stage (T05 stage 6): the send tool and template surface only matter
+# once the Meta UTILITY template is approved, and a smaller surface is
+# a smaller surface.
+apiVersion: agentic.stigmer.ai/v1
+kind: AgentChannel
+metadata:
+  name: <firm>-law-whatsapp
+  org: <stigmer-org>
+spec:
+  agent_ref:
+    kind: agent
+    org: <stigmer-org>
+    slug: <firm>-law-assistant
+  enabled: true
+  proactive_messaging_enabled: false
+  whatsapp:
+    phone_number_id: "<from-the-console-install>"
+  app_ref:
+    kind: channel_app
+    org: <stigmer-org>
+    slug: <channel-app-slug>
+  environment_refs:
+    - kind: environment
+      org: <stigmer-org>
+      slug: <firm>-law-mcp-credentials

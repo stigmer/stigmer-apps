@@ -8,17 +8,21 @@
  * construction — connect-es supplies the fallback for every method missing
  * from a partial `ServiceImpl`.
  *
- * Pipelines are transport-independent (T03 D1): create/update chains are
- * built from the ResourceDefinition alone and exposed on
- * `DefinedResource.invoke`, with the Connect handlers as thin adapters
- * that extract the caller and delegate. That is what lets a system-written
- * resource (e.g. a Notification created by an event handler) run the FULL
+ * Pipelines are transport-independent (T03 D1, completed for every
+ * flavor in T05): each operation's chain is built once and exposed on
+ * `DefinedResource.invoke` as a plain async function taking an explicit
+ * caller, with the Connect handlers as thin adapters that extract the
+ * caller and delegate. That is what lets a system-written resource
+ * (e.g. a Notification created by an event handler) run the FULL
  * pipeline — validation included, see validate.ts's documented double
  * arrangement — without a service method existing at all
- * (`systemOperations`). The Java parent cannot do this: its handlers
- * thread the gRPC StreamObserver into the pipeline context. This edition
- * already rejected that coupling by returning values from pipelines; the
- * invoker completes the separation.
+ * (`systemOperations`), and what lets an in-process surface like the MCP
+ * gate serve reads and named custom operations through the same
+ * pipelines the wire uses, passing a principal instead of materialising
+ * a credential. The Java parent cannot do this: its handlers thread the
+ * gRPC StreamObserver into the pipeline context. This edition already
+ * rejected that coupling by returning values from pipelines; the invoker
+ * completes the separation.
  *
  * Per-operation chains are ports of the Java edition's canonical
  * pipelines, including their deliberate ordering:
@@ -64,7 +68,12 @@ import { Pipeline, type PipelineStep } from "./pipeline.js";
 import type { CallerPrincipal } from "./principal.js";
 import type { AuthorizationPolicy } from "./policy.js";
 import { NOOP_PUBLISHER, type ResourceEventPublisher } from "./publisher.js";
-import { DuplicateNaturalKeyError, type ListQuery, type ResourceStore } from "./store/store.js";
+import {
+  DuplicateNaturalKeyError,
+  type FilterValue,
+  type ListQuery,
+  type ResourceStore,
+} from "./store/store.js";
 import { validateMessage } from "./validate.js";
 
 /** The contract's list defaults: page size 20, hard cap 100. */
@@ -171,12 +180,42 @@ type WriteExecutor<R extends ResourceMessage> = (
   caller: CallerPrincipal | undefined,
 ) => Promise<R>;
 
-export interface OperationBinding<R extends ResourceMessage> {
+/**
+ * One operation as a transport-free async function — what `invoke`
+ * exposes. The public signature demands a caller (in-process code always
+ * knows who it is acting as); the internal cores accept `undefined` so
+ * the wire adapters can delegate and let the authorize step answer
+ * UNAUTHENTICATED, exactly like create/update always have.
+ */
+export type Invokable<I, O> = (input: I, caller: CallerPrincipal) => Promise<O>;
+
+type InvokableCore<I, O> = (input: I, caller: CallerPrincipal | undefined) => Promise<O>;
+
+/**
+ * The I/O type parameters exist so `invoke` can be typed per operation
+ * from the factory call sites (where apps already name their request and
+ * response types) — NOT unified with the method descriptors, per the
+ * recorded typing stance above. They default to `unknown`, so an
+ * operation declared without them still compiles and simply yields an
+ * untyped invokable.
+ */
+export interface OperationBinding<R extends ResourceMessage, I = unknown, O = unknown> {
   readonly flavor: "create" | "update" | "get" | "list" | "custom";
-  /** @internal transport adapter for get/list/custom (needs the method). */
-  bind?(runtime: Runtime<R>, method: DescMethod, operationName: string): UnaryHandler;
   /** @internal pipeline construction for create/update (method-free, D1). */
   buildExecutor?(runtime: Runtime<R>, operationName: string): WriteExecutor<R>;
+  /**
+   * @internal transport-free core for get/list/custom (T05): the full
+   * pipeline as a plain async function, which `defineResource` both
+   * exposes on `invoke` and adapts to the wire — the same arrangement
+   * create/update have always had. Needs the method descriptor (its
+   * input schema drives validation), unlike the write executors, which
+   * validate against the resource schema.
+   */
+  buildInvokable?(
+    runtime: Runtime<R>,
+    method: DescMethod,
+    operationName: string,
+  ): InvokableCore<I, O>;
 }
 
 interface Runtime<R extends ResourceMessage> {
@@ -411,7 +450,7 @@ function buildCreateExecutor<R extends ResourceMessage>(
 
 export function createOperation<R extends ResourceMessage>(
   options: CreateOperationOptions<R> = {},
-): OperationBinding<R> {
+): OperationBinding<R, R, R> {
   return {
     flavor: "create",
     buildExecutor(runtime, operationName) {
@@ -512,7 +551,7 @@ function buildUpdateExecutor<R extends ResourceMessage>(
 
 export function updateOperation<R extends ResourceMessage>(
   options: UpdateOperationOptions<R> = {},
-): OperationBinding<R> {
+): OperationBinding<R, R, R> {
   return {
     flavor: "update",
     buildExecutor(runtime, operationName) {
@@ -530,38 +569,41 @@ export interface GetOperationOptions<R extends ResourceMessage, I> {
 
 export function getOperation<R extends ResourceMessage, I>(
   options: GetOperationOptions<R, I>,
-): OperationBinding<R> {
-  return {
-    flavor: "get",
-    bind(runtime, method, operationName) {
-      const { def } = runtime;
-      const pipeline = new Pipeline<ReadContext<R, I>>(`${def.kind}-${operationName}`, [
-        validateInputStep(method.input, runtime.displayName),
-        {
-          name: "load-target",
-          traits: ["existence-check"],
-          async execute(ctx) {
-            const ref = options.ref(ctx.input);
-            requireRef(runtime, ref);
-            const target = await loadByRef(runtime, ref);
-            if (!target) {
-              throw notFound(runtime.displayName, refDescription(runtime, ref));
-            }
-            ctx.target = target;
-          },
+): OperationBinding<R, I, R> {
+  const buildInvokable = (
+    runtime: Runtime<R>,
+    method: DescMethod,
+    operationName: string,
+  ): InvokableCore<I, R> => {
+    const { def } = runtime;
+    const pipeline = new Pipeline<ReadContext<R, I>>(`${def.kind}-${operationName}`, [
+      validateInputStep(method.input, runtime.displayName),
+      {
+        name: "load-target",
+        traits: ["existence-check"],
+        async execute(ctx) {
+          const ref = options.ref(ctx.input);
+          requireRef(runtime, ref);
+          const target = await loadByRef(runtime, ref);
+          if (!target) {
+            throw notFound(runtime.displayName, refDescription(runtime, ref));
+          }
+          ctx.target = target;
         },
-        authorizeStep(runtime, operationName, (ctx) => ctx.target),
-      ]);
+      },
+      authorizeStep(runtime, operationName, (ctx) => ctx.target),
+    ]);
 
-      return async (req, hctx) => {
-        const ctx: ReadContext<R, I> = { caller: await def.caller(hctx), input: req as I };
-        await pipeline.execute(ctx);
-        const target = ctx.target as R;
-        await deriveAll(runtime, [target]);
-        return target;
-      };
-    },
+    return async (input, caller) => {
+      const ctx: ReadContext<R, I> = { caller, input };
+      await pipeline.execute(ctx);
+      const target = ctx.target as R;
+      await deriveAll(runtime, [target]);
+      return target;
+    };
   };
+
+  return { flavor: "get", buildInvokable };
 }
 
 /* ---------------------------- list --------------------------------- */
@@ -574,9 +616,11 @@ export interface ListOperationOptions<R extends ResourceMessage, I, O> {
    */
   readonly orderBy: NonNullable<ListQuery["orderBy"]>;
   /**
-   * Maps the request to paging and equality filters. The caller is the
-   * authorized principal (T03 D2) — the seam for caller-scoped defaults
-   * like "My Tasks" or a recipient's own notifications.
+   * Maps the request to paging and filters (any FilterValue shape — the
+   * named list predicates compose set-membership and ranges here). The
+   * caller is the authorized principal (T03 D2) — the seam for
+   * caller-scoped defaults like "My Tasks" or a recipient's own
+   * notifications.
    */
   readonly query: (
     request: I,
@@ -584,7 +628,7 @@ export interface ListOperationOptions<R extends ResourceMessage, I, O> {
   ) => {
     readonly pageSize?: number;
     readonly pageOffset?: number;
-    readonly filter?: Readonly<Record<string, string>>;
+    readonly filter?: Readonly<Record<string, FilterValue>>;
   };
   /** Builds the response message from the page. */
   readonly respond: (items: R[], totalCount: number) => O;
@@ -592,39 +636,42 @@ export interface ListOperationOptions<R extends ResourceMessage, I, O> {
 
 export function listOperation<R extends ResourceMessage, I, O>(
   options: ListOperationOptions<R, I, O>,
-): OperationBinding<R> {
-  return {
-    flavor: "list",
-    bind(runtime, method, operationName) {
-      const { def } = runtime;
-      // Authorization is scope-level and runs first (the Java find
-      // pipeline): there is no single resource to load.
-      const pipeline = new Pipeline<ReadContext<R, I>>(`${def.kind}-${operationName}`, [
-        validateInputStep(method.input, runtime.displayName),
-        authorizeStep(runtime, operationName, () => undefined),
-      ]);
+): OperationBinding<R, I, O> {
+  const buildInvokable = (
+    runtime: Runtime<R>,
+    method: DescMethod,
+    operationName: string,
+  ): InvokableCore<I, O> => {
+    const { def } = runtime;
+    // Authorization is scope-level and runs first (the Java find
+    // pipeline): there is no single resource to load.
+    const pipeline = new Pipeline<ReadContext<R, I>>(`${def.kind}-${operationName}`, [
+      validateInputStep(method.input, runtime.displayName),
+      authorizeStep(runtime, operationName, () => undefined),
+    ]);
 
-      return async (req, hctx) => {
-        const ctx: ReadContext<R, I> = { caller: await def.caller(hctx), input: req as I };
-        await pipeline.execute(ctx);
+    return async (input, caller) => {
+      const ctx: ReadContext<R, I> = { caller, input };
+      await pipeline.execute(ctx);
 
-        // authorize guaranteed a caller above.
-        const q = options.query(ctx.input, ctx.caller as CallerPrincipal);
-        const limit = Math.min(q.pageSize && q.pageSize > 0 ? q.pageSize : DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
-        const offset = q.pageOffset && q.pageOffset > 0 ? q.pageOffset : 0;
-        const { items, totalCount } = await def.store.list(def.kind, {
-          limit,
-          offset,
-          orderBy: options.orderBy,
-          filter: q.filter,
-        });
-        // One derivation for the whole page (T03 D4) — a counting
-        // derivation costs one query here, not one per row.
-        await deriveAll(runtime, items as R[]);
-        return options.respond(items as R[], totalCount);
-      };
-    },
+      // authorize guaranteed a caller above.
+      const q = options.query(ctx.input, ctx.caller as CallerPrincipal);
+      const limit = Math.min(q.pageSize && q.pageSize > 0 ? q.pageSize : DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+      const offset = q.pageOffset && q.pageOffset > 0 ? q.pageOffset : 0;
+      const { items, totalCount } = await def.store.list(def.kind, {
+        limit,
+        offset,
+        orderBy: options.orderBy,
+        filter: q.filter,
+      });
+      // One derivation for the whole page (T03 D4) — a counting
+      // derivation costs one query here, not one per row.
+      await deriveAll(runtime, items as R[]);
+      return options.respond(items as R[], totalCount);
+    };
   };
+
+  return { flavor: "list", buildInvokable };
 }
 
 /* --------------------------- custom -------------------------------- */
@@ -635,64 +682,65 @@ export interface CustomOperationOptions<R extends ResourceMessage, I, O> {
 
 export function customOperation<R extends ResourceMessage, I, O>(
   options: CustomOperationOptions<R, I, O>,
-): OperationBinding<R> {
-  return {
-    flavor: "custom",
-    bind(runtime, method, operationName) {
-      const { def } = runtime;
-      return async (req, hctx) => {
-        const caller = await def.caller(hctx);
-        validateMessage(method.input, req, `${runtime.displayName} ${operationName}`);
+): OperationBinding<R, I, O> {
+  const buildInvokable = (
+    runtime: Runtime<R>,
+    method: DescMethod,
+    operationName: string,
+  ): InvokableCore<I, O> => {
+    return async (input, caller) => {
+      validateMessage(method.input, input, `${runtime.displayName} ${operationName}`);
 
-        // Fail-closed authorization: the handler MUST authorize (via
-        // load() or authorize()) before this call returns. Forgetting is
-        // an INTERNAL error caught by the operation's first test — never
-        // a silently unprotected endpoint. Deny-by-default, mechanically.
-        let authorized = false;
+      // Fail-closed authorization: the handler MUST authorize (via
+      // load() or authorize()) before this call returns. Forgetting is
+      // an INTERNAL error caught by the operation's first test — never
+      // a silently unprotected endpoint. Deny-by-default, mechanically.
+      let authorized = false;
 
-        const ctx: CustomContext<R, I> = {
-          caller,
-          input: req as I,
-          async load(ref) {
-            requireRef(runtime, ref);
-            const resource = await loadByRef(runtime, ref);
-            if (!resource) {
-              throw notFound(runtime.displayName, refDescription(runtime, ref));
-            }
-            await authorizeOrThrow(runtime, operationName, caller, resource);
-            authorized = true;
-            return resource;
-          },
-          async authorize() {
-            await authorizeOrThrow(runtime, operationName, caller, undefined);
-            authorized = true;
-          },
-          async save(resource) {
-            const stamped = stampCustomMutation(
-              runtime.identity,
-              resource,
-              caller as CallerPrincipal,
-              new Date(),
-            );
-            await persist(runtime, stamped);
-            return stamped;
-          },
-          async publish(type, resource, previous) {
-            await publishSafely(runtime, type, resource, previous, caller as CallerPrincipal);
-          },
-        };
-
-        const response = await options.handler(ctx);
-        if (!authorized) {
-          throw internal(
-            `${runtime.displayName} ${operationName}: handler completed without an ` +
-              `authorization check (call ctx.load() or ctx.authorize())`,
+      const ctx: CustomContext<R, I> = {
+        caller,
+        input,
+        async load(ref) {
+          requireRef(runtime, ref);
+          const resource = await loadByRef(runtime, ref);
+          if (!resource) {
+            throw notFound(runtime.displayName, refDescription(runtime, ref));
+          }
+          await authorizeOrThrow(runtime, operationName, caller, resource);
+          authorized = true;
+          return resource;
+        },
+        async authorize() {
+          await authorizeOrThrow(runtime, operationName, caller, undefined);
+          authorized = true;
+        },
+        async save(resource) {
+          const stamped = stampCustomMutation(
+            runtime.identity,
+            resource,
+            caller as CallerPrincipal,
+            new Date(),
           );
-        }
-        return response;
+          await persist(runtime, stamped);
+          return stamped;
+        },
+        async publish(type, resource, previous) {
+          await publishSafely(runtime, type, resource, previous, caller as CallerPrincipal);
+        },
       };
-    },
+
+      const response = await options.handler(ctx);
+      if (!authorized) {
+        throw internal(
+          `${runtime.displayName} ${operationName}: handler completed without an ` +
+            `authorization check (call ctx.load() or ctx.authorize())`,
+        );
+      }
+      return response;
+    };
   };
+
+  return { flavor: "custom", buildInvokable };
 }
 
 /* ------------------------ defineResource --------------------------- */
@@ -702,29 +750,55 @@ type ServiceMethodNames<S extends DescService> = S extends { method: infer M }
   : string;
 
 /**
- * The in-process invocation surface (T03 D1). Present for every declared
- * create/update — whether bound to a service method or declared
- * system-only — and typed to demand a caller: in-process code always
- * knows who it is acting as (an event handler passes SYSTEM_PRINCIPAL).
+ * The in-process invocation surface (T03 D1, completed T05). Every
+ * declared operation — create/update (wire-bound or system-only), get,
+ * list, and each named custom operation — is reachable as a plain async
+ * function running its FULL pipeline, typed to demand a caller:
+ * in-process code always knows who it is acting as (an event handler
+ * passes SYSTEM_PRINCIPAL; the MCP gate passes the channel-resolved
+ * user). This baseline interface carries the always-possible
+ * create/update slots; `InvokerFor` layers the per-operation typing on
+ * top when `defineResource` can see the concrete operations map.
  */
 export interface ResourceInvoker<R extends ResourceMessage> {
   readonly create?: (input: R, caller: CallerPrincipal) => Promise<R>;
   readonly update?: (input: R, caller: CallerPrincipal) => Promise<R>;
 }
 
-export interface DefinedResource<R extends ResourceMessage, S extends DescService> {
+/**
+ * The fully-typed invoke surface derived from a concrete operations map:
+ * one function per declared operation name, I/O types flowing from the
+ * factory call sites (`getOperation<Task, GetTaskRequest>` ⇒
+ * `invoke.get(req, caller): Promise<Task>`). Intersected with the
+ * baseline so system-only create/update stay reachable.
+ */
+export type InvokerFor<R extends ResourceMessage, Ops> = ResourceInvoker<R> & {
+  readonly [K in keyof Ops]-?: Ops[K] extends OperationBinding<R, infer I, infer O>
+    ? Invokable<I, O>
+    : never;
+};
+
+export interface DefinedResource<
+  R extends ResourceMessage,
+  S extends DescService,
+  Inv extends ResourceInvoker<R> = ResourceInvoker<R>,
+> {
   readonly service: S;
   readonly impl: Partial<ServiceImpl<S>>;
   /** Registers the service on a ConnectRouter. */
   routes(router: ConnectRouter): void;
   /** Same pipelines, no transport (T03 D1). */
-  readonly invoke: ResourceInvoker<R>;
+  readonly invoke: Inv;
 }
 
-export function defineResource<R extends ResourceMessage, S extends DescService>(opts: {
+export function defineResource<
+  R extends ResourceMessage,
+  S extends DescService,
+  Ops extends { readonly [K in ServiceMethodNames<S>]?: OperationBinding<R, never, unknown> },
+>(opts: {
   definition: ResourceDefinition<R>;
   service: S;
-  operations: { readonly [K in ServiceMethodNames<S>]?: OperationBinding<R> };
+  operations: Ops;
   /**
    * Operations that exist ONLY in-process — no service method, absent
    * from the wire by construction, reachable through `invoke` alone. The
@@ -735,7 +809,7 @@ export function defineResource<R extends ResourceMessage, S extends DescService>
     readonly create?: CreateOperationOptions<R>;
     readonly update?: UpdateOperationOptions<R>;
   };
-}): DefinedResource<R, S> {
+}): DefinedResource<R, S, InvokerFor<R, Ops>> {
   const { definition, service, operations, systemOperations } = opts;
   const runtime: Runtime<R> = {
     def: definition,
@@ -750,7 +824,7 @@ export function defineResource<R extends ResourceMessage, S extends DescService>
 
   const methodsByLocalName = new Map(service.methods.map((m) => [m.localName, m]));
   const impl: Record<string, UnaryHandler> = {};
-  const invoke: { create?: WriteExecutor<R>; update?: WriteExecutor<R> } = {};
+  const invoke: Record<string, InvokableCore<never, unknown> | WriteExecutor<R>> = {};
 
   for (const [name, binding] of Object.entries(operations) as [string, OperationBinding<R>][]) {
     if (!binding) continue;
@@ -784,10 +858,22 @@ export function defineResource<R extends ResourceMessage, S extends DescService>
         runtime,
         name,
       );
+      // Exposed under BOTH the operation name (what InvokerFor promises)
+      // and the flavor (what ResourceInvoker's baseline and the event
+      // handlers use) — the same executor either way.
       invoke[binding.flavor] = executor;
+      invoke[name] = executor;
       impl[name] = async (req, hctx) => executor(req as R, await definition.caller(hctx));
     } else {
-      impl[name] = (binding.bind as NonNullable<typeof binding.bind>)(runtime, method, name);
+      const run = (binding.buildInvokable as NonNullable<typeof binding.buildInvokable>)(
+        runtime,
+        method,
+        name,
+      );
+      invoke[name] = run;
+      // The wire adapter — identical in shape to the create/update one:
+      // extract the caller, delegate to the transport-free core.
+      impl[name] = async (req, hctx) => run(req as never, await definition.caller(hctx));
     }
   }
 
@@ -814,7 +900,11 @@ export function defineResource<R extends ResourceMessage, S extends DescService>
       // connect-es answers every unbound method with UNIMPLEMENTED.
       router.service(service, impl as Partial<ServiceImpl<S>>);
     },
-    invoke,
+    // The runtime object is name-keyed and flavor-keyed as built above;
+    // the assertion narrows it to the per-operation types InvokerFor
+    // computed from the factories' generics (the recorded typing stance:
+    // types flow from where apps write code, not from descriptors).
+    invoke: invoke as InvokerFor<R, Ops>,
   };
 }
 

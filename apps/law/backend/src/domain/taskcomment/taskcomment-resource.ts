@@ -20,6 +20,7 @@ import {
 import type { CallerExtractor } from "@stigmer/resource-api";
 import {
   type ListTaskCommentsRequest,
+  type ListTaskCommentsResponse,
   ListTaskCommentsResponseSchema,
   type TaskComment,
   TaskCommentSchema,
@@ -52,7 +53,7 @@ export function taskCommentResource(deps: {
           ]),
         ],
       }),
-      list: listOperation<TaskComment, ListTaskCommentsRequest, unknown>({
+      list: listOperation<TaskComment, ListTaskCommentsRequest, ListTaskCommentsResponse>({
         // Oldest first — a conversation reads top-down (record model,
         // deliberately opposite to case notes).
         orderBy: { field: "createdAt", direction: "asc", nulls: "last" },

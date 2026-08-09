@@ -28,6 +28,7 @@ import {
 import type { CallerExtractor } from "@stigmer/resource-api";
 import {
   type ListNotificationsRequest,
+  type ListNotificationsResponse,
   ListNotificationsResponseSchema,
   type MarkAllNotificationsReadRequest,
   MarkAllNotificationsReadResponseSchema,
@@ -74,7 +75,7 @@ export function notificationResource(deps: {
     },
     service: NotificationService,
     operations: {
-      list: listOperation<Notification, ListNotificationsRequest, unknown>({
+      list: listOperation<Notification, ListNotificationsRequest, ListNotificationsResponse>({
         // Newest first (metadata-backed column, D5).
         orderBy: { field: "createdAt", direction: "desc", nulls: "last" },
         // ALWAYS the caller's own — recipient scoping is server-side, not

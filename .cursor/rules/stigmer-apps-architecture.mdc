@@ -17,7 +17,16 @@ its extraction is mechanical). No → it belongs to exactly one app.
 | Layer | Path | License | Knows about |
 |-------|------|---------|-------------|
 | Commons | `packages/resource-api` (and future `packages/*`) | Apache-2.0 | Nothing product-, domain-, or customer-specific — business-agnostic by contract |
-| Apps | `apps/<domain>/` (proto, backend, web, mcp-server) | AGPL-3.0-only | Its own domain + the commons |
+| Apps | `apps/<domain>/` (proto, backend, web, deploy) | AGPL-3.0-only | Its own domain + the commons |
+
+**There is deliberately NO `mcp-server` directory** (a T05 decision this
+rule originally predicted otherwise — project DD-008): the MCP tool
+surface is MOUNTED INSIDE the backend (`backend/src/mcp/`, its own
+cluster-internal listener), because a firm is one deployment by design
+(T04b D1's one-service property), and an in-process surface resolves the
+channel caller to a principal directly — no cross-service credential
+that could mint sessions for arbitrary users ever exists. A separate MCP
+process would need exactly that credential.
 
 Dependencies flow downward only. Commons never import from apps. Apps
 never import from each other. A commons package's test suite runs

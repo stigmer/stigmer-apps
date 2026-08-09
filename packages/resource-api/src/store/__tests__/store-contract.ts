@@ -329,5 +329,171 @@ export function runStoreContractTests(
         ).rejects.toThrowError(/Gadget/);
       });
     });
+
+    // ── The T05 filter vocabulary: in / range / absent (AND-only) ──────
+
+    it("filters by set membership; an empty set matches nothing", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_1", serialNumber: "SN-1", ownerId: "owner-a" }));
+        await store.save("Widget", makeWidget({ id: "wdg_2", serialNumber: "SN-2", ownerId: "owner-b" }));
+        await store.save("Widget", makeWidget({ id: "wdg_3", serialNumber: "SN-3", ownerId: "owner-c" }));
+
+        const some = await store.list("Widget", {
+          limit: 10,
+          offset: 0,
+          orderBy: { field: "createdAt", direction: "asc", nulls: "last" },
+          filter: { ownerId: { in: ["owner-a", "owner-c", "owner-none"] } },
+        });
+        expect(some.items.map((w) => w.metadata?.id)).toEqual(["wdg_1", "wdg_3"]);
+        expect(some.totalCount).toBe(2);
+
+        const none = await store.list("Widget", {
+          limit: 10,
+          offset: 0,
+          filter: { ownerId: { in: [] } },
+        });
+        expect(none.items).toEqual([]);
+        expect(none.totalCount).toBe(0);
+      });
+    });
+
+    it("filters by inclusive range — the hearing-window shape", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_before", serialNumber: "B", inspectionDate: "2026-08-08" }));
+        await store.save("Widget", makeWidget({ id: "wdg_low", serialNumber: "L", inspectionDate: "2026-08-09" }));
+        await store.save("Widget", makeWidget({ id: "wdg_mid", serialNumber: "M", inspectionDate: "2026-08-12" }));
+        await store.save("Widget", makeWidget({ id: "wdg_high", serialNumber: "H", inspectionDate: "2026-08-16" }));
+        await store.save("Widget", makeWidget({ id: "wdg_after", serialNumber: "A", inspectionDate: "2026-08-17" }));
+
+        const window = await store.list("Widget", {
+          limit: 10,
+          offset: 0,
+          orderBy: { field: "inspectionDate", direction: "asc", nulls: "last" },
+          filter: { inspectionDate: { gte: "2026-08-09", lte: "2026-08-16" } },
+        });
+        expect(window.items.map((w) => w.metadata?.id)).toEqual(["wdg_low", "wdg_mid", "wdg_high"]);
+        expect(window.totalCount).toBe(3);
+      });
+    });
+
+    it("strict bounds are strict — the overdue shape (lt)", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_past", serialNumber: "P", inspectionDate: "2026-08-08" }));
+        await store.save("Widget", makeWidget({ id: "wdg_today", serialNumber: "T", inspectionDate: "2026-08-09" }));
+
+        const past = await store.list("Widget", {
+          limit: 10,
+          offset: 0,
+          filter: { inspectionDate: { lt: "2026-08-09" } },
+        });
+        expect(past.items.map((w) => w.metadata?.id)).toEqual(["wdg_past"]);
+      });
+    });
+
+    it("a range NEVER matches a row whose field is absent", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_dated", serialNumber: "D", inspectionDate: "2026-08-01" }));
+        await store.save("Widget", makeWidget({ id: "wdg_undated", serialNumber: "U" }));
+
+        // Absent must not satisfy ANY bound direction: SQL comparison
+        // against NULL is false, and the fake mirrors it. Without this
+        // pin, "overdue" would quietly include tasks that have no due
+        // date at all.
+        for (const range of [{ lt: "2026-12-31" }, { gte: "2026-01-01" }]) {
+          const result = await store.list("Widget", {
+            limit: 10,
+            offset: 0,
+            filter: { inspectionDate: range },
+          });
+          expect(result.items.map((w) => w.metadata?.id)).toEqual(["wdg_dated"]);
+          expect(result.totalCount).toBe(1);
+        }
+      });
+    });
+
+    it("absent matches exactly the rows where the field was never set", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_dated", serialNumber: "D", inspectionDate: "2026-08-01" }));
+        await store.save("Widget", makeWidget({ id: "wdg_undated", serialNumber: "U" }));
+
+        const undated = await store.list("Widget", {
+          limit: 10,
+          offset: 0,
+          filter: { inspectionDate: { absent: true } },
+        });
+        expect(undated.items.map((w) => w.metadata?.id)).toEqual(["wdg_undated"]);
+        expect(undated.totalCount).toBe(1);
+      });
+    });
+
+    it("conditions on different fields AND together", async () => {
+      await withStore(async (store) => {
+        // Each of wdg_2/3/4 fails exactly one of the three conditions.
+        // (The equality condition uses retired: "true" — a false bool is
+        // omitted from proto3 JSON, so "false" is unfilterable-by-equality
+        // by the port's own rendering rules, same as the T03 D5 test.)
+        await store.save("Widget", makeWidget({ id: "wdg_1", serialNumber: "S1", ownerId: "owner-a", inspectionDate: "2026-08-01", retired: true }));
+        await store.save("Widget", makeWidget({ id: "wdg_2", serialNumber: "S2", ownerId: "owner-a", inspectionDate: "2026-09-01", retired: true }));
+        await store.save("Widget", makeWidget({ id: "wdg_3", serialNumber: "S3", ownerId: "owner-b", inspectionDate: "2026-08-01", retired: true }));
+        await store.save("Widget", makeWidget({ id: "wdg_4", serialNumber: "S4", ownerId: "owner-a", inspectionDate: "2026-08-01", retired: false }));
+
+        const result = await store.list("Widget", {
+          limit: 10,
+          offset: 0,
+          filter: {
+            ownerId: { in: ["owner-a"] },
+            inspectionDate: { lt: "2026-08-15" },
+            retired: "true",
+          },
+        });
+        expect(result.items.map((w) => w.metadata?.id)).toEqual(["wdg_1"]);
+        expect(result.totalCount).toBe(1);
+      });
+    });
+
+    it("rejects malformed filter shapes loudly, naming the field", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_1", serialNumber: "SN-1" }));
+
+        // An empty range means nothing; guessing a meaning would return
+        // wrong data (the unregistered-field rule applied to shapes).
+        await expect(
+          store.list("Widget", { limit: 10, offset: 0, filter: { inspectionDate: {} } }),
+        ).rejects.toThrowError(/inspectionDate/);
+
+        await expect(
+          store.list("Widget", {
+            limit: 10,
+            offset: 0,
+            filter: { ownerId: { in: ["x"], lt: "y" } as never },
+          }),
+        ).rejects.toThrowError(/ownerId/);
+      });
+    });
+
+    it("equal order keys page deterministically by id across both adapters", async () => {
+      await withStore(async (store) => {
+        // Inserted deliberately out of id order so the memory adapter's
+        // insertion order disagrees with id order — the divergence the
+        // tiebreak exists to close.
+        await store.save("Widget", makeWidget({ id: "wdg_c", serialNumber: "C", inspectionDate: "2026-08-10" }));
+        await store.save("Widget", makeWidget({ id: "wdg_a", serialNumber: "A", inspectionDate: "2026-08-10" }));
+        await store.save("Widget", makeWidget({ id: "wdg_b", serialNumber: "B", inspectionDate: "2026-08-10" }));
+
+        const first = await store.list("Widget", {
+          limit: 2,
+          offset: 0,
+          orderBy: { field: "inspectionDate", direction: "asc", nulls: "last" },
+        });
+        const second = await store.list("Widget", {
+          limit: 2,
+          offset: 2,
+          orderBy: { field: "inspectionDate", direction: "asc", nulls: "last" },
+        });
+        expect(
+          [...first.items, ...second.items].map((w) => w.metadata?.id),
+        ).toEqual(["wdg_a", "wdg_b", "wdg_c"]);
+      });
+    });
   });
 }

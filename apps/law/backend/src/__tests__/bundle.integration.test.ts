@@ -41,8 +41,11 @@ const STARTUP_TIMEOUT_MS = 30_000;
 let container: StartedPostgreSqlContainer;
 let child: ChildProcess;
 let base: string;
+let mcpBase: string;
 /** Every stdout line the child printed before "listening" (boot log). */
 let bootLog: string[];
+
+const MCP_SECRET = "bundle-test-mcp-secret-0123456789abcdef";
 
 /** A port the OS just proved free — config.ts rejects PORT=0 by design. */
 async function freePort(): Promise<number> {
@@ -56,7 +59,7 @@ async function freePort(): Promise<number> {
   });
 }
 
-async function startBundle(port: number): Promise<ChildProcess> {
+async function startBundle(port: number, mcpPort: number): Promise<ChildProcess> {
   const proc = spawn(process.execPath, [BUNDLE], {
     env: {
       // No process.env passthrough: the artifact must boot from exactly
@@ -69,6 +72,8 @@ async function startBundle(port: number): Promise<ChildProcess> {
       OBJECT_STORE_SECRET_ACCESS_KEY: "bundle-test-secret-key",
       AUTH_EPHEMERAL_KEYS: "true",
       AUTH_OPERATOR_KEY_SHA256: "a".repeat(64),
+      MCP_PORT: String(mcpPort),
+      MCP_SHARED_SECRET: MCP_SECRET,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -116,8 +121,10 @@ beforeAll(async () => {
 
   container = await new PostgreSqlContainer("postgres:17-alpine").start();
   const port = await freePort();
-  child = await startBundle(port);
+  const mcpPort = await freePort();
+  child = await startBundle(port, mcpPort);
   base = `http://127.0.0.1:${port}`;
+  mcpBase = `http://127.0.0.1:${mcpPort}`;
 }, 120_000);
 
 afterAll(async () => {
@@ -151,6 +158,38 @@ describe("the bundled artifact", () => {
     });
     expect(response.status).toBe(401);
     expect(((await response.json()) as { code?: string }).code).toBe("unauthenticated");
+  });
+
+  it("serves the MCP listener from the artifact: secret gate holds, tools list (T05)", async () => {
+    // Without the secret: refused before anything else is read.
+    const denied = await fetch(`${mcpBase}/mcp`, { method: "POST", body: "{}" });
+    expect(denied.status).toBe(401);
+
+    // With it: a real MCP tools/list answers with the seven tools — the
+    // MCP SDK survived bundling (conditional imports are exactly the
+    // kind of thing esbuild can break while source tests stay green).
+    const listed = await fetch(`${mcpBase}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${MCP_SECRET}`,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    });
+    expect(listed.status).toBe(200);
+    const body = (await listed.json()) as { result?: { tools?: { name: string }[] } };
+    expect(body.result?.tools?.map((t) => t.name).sort()).toEqual(
+      [
+        "add_case_note",
+        "find_tasks",
+        "firm_overview",
+        "get_case",
+        "my_open_tasks",
+        "upcoming_hearings",
+        "update_task_status",
+      ].sort(),
+    );
   });
 
   it("exits 0 on SIGTERM — the container shutdown contract", async () => {

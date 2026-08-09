@@ -9,7 +9,7 @@ import pg from "pg";
 import { createAuthKit } from "./auth/auth.js";
 import { loadConfigFromEnv } from "./config.js";
 import { createS3ObjectStore } from "./objectstore/object-store.js";
-import { createBackendServer } from "./server.js";
+import { createFirmServers } from "./server.js";
 import { createResourceStore } from "./storage.js";
 import { detectWebRoot } from "./web/static-routes.js";
 
@@ -68,26 +68,41 @@ async function main(): Promise<void> {
   // instead, so absence just means no static surface (T04b D1).
   const webRoot = detectWebRoot(path.dirname(fileURLToPath(import.meta.url)));
 
-  const server = createBackendServer({
-    store: createResourceStore(pool),
-    auth,
-    credentials: createPgCredentialStore(pool),
-    refreshTokens: createPgRefreshTokenStore(pool),
-    objectStore: createS3ObjectStore(config.objectStore),
-    dispatcher,
-    webRoot,
-  });
-  server.listen(config.port, () => {
+  // One assembly, two listeners (T05): the app on the ingress port, the
+  // MCP channel entrance on its own cluster-internal port.
+  const { web, mcp } = createFirmServers(
+    {
+      store: createResourceStore(pool),
+      auth,
+      credentials: createPgCredentialStore(pool),
+      refreshTokens: createPgRefreshTokenStore(pool),
+      objectStore: createS3ObjectStore(config.objectStore),
+      dispatcher,
+      webRoot,
+    },
+    { sharedSecret: config.mcp.sharedSecret },
+  );
+  web.listen(config.port, () => {
     console.log(`backend listening on :${config.port}`);
   });
+  mcp.listen(config.mcp.port, () => {
+    console.log(`mcp listening on :${config.mcp.port}`);
+  });
 
-  // Graceful shutdown: stop accepting connections, then release the pool.
-  // Signals must reach this process directly (exec-form CMD in containers).
+  // Graceful shutdown: stop accepting connections on BOTH listeners,
+  // then release the pool. Signals must reach this process directly
+  // (exec-form CMD in containers).
   const shutdown = (signal: string) => {
     console.log(`${signal} received, shutting down`);
-    server.close(() => {
-      void pool.end().then(() => process.exit(0));
-    });
+    let remaining = 2;
+    const done = () => {
+      remaining -= 1;
+      if (remaining === 0) {
+        void pool.end().then(() => process.exit(0));
+      }
+    };
+    web.close(done);
+    mcp.close(done);
   };
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));

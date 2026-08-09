@@ -18,6 +18,7 @@ import {
   createOperation,
   defineResource,
   getOperation,
+  invalidArgument,
   listOperation,
   referencesExistStep,
   updateOperation,
@@ -29,8 +30,10 @@ import {
   CaseStatusSchema,
   type GetCaseRequest,
   type ListCasesRequest,
+  type ListCasesResponse,
   ListCasesResponseSchema,
 } from "../../gen/stigmer/law/case/v1/case_pb.js";
+import { addDaysToIsoDate, todayInFirmTimezone } from "../firm-clock.js";
 
 export function caseResource(deps: {
   store: ResourceStore;
@@ -83,14 +86,38 @@ export function caseResource(deps: {
           naturalKey: req.caseNumber || undefined,
         }),
       }),
-      list: listOperation<Case, ListCasesRequest, unknown>({
+      list: listOperation<Case, ListCasesRequest, ListCasesResponse>({
         // The list contract (FR-CASE-002 AC4/AC5): soonest hearing first,
         // dateless cases last. Fixed server-side; not a client option.
         orderBy: { field: "nextHearingDate", direction: "asc", nulls: "last" },
-        query: (req) => ({
-          pageSize: req.pageSize,
-          pageOffset: req.pageOffset,
-        }),
+        query: (req) => {
+          if (req.hearingWithinDays > 0 && req.unscheduledOnly) {
+            throw invalidArgument(
+              "Case: hearing_within_days and unscheduled_only are mutually exclusive " +
+                "(a case cannot be both inside a hearing window and unscheduled)",
+            );
+          }
+          // The named predicates (T05), each implemented exactly once.
+          // Hearing window: [today, today+N] inclusive, firm clock. A
+          // range never matches a dateless case (port contract), and gte
+          // excludes the past — "upcoming" means upcoming. Unscheduled:
+          // the absent-variant, the one shape a range cannot express.
+          const today = todayInFirmTimezone();
+          return {
+            pageSize: req.pageSize,
+            pageOffset: req.pageOffset,
+            filter: req.unscheduledOnly
+              ? { nextHearingDate: { absent: true } }
+              : req.hearingWithinDays > 0
+                ? {
+                    nextHearingDate: {
+                      gte: today,
+                      lte: addDaysToIsoDate(today, req.hearingWithinDays),
+                    },
+                  }
+                : undefined,
+          };
+        },
         respond: (items, totalCount) =>
           create(ListCasesResponseSchema, { items, totalCount: BigInt(totalCount) }),
       }),

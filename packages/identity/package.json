@@ -1,6 +1,6 @@
 {
   "name": "@stigmer/identity",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shared identity for Stigmer vertical apps: the User resource, credential storage, token issuing/verification, and a pluggable authenticator chain. Owns the seam; ships the smallest correct issuer (DD-005).",
   "license": "Apache-2.0",
   "repository": {
@@ -36,7 +36,7 @@
   "dependencies": {
     "@bufbuild/protobuf": "^2.13.0",
     "@connectrpc/connect": "^2.1.2",
-    "@stigmer/resource-api": "^0.4.0",
+    "@stigmer/resource-api": "^0.5.0",
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.8",
     "pg": "^8.22.0"

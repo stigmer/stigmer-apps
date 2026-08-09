@@ -34,8 +34,10 @@ import type { CredentialStore } from "./credential-store.js";
 import {
   type GetUserRequest,
   type ListUsersRequest,
+  type ListUsersResponse,
   ListUsersResponseSchema,
   type SetPasswordRequest,
+  type SetPasswordResponse,
   SetPasswordResponseSchema,
   type User,
   UserSchema,
@@ -105,7 +107,7 @@ export function userResource(deps: UserResourceDeps) {
           naturalKey: req.email ? req.email.trim().toLowerCase() : undefined,
         }),
       }),
-      list: listOperation<User, ListUsersRequest, unknown>({
+      list: listOperation<User, ListUsersRequest, ListUsersResponse>({
         orderBy: { field: "email", direction: "asc", nulls: "last" },
         query: (req) => ({
           pageSize: req.pageSize,
@@ -114,7 +116,7 @@ export function userResource(deps: UserResourceDeps) {
         respond: (items, totalCount) =>
           create(ListUsersResponseSchema, { items, totalCount: BigInt(totalCount) }),
       }),
-      setPassword: customOperation<User, SetPasswordRequest, unknown>({
+      setPassword: customOperation<User, SetPasswordRequest, SetPasswordResponse>({
         async handler(ctx) {
           // load() authorizes "setPassword" against the policy
           // (operator-only) and answers NOT_FOUND naming the reference.

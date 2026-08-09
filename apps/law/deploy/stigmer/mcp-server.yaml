@@ -1,0 +1,59 @@
+# The firm's MCP server registration — TEMPLATE (T05, DD-008).
+#
+# Per-firm concretions live in the PRIVATE ops repo
+# (stigmer-cloud `_ops/planton/clients/law/<client>/stigmer/`) with the
+# <angle-bracket> placeholders filled; this file carries the generic
+# shape and the reasoning, and never a customer string (DD-A10).
+#
+# The URL is the firm backend's CLUSTER-INTERNAL MCP port (the chart's
+# second, non-ingress port): every legitimate caller is an agent sandbox
+# inside the same cluster, so the tool surface has no public exposure —
+# a shared-secret boundary that never faces the internet.
+#
+# The three env declarations fail in OPPOSITE directions, and both
+# directions are silent if you get them wrong (learned on the reference
+# deployment):
+#   - The shared secret is REQUIRED on purpose: a missing binding then
+#     refuses loudly at execution-create. If it were optional, the
+#     runner would fail to resolve the header placeholder and silently
+#     DROP this whole server — an agent that just has no tools.
+#   - The caller-identity keys MUST be optional: they have no value at
+#     execution-create time (the runner injects them per turn), so a
+#     required declaration rejects every run before it starts.
+apiVersion: agentic.stigmer.ai/v1
+kind: McpServer
+metadata:
+  name: <firm>-law-firm
+  org: <stigmer-org>
+spec:
+  description: >-
+    Case-management tools for the <firm> law firm: the caller's own
+    tasks, firm-wide task search, case lookup, upcoming hearings, the
+    firm overview, task status updates, and case notes. Caller-identity
+    authorized: the verified WhatsApp sender resolves to a firm member,
+    and every call runs that member's permissions.
+  http:
+    url: "http://<org>-<env>-law-<firm>-backend.<org>-<env>-law-<firm>.svc.cluster.local:8081/mcp"
+    headers:
+      Authorization: "Bearer ${LAW_MCP_SHARED_SECRET}"
+      X-Stigmer-Caller-Kind: "${STIGMER_CALLER_IDENTITY_KIND}"
+      X-Stigmer-Caller-Value: "${STIGMER_CALLER_IDENTITY_VALUE}"
+  env:
+    LAW_MCP_SHARED_SECRET:
+      is_secret: true
+      description: >-
+        Bearer secret for the firm's MCP entrance. The mcp-shared-secret
+        key of the firm's auth-keys config-manager secret (Planton, org
+        stigmer, the firm's env) — the same value the chart deploys to
+        the backend. Whoever holds it can assert any firm member's
+        identity (DD-008): treat it as the credential it is.
+    STIGMER_CALLER_IDENTITY_KIND:
+      optional: true
+      description: >-
+        Platform-injected: the verified caller's identity kind
+        (whatsapp_phone, stigmer_user, anonymous). Never set by hand.
+    STIGMER_CALLER_IDENTITY_VALUE:
+      optional: true
+      description: >-
+        Platform-injected: the verified caller's identity value (the
+        digits-only wa_id, or a Stigmer user email). Never set by hand.

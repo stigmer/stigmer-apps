@@ -1,0 +1,26 @@
+# The firm's tool credentials — TEMPLATE (T05).
+#
+# visibility_org is LOAD-BEARING: a WhatsApp sender has no personal
+# environment, so the channel execution-context merge takes only
+# org-shared environments — a private one is silently skipped and the
+# defect surfaces much later as an execution refusing on a missing key.
+#
+# The value is seeded AT APPLY TIME from the firm's gitignored
+# .secret-values staging (see the per-client runbook) — never committed,
+# in either repo.
+apiVersion: agentic.stigmer.ai/v1
+kind: Environment
+metadata:
+  name: <firm>-law-mcp-credentials
+  org: <stigmer-org>
+  visibility: visibility_org
+spec:
+  description: >-
+    Credentials the <firm> law assistant's tools need — the MCP
+    entrance's bearer secret (the mcp-shared-secret key of the firm's
+    auth-keys config-manager secret; one value, two homes).
+  data:
+    LAW_MCP_SHARED_SECRET:
+      value: "REPLACE_AT_APPLY"
+      is_secret: true
+      description: Bearer secret for the firm's MCP entrance (DD-008).

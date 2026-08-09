@@ -18,6 +18,9 @@ export function identityStoreKinds(): Record<string, PostgresKindConfig> {
       naturalKey: { column: "email", jsonField: "email" },
       columns: {
         email: "email",
+        // The channel-binding lookup column (T05, migration 0002) —
+        // exact E.164 equality, non-unique by recorded deferral.
+        phone: "phone",
       },
     },
   };

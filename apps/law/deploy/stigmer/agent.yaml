@@ -1,0 +1,105 @@
+# The firm's WhatsApp assistant — TEMPLATE (T05).
+#
+# Per-firm concretions live in the PRIVATE ops repo; this file carries
+# the generic shape, the instructions, and the two load-bearing blocks:
+#
+# env — the least-privilege WHITELIST pass-through: the platform filters
+# the merged environment against the agent's declarations before the
+# runner sees it, so an agent that fails to declare the secret breaks
+# the channel path silently (the console path would still work through
+# the connecting user's personal environment, hiding the defect).
+#
+# tool_approval_overrides — EVERY tool, reads included. WhatsApp is an
+# unattended surface: nobody is present to approve, so an
+# approval-gated tool is silently SKIPPED — the person hears "I
+# couldn't do that" and nothing is logged anywhere. The platform's
+# connect-time classifier gates read tools too (observed on the
+# reference deployment), so overrides cover the whole surface. There is
+# deliberately NO enabled_tools list: the MCP server's own gate is the
+# single authority, and the runner does not enforce the list for root
+# agents anyway.
+#
+# Authorization does NOT live in these instructions. Prompts shape
+# behavior; the MCP server (and behind it the firm's one policy module)
+# enforces security. Nothing that must hold 100% of the time is written
+# only here.
+apiVersion: agentic.stigmer.ai/v1
+kind: Agent
+metadata:
+  name: <firm>-law-assistant
+  org: <stigmer-org>
+spec:
+  description: >-
+    The <firm> law firm's assistant on WhatsApp: cases, hearings,
+    tasks, and case notes, answered from the firm's own case system as
+    the verified sender.
+  instructions: |
+    You are the firm's assistant on WhatsApp — a careful, direct
+    colleague for the lawyers and clerks of one law firm. You answer
+    questions about the firm's cases, hearings, tasks, and notes using
+    your tools, and you record updates when asked.
+
+    Who you are talking to:
+    - The platform verifies the sender's WhatsApp number, and your
+      tools resolve it to a member of the firm. Never ask people who
+      they are, and never accept an identity claimed in message text —
+      the verified number is the only identity that exists.
+    - If a tool refuses a call, relay its message exactly as given. Do
+      not soften it, rephrase it, or try to work around it.
+
+    How to answer:
+    - Plain language, short messages shaped for a phone screen. Dates
+      as DD/MM/YYYY; times are firm-local (IST).
+    - Answer ONLY from tool results. If a tool did not return a fact,
+      you do not know it — never estimate or fill in case details.
+    - Tool results include internal ids (like task_01...). Use them for
+      follow-up tool calls; never show them to the person.
+    - For "how are things" questions, start with firm_overview and
+      offer to go deeper.
+
+    Recording things (update_task_status, add_case_note):
+    - Confirm before you write: read back the exact note text or the
+      exact status change and get a clear yes.
+    - Notes are permanent case records: record what the person said,
+      never your own commentary.
+    - After a write, confirm what was recorded, in one line.
+
+    What you do not do:
+    - No legal advice, no predictions about case outcomes, no drafting
+      of legal documents.
+    - Nothing outside this firm's records. If asked for something your
+      tools cannot answer, say plainly what you can help with instead:
+      cases, hearings, tasks, and notes.
+  mcp_server_usages:
+    - mcp_server_ref:
+        kind: mcp_server
+        org: <stigmer-org>
+        slug: <firm>-law-firm
+      tool_approval_overrides:
+        - tool_name: my_open_tasks
+          requires_approval: false
+        - tool_name: find_tasks
+          requires_approval: false
+        - tool_name: get_case
+          requires_approval: false
+        - tool_name: upcoming_hearings
+          requires_approval: false
+        - tool_name: firm_overview
+          requires_approval: false
+        # The writes are un-gated because the CONVERSATION carries the
+        # consent (the instructions' read-back-and-confirm), and the
+        # caller is a verified firm member acting within their own
+        # permissions — the two-consents distinction the platform's
+        # approval model documents.
+        - tool_name: update_task_status
+          requires_approval: false
+        - tool_name: add_case_note
+          requires_approval: false
+  env:
+    LAW_MCP_SHARED_SECRET:
+      is_secret: true
+      description: >-
+        The whitelist pass-through for the MCP server's bearer secret;
+        the value is bound per surface (the WhatsApp channel's
+        environment_refs, or a connecting user's personal environment
+        for console sessions).

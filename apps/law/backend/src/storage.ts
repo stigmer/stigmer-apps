@@ -39,6 +39,9 @@ export function createResourceStore(pool: pg.Pool): ResourceStore {
         caseId: "case_id",
         assigneeId: "assignee_id",
         dueDate: "due_date",
+        // Stored lifecycle state (0007) — the open/overdue named
+        // predicates filter on it; values are proto3-JSON enum names.
+        state: "state",
       },
     },
     Notification: {

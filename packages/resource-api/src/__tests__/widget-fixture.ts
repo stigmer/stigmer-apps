@@ -9,6 +9,7 @@ import type { HandlerContext } from "@connectrpc/connect";
 import {
   type GetWidgetRequest,
   type ListWidgetsRequest,
+  type ListWidgetsResponse,
   ListWidgetsResponseSchema,
   type RetireWidgetRequest,
   type Widget,
@@ -107,7 +108,9 @@ export function widgetResource(options: {
           naturalKey: req.serialNumber || undefined,
         }),
       }),
-      list: listOperation<Widget, ListWidgetsRequest, unknown>({
+      // The response type is named (not `unknown`) so the typed invoke
+      // surface flows: `invoke.list` answers ListWidgetsResponse.
+      list: listOperation<Widget, ListWidgetsRequest, ListWidgetsResponse>({
         orderBy: { field: "inspectionDate", direction: "asc", nulls: "last" },
         query: (req) => ({
           pageSize: req.pageSize,

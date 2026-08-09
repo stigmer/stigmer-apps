@@ -70,6 +70,24 @@ message ListCasesRequest {
     lte: 100
   }];
   int32 page_offset = 2 [(buf.validate.field).int32.gte = 0];
+
+  // Named list predicate (T05): cases whose next hearing falls within
+  // [today, today + N] in the firm's timezone, both ends inclusive. Past
+  // hearing dates and cases with no hearing scheduled never match. 0
+  // means no narrowing; capped at 90 — "upcoming" is an operational
+  // horizon, not a report (the caller composes wider questions from the
+  // full list).
+  int32 hearing_within_days = 3 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 90
+  }];
+
+  // Named list predicate (T05): cases with NO next hearing scheduled —
+  // the matters-needing-attention question a date range cannot express
+  // by definition. Mutually exclusive with hearing_within_days (a case
+  // cannot be both inside a window and dateless); setting both is
+  // INVALID_ARGUMENT.
+  bool unscheduled_only = 4;
 }
 
 message ListCasesResponse {

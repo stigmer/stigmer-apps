@@ -10,6 +10,9 @@ import { loadConfigFromEnv } from "../config.js";
 /** Any 64-hex string is hash-shaped enough for the loader. */
 const OPERATOR_KEY_HASH = "a".repeat(64);
 
+/** Long enough for the loader's 32-char floor; obviously not real. */
+const MCP_SECRET = "test-mcp-shared-secret-0123456789abcdef";
+
 /** A complete, valid environment — tests remove or override entries. */
 function fullEnv(): Record<string, string> {
   return {
@@ -22,6 +25,7 @@ function fullEnv(): Record<string, string> {
     OBJECT_STORE_SECRET_ACCESS_KEY: "test-secret-key",
     AUTH_JWT_PRIVATE_KEY: "bm90LWEtcmVhbC1rZXk=",
     AUTH_OPERATOR_KEY_SHA256: OPERATOR_KEY_HASH,
+    MCP_SHARED_SECRET: MCP_SECRET,
   };
 }
 
@@ -45,10 +49,14 @@ describe("loadConfigFromEnv", () => {
         previousPublicKeyBase64: undefined,
         operatorKeySha256Hex: OPERATOR_KEY_HASH,
       },
+      mcp: {
+        port: 8081,
+        sharedSecret: MCP_SECRET,
+      },
     });
   });
 
-  it("defaults PORT to 8080 and OBJECT_STORE_REGION to auto", () => {
+  it("defaults PORT to 8080, MCP_PORT to 8081, and OBJECT_STORE_REGION to auto", () => {
     const env = fullEnv();
     delete env.PORT;
     delete env.OBJECT_STORE_REGION;
@@ -56,6 +64,7 @@ describe("loadConfigFromEnv", () => {
     const config = loadConfigFromEnv(env);
 
     expect(config.port).toBe(8080);
+    expect(config.mcp.port).toBe(8081);
     expect(config.objectStore.region).toBe("auto");
   });
 
@@ -63,8 +72,31 @@ describe("loadConfigFromEnv", () => {
     // A deploy with several missing variables must fail once with all the
     // names — the operator fixes the manifest in one pass.
     expect(() => loadConfigFromEnv({})).toThrowError(
-      /^Invalid backend configuration:\n- DATABASE_URL .*\n- OBJECT_STORE_ENDPOINT .*\n- OBJECT_STORE_BUCKET .*\n- OBJECT_STORE_ACCESS_KEY_ID .*\n- OBJECT_STORE_SECRET_ACCESS_KEY .*\n- AUTH_JWT_PRIVATE_KEY .*\n- AUTH_OPERATOR_KEY_SHA256 .*/,
+      /^Invalid backend configuration:\n- DATABASE_URL .*\n- OBJECT_STORE_ENDPOINT .*\n- OBJECT_STORE_BUCKET .*\n- OBJECT_STORE_ACCESS_KEY_ID .*\n- OBJECT_STORE_SECRET_ACCESS_KEY .*\n- AUTH_JWT_PRIVATE_KEY .*\n- AUTH_OPERATOR_KEY_SHA256 .*\n- MCP_SHARED_SECRET .*/,
     );
+  });
+
+  describe("the MCP entrance (T05, DD-008)", () => {
+    it("refuses a short shared secret — there is no insecure mode", () => {
+      const env = fullEnv();
+      env.MCP_SHARED_SECRET = "too-short";
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(/MCP_SHARED_SECRET .* min 32/);
+    });
+
+    it("refuses MCP_PORT colliding with PORT — two listeners, two ports", () => {
+      const env = fullEnv();
+      env.MCP_PORT = env.PORT as string;
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(/MCP_PORT must differ from PORT/);
+    });
+
+    it("validates MCP_PORT like every port", () => {
+      const env = fullEnv();
+      env.MCP_PORT = "0";
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(/MCP_PORT/);
+    });
   });
 
   describe("auth (DD-005 D4/D7)", () => {

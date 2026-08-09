@@ -2,12 +2,18 @@ import http from "node:http";
 import { connectNodeAdapter } from "@connectrpc/connect-node";
 import type { ConnectRouter } from "@connectrpc/connect";
 import type { InProcessEventDispatcher, ResourceStore } from "@stigmer/resource-api";
-import { authService, type CredentialStore, type RefreshTokenStore } from "@stigmer/identity";
+import {
+  authService,
+  createChannelIdentityResolver,
+  type CredentialStore,
+  type RefreshTokenStore,
+} from "@stigmer/identity";
 import type { AuthKit } from "./auth/auth.js";
 import { registerTaskAssignmentHandler } from "./domain/notification/task-assignment-handler.js";
 import { createFileRoutes } from "./files/file-routes.js";
+import { createMcpHttpServer } from "./mcp/transport.js";
 import type { ObjectStore } from "./objectstore/object-store.js";
-import { buildRoutes, createApp } from "./routes.js";
+import { type App, buildRoutes, createApp } from "./routes.js";
 import { createStaticRoutes } from "./web/static-routes.js";
 
 export interface BackendDeps {
@@ -41,6 +47,37 @@ export interface BackendDeps {
  * the exact production server on an ephemeral port.
  */
 export function createBackendServer(deps: BackendDeps): http.Server {
+  return buildWebServer(assembleApp(deps), deps);
+}
+
+/**
+ * The firm's whole process (T05, DD-008): the app server AND the MCP
+ * listener, assembled from ONE createApp — the MCP tools run the exact
+ * pipeline instances the Connect routes serve, so the policy module and
+ * the event subscribers govern every surface identically. The MCP
+ * server listens on its own cluster-internal port; it is never mounted
+ * on the ingress port.
+ */
+export function createFirmServers(
+  deps: BackendDeps,
+  mcp: { readonly sharedSecret: string },
+): { readonly web: http.Server; readonly mcp: http.Server } {
+  const app = assembleApp(deps);
+  return {
+    web: buildWebServer(app, deps),
+    mcp: createMcpHttpServer(
+      { sharedSecret: mcp.sharedSecret },
+      {
+        resources: app.resources,
+        // The channel resolver reads the SAME store the pipelines use;
+        // deliberately not in the authenticator chain (identity README).
+        resolveChannelIdentity: createChannelIdentityResolver(deps.store),
+      },
+    ),
+  };
+}
+
+function assembleApp(deps: BackendDeps): App {
   const app = createApp({
     store: deps.store,
     caller: deps.auth.resolver.fromConnect,
@@ -59,7 +96,10 @@ export function createBackendServer(deps: BackendDeps): http.Server {
       >,
     );
   }
+  return app;
+}
 
+function buildWebServer(app: App, deps: BackendDeps): http.Server {
   const fileRoutes = createFileRoutes({
     policy: app.policy,
     caller: deps.auth.resolver.fromHttp,
