@@ -38,6 +38,7 @@ import {
   TaskStatusSchema,
   type UpdateTaskStatusRequest,
 } from "../../gen/stigmer/law/task/v1/task_pb.js";
+import type { Case } from "../../gen/stigmer/law/case/v1/case_pb.js";
 
 /**
  * "Today" for overdue derivation, in the firm's timezone (Asia/Kolkata —
@@ -100,16 +101,33 @@ export function taskResource(deps: {
       policy: deps.policy,
       publisher: deps.publisher,
       caller: deps.caller,
-      // Page-shaped (T03 D4); pure computation here, so no query at all.
-      deriveStatus: (tasks: readonly Task[]) => {
+      // Page-shaped (T03 D4): overdue is pure computation; case_number
+      // (T04b D9) is ONE bulk lookup per response — lawyers speak in case
+      // numbers, and every task-listing consumer (web lists, WhatsApp
+      // my_open_tasks) renders them, so the reference resolves here, never
+      // client-side and never N+1.
+      deriveStatus: async (tasks: readonly Task[]) => {
         const today = todayInFirmTimezone();
+        const caseIds = [
+          ...new Set(
+            tasks
+              .map((t) => t.spec?.caseId)
+              .filter((id): id is string => !!id),
+          ),
+        ];
+        const cases = await deps.store.getByIds("Case", caseIds);
         for (const task of tasks) {
           const dueDate = task.spec?.dueDate;
           const state = task.status?.state ?? TaskState.UNSPECIFIED;
+          const referenced = cases.get(task.spec?.caseId ?? "") as Case | undefined;
           task.status = create(TaskStatusSchema, {
             state,
             overdue:
               dueDate !== undefined && dueDate < today && state !== TaskState.CLOSED,
+            // A dangling reference (case rows are never deleted in MVP,
+            // but the field is best-effort display data) renders empty
+            // rather than failing the read.
+            caseNumber: referenced?.spec?.caseNumber ?? "",
           });
         }
       },

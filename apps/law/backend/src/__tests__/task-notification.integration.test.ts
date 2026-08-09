@@ -335,6 +335,45 @@ describe("Task and Notification resources", () => {
     });
   });
 
+  describe("derived case_number (T04b D9 — lawyers speak in case numbers)", () => {
+    it("every read surface carries the referenced case's number, derived per page", async () => {
+      // A second case proves per-row mapping, not a page-wide constant.
+      const cases = createClient(CaseService, transport);
+      const otherCaseId = (
+        await cases.create(
+          create(CaseSchema, {
+            spec: {
+              caseNumber: "WP-77/2026",
+              clientName: "Other Client",
+              caseType: "writ",
+              assignedLawyerId: asha,
+            },
+          }),
+          asUser(asha),
+        )
+      ).metadata?.id as string;
+
+      const created = await tasks.create(
+        taskInput({ title: "on the base case", assigneeId: asha }),
+        asUser(asha),
+      );
+      expect(created.status?.caseNumber).toBe("CRL-9/2026");
+
+      await tasks.create(
+        taskInput({ title: "on the other case", caseId: otherCaseId, assigneeId: asha }),
+        asUser(asha),
+      );
+
+      const got = await tasks.get({ id: created.metadata?.id as string }, asUser(asha));
+      expect(got.status?.caseNumber).toBe("CRL-9/2026");
+
+      const mine = await tasks.list({}, asUser(asha));
+      const byTitle = new Map(mine.items.map((t) => [t.spec?.title, t.status?.caseNumber]));
+      expect(byTitle.get("on the base case")).toBe("CRL-9/2026");
+      expect(byTitle.get("on the other case")).toBe("WP-77/2026");
+    });
+  });
+
   describe("TASK_ASSIGNMENT notifications (publish slot, never handler code)", () => {
     it("assigning a task to someone else notifies them through the full pipeline", async () => {
       const task = await tasks.create(

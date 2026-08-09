@@ -165,6 +165,24 @@ export class PostgresResourceStore implements ResourceStore {
     };
   }
 
+  async getByIds(kind: string, ids: readonly string[]): Promise<Map<string, ResourceMessage>> {
+    const config = this.#config(kind);
+    const found = new Map<string, ResourceMessage>();
+    if (ids.length === 0) {
+      return found;
+    }
+    // One IN-query regardless of how many ids: the countBy arrangement
+    // applied to lookups, so derived references are never an N+1 (T04b D9).
+    const res = await this.#pool.query(
+      `SELECT id, resource FROM ${config.table} WHERE id = ANY($1::text[])`,
+      [[...ids]],
+    );
+    for (const row of res.rows) {
+      found.set(row.id as string, this.#toMessage(config, row.resource));
+    }
+    return found;
+  }
+
   async countBy(
     kind: string,
     field: string,

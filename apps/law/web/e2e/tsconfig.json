@@ -1,0 +1,15 @@
+{
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    // Node-side tooling: Playwright specs and the Vite/Vitest configs run
+    // under Node, so they keep the base's NodeNext resolution and node
+    // types — unlike the browser code in ../src (see ../tsconfig.json).
+    "noEmit": true
+  },
+  "include": [
+    "./**/*.ts",
+    "../playwright.config.ts",
+    "../vite.config.ts",
+    "../vitest.config.ts"
+  ]
+}

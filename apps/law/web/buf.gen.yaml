@@ -1,0 +1,25 @@
+# Codegen template for the Stigmer Law WEB APP. Run from the REPO ROOT via
+# the root `npm run codegen` (buf generate --template ...): inputs and out
+# are root-relative, so invoking it from anywhere else generates into the
+# wrong place.
+#
+# The web app owns its own committed gen (T04b D2): it may not deep-import
+# @law/backend's gen (server code), and @stigmer/identity's package export
+# carries server-side dependencies a browser bundle must not touch — so the
+# browser generates the SAME proto definitions into its own tree (DD-A3:
+# one definition, N generated copies, CI drift-checked). Inputs cover both
+# contracts a web session needs: the law resources and the identity
+# auth/user surface; include_imports materializes the envelope and
+# buf.validate types alongside.
+version: v2
+clean: true
+plugins:
+  - remote: buf.build/bufbuild/es
+    out: apps/law/web/src/gen
+    opt:
+      - target=ts
+      - import_extension=js
+    include_imports: true
+inputs:
+  - directory: apps/law/proto
+  - directory: packages/identity/proto

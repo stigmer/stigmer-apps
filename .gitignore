@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# Playwright artifacts (apps/law/web)
+test-results/
+playwright-report/

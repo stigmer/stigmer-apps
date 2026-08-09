@@ -117,6 +117,19 @@ export class MemoryResourceStore implements ResourceStore {
     return { items: page, totalCount };
   }
 
+  async getByIds(kind: string, ids: readonly string[]): Promise<Map<string, ResourceMessage>> {
+    this.#config(kind);
+    const table = this.#table(kind);
+    const found = new Map<string, ResourceMessage>();
+    for (const id of ids) {
+      const row = table.get(id);
+      if (row) {
+        found.set(id, this.#cloneOut(kind, row));
+      }
+    }
+    return found;
+  }
+
   async countBy(
     kind: string,
     field: string,

@@ -8,12 +8,13 @@
   "workspaces": [
     "packages/resource-api",
     "packages/identity",
-    "apps/law/backend"
+    "apps/law/backend",
+    "apps/law/web"
   ],
   "scripts": {
-    "build": "npm run build -w @stigmer/resource-api && npm run build -w @stigmer/identity && npm run build -w @law/backend",
+    "build": "npm run build -w @stigmer/resource-api && npm run build -w @stigmer/identity && npm run build -w @law/web && npm run build -w @law/backend",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "codegen": "npx @bufbuild/buf generate --template packages/resource-api/buf.gen.yaml && npx @bufbuild/buf generate --template packages/identity/buf.gen.yaml && npx @bufbuild/buf generate --template apps/law/buf.gen.yaml"
+    "codegen": "npx @bufbuild/buf generate --template packages/resource-api/buf.gen.yaml && npx @bufbuild/buf generate --template packages/identity/buf.gen.yaml && npx @bufbuild/buf generate --template apps/law/buf.gen.yaml && npx @bufbuild/buf generate --template apps/law/web/buf.gen.yaml"
   }
 }

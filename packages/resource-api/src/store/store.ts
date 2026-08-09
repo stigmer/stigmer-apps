@@ -87,4 +87,13 @@ export interface ResourceStore {
    * derived-count consumer (T03 D4).
    */
   countBy(kind: string, field: string, values: readonly string[]): Promise<Map<string, number>>;
+
+  /**
+   * Bulk getById — one round trip for a page's worth of references, so a
+   * page-shaped deriveStatus that renders REFERENCED resources (e.g.
+   * Task.case_number over 20 tasks) is never an N+1; the countBy
+   * precedent applied to lookups. Unknown ids are simply absent from the
+   * map. Forced by the first derived-reference consumer (T04b D9).
+   */
+  getByIds(kind: string, ids: readonly string[]): Promise<Map<string, ResourceMessage>>;
 }

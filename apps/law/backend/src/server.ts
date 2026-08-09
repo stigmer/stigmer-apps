@@ -8,6 +8,7 @@ import { registerTaskAssignmentHandler } from "./domain/notification/task-assign
 import { createFileRoutes } from "./files/file-routes.js";
 import type { ObjectStore } from "./objectstore/object-store.js";
 import { buildRoutes, createApp } from "./routes.js";
+import { createStaticRoutes } from "./web/static-routes.js";
 
 export interface BackendDeps {
   readonly store: ResourceStore;
@@ -22,6 +23,12 @@ export interface BackendDeps {
    * and the bus the notification handlers subscribe on.
    */
   readonly dispatcher?: InProcessEventDispatcher;
+  /**
+   * Directory of the web app's built SPA (T04b D1). Optional: absent in
+   * dev (the Vite dev server proxies to this process) and in API tests;
+   * present in the built image, detected by main.ts (detectWebRoot).
+   */
+  readonly webRoot?: string;
 }
 
 /**
@@ -81,6 +88,11 @@ export function createBackendServer(deps: BackendDeps): http.Server {
     },
   });
 
+  // The web app's built SPA, same origin as the API (T04b D1) — the
+  // handler owns non-API GET/HEAD paths and declines `/stigmer.*`, so it
+  // can never shadow an RPC.
+  const staticRoutes = deps.webRoot ? createStaticRoutes(deps.webRoot) : undefined;
+
   return http.createServer((req, res) => {
     // Health answers before anything else and deliberately does NOT check
     // the database: a store outage must degrade requests, not crash-loop
@@ -91,6 +103,9 @@ export function createBackendServer(deps: BackendDeps): http.Server {
       return;
     }
     if (fileRoutes(req, res)) {
+      return;
+    }
+    if (staticRoutes?.(req, res)) {
       return;
     }
     connectHandler(req, res);

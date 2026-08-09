@@ -47,7 +47,7 @@ jobs:
         # codegen after a proto change).
         run: |
           npm run codegen
-          git diff --exit-code -- packages/resource-api/src/gen packages/identity/src/gen apps/law/backend/src/gen
+          git diff --exit-code -- packages/resource-api/src/gen packages/identity/src/gen apps/law/backend/src/gen apps/law/web/src/gen
 
       - name: Build
         run: npm run build
@@ -60,3 +60,30 @@ jobs:
         # document flow) via Testcontainers — ubuntu-latest provides the
         # Docker daemon.
         run: npm test
+
+  # The web app's working-day flows through real Chromium against the real
+  # backend (T04b): src/e2e/serve.ts boots Postgres in a container, seeds
+  # fictional users through the operator path, and serves the app's build
+  # the way the deployed image does (dist/public).
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        # Commons first (workspace links point at dist/), then the web
+        # build the E2E backend serves.
+        run: npm run build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Web E2E
+        run: npm run test:e2e -w @law/web

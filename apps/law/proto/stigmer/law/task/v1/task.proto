@@ -64,6 +64,13 @@ message TaskStatus {
   // Derived on read against today's date in the firm's timezone
   // (Asia/Kolkata): due_date passed and not CLOSED. Never stored.
   bool overdue = 2;
+
+  // The referenced case's court case number, derived on read (T04b D9) —
+  // lawyers speak in case numbers, and every consumer that lists tasks
+  // (web task lists, the WhatsApp my_open_tasks tool) needs it without
+  // joining client-side. One grouped lookup per page (the document_count
+  // arrangement). Never stored.
+  string case_number = 3;
 }
 
 enum TaskState {

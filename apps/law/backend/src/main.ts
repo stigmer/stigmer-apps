@@ -11,6 +11,7 @@ import { loadConfigFromEnv } from "./config.js";
 import { createS3ObjectStore } from "./objectstore/object-store.js";
 import { createBackendServer } from "./server.js";
 import { createResourceStore } from "./storage.js";
+import { detectWebRoot } from "./web/static-routes.js";
 
 /**
  * Two migration sources, identity first so app tables may reference
@@ -60,6 +61,11 @@ async function main(): Promise<void> {
   // handlers.
   const dispatcher = new InProcessEventDispatcher();
 
+  // The built image carries the web app at dist/public (build.mjs, the
+  // migrations-copy precedent); dev serves the front end from Vite
+  // instead, so absence just means no static surface (T04b D1).
+  const webRoot = detectWebRoot(path.dirname(fileURLToPath(import.meta.url)));
+
   const server = createBackendServer({
     store: createResourceStore(pool),
     auth,
@@ -67,6 +73,7 @@ async function main(): Promise<void> {
     refreshTokens: createPgRefreshTokenStore(pool),
     objectStore: createS3ObjectStore(config.objectStore),
     dispatcher,
+    webRoot,
   });
   server.listen(config.port, () => {
     console.log(`backend listening on :${config.port}`);

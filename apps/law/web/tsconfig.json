@@ -1,0 +1,17 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    // Browser code consumed ONLY by Vite/Vitest, never by plain Node —
+    // the one sanctioned divergence from the base's NodeNext (which
+    // exists for cross-package Node consumers, DD-A8). Relative imports
+    // still carry ".js" extensions: house style, and what the generated
+    // code emits (import_extension=js).
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    "noEmit": true
+  },
+  "include": ["src", "vitest.setup.ts"]
+}

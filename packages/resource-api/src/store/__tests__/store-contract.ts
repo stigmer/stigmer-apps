@@ -281,6 +281,34 @@ export function runStoreContractTests(
       });
     });
 
+    it("getByIds returns found rows keyed by id; unknown ids are simply absent (T04b D9)", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_1", serialNumber: "SN-1" }));
+        await store.save("Widget", makeWidget({ id: "wdg_2", serialNumber: "SN-2" }));
+        await store.save("Widget", makeWidget({ id: "wdg_3", serialNumber: "SN-3" }));
+
+        const found = await store.getByIds("Widget", ["wdg_1", "wdg_3", "wdg_gone"]);
+        expect(found.size).toBe(2);
+        expect((found.get("wdg_1") as Widget).spec?.serialNumber).toBe("SN-1");
+        expect((found.get("wdg_3") as Widget).spec?.serialNumber).toBe("SN-3");
+        expect(found.has("wdg_gone")).toBe(false);
+        // Unrequested rows are not reported.
+        expect(found.has("wdg_2")).toBe(false);
+      });
+    });
+
+    it("getByIds with no ids returns an empty map without touching the store", async () => {
+      await withStore(async (store) => {
+        expect((await store.getByIds("Widget", [])).size).toBe(0);
+      });
+    });
+
+    it("rejects getByIds on unregistered kinds loudly", async () => {
+      await withStore(async (store) => {
+        await expect(store.getByIds("Gadget", ["gdt_1"])).rejects.toThrowError(/Gadget/);
+      });
+    });
+
     it("rejects order/filter on unregistered fields loudly", async () => {
       await withStore(async (store) => {
         await store.save("Widget", makeWidget({ id: "wdg_1", serialNumber: "SN-1" }));

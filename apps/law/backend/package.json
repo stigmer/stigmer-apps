@@ -24,7 +24,7 @@
     "@connectrpc/connect": "^2.1.2",
     "@connectrpc/connect-node": "^2.1.2",
     "@stigmer/identity": "^0.1.0",
-    "@stigmer/resource-api": "^0.3.0",
+    "@stigmer/resource-api": "^0.4.0",
     "pg": "^8.22.0"
   },
   "devDependencies": {

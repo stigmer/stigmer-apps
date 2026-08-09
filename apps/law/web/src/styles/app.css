@@ -1,0 +1,57 @@
+/*
+ * The app's single token/style source (T04b D5): every color, radius, and
+ * font the screens use is a token defined here — a hardcoded value in a
+ * component is a defect even before a shared theme package exists (and no
+ * such package exists until vertical #2, dont-do #7). Tailwind v4 turns
+ * each token into utilities (bg-paper, text-ink, border-line, ...).
+ *
+ * The palette is deliberately quiet — this is a working tool for a law
+ * office, read for hours: warm paper neutrals, one deep "counsel blue"
+ * for actions, semantic red/amber reserved for meaning (errors, overdue),
+ * never decoration.
+ */
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+
+  /* Surfaces */
+  --color-paper: oklch(0.98 0.004 85);
+  --color-surface: oklch(1 0 0);
+  --color-line: oklch(0.9 0.008 85);
+
+  /* Text. Every step ≥ 4.5:1 on paper AND surface (WCAG AA, enforced by
+   * the axe gate in e2e/quality.spec.ts) — hierarchy comes from small
+   * lightness steps, never from dropping below readable contrast. */
+  --color-ink: oklch(0.27 0.02 260);
+  --color-ink-muted: oklch(0.47 0.015 260);
+  --color-ink-faint: oklch(0.52 0.012 260);
+
+  /* Actions — counsel blue */
+  --color-brand: oklch(0.45 0.09 255);
+  --color-brand-strong: oklch(0.38 0.09 255);
+  --color-brand-surface: oklch(0.955 0.015 255);
+  --color-on-brand: oklch(1 0 0);
+
+  /* Meaning — each text color ≥ 4.5:1 on its paired surface. */
+  --color-danger: oklch(0.48 0.17 27);
+  --color-danger-surface: oklch(0.96 0.02 27);
+  --color-warn: oklch(0.47 0.12 65);
+  --color-warn-surface: oklch(0.965 0.025 80);
+  --color-ok: oklch(0.5 0.12 150);
+
+  --radius-card: 0.625rem;
+}
+
+@layer base {
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+  }
+  /* One visible focus treatment everywhere — keyboard users see exactly
+   * where they are (D5 accessibility). */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}

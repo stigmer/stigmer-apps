@@ -6,6 +6,7 @@
 // to resolve @stigmer/identity's files from — so the build copies BOTH
 // migration sources beside the bundle (DD-005 D8's packaging rule);
 // main.ts detects `dist/migrations/app` and uses this layout.
+import { existsSync } from "node:fs";
 import { cp } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -18,6 +19,14 @@ const identityMigrations = path.join(
 );
 await cp(identityMigrations, "dist/migrations/identity", { recursive: true });
 await cp("migrations", "dist/migrations/app", { recursive: true });
+
+// The web app's built SPA rides the same image at dist/public (T04b D1) —
+// same mechanism as the migrations above. The root build script builds
+// @law/web before this package; a missing dist (a backend-only local
+// build) just yields a server without the static surface.
+if (existsSync("../web/dist/index.html")) {
+  await cp("../web/dist", "dist/public", { recursive: true });
+}
 
 await build({
   entryPoints: ["src/main.ts"],
