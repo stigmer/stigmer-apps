@@ -102,6 +102,11 @@ spec:
             value: law
           - name: PGUSER
             value: law_app
+          # Required: the operator's pg_hba rejects unencrypted clients
+          # ("no encryption", verified at NK's first boot). Certs are
+          # operator-self-signed, so 'require' = encrypt, don't verify.
+          - name: PGSSLMODE
+            value: require
           # ── Documents (OBJECT_STORE_* contract): same expressions as
           # templates/r2-bucket-documents.yaml — one render, no drift.
           # Region defaults to "auto" in the backend; PGPORT to 5432.

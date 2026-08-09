@@ -24,6 +24,18 @@ export interface AuthConfig {
 }
 
 /**
+ * Encrypt without verifying the server certificate — the deployed
+ * Postgres operator issues self-signed certs, and its pg_hba REQUIRES
+ * encrypted client connections (verified live at NK's first boot:
+ * "pg_hba.conf rejects connection ... no encryption"). This matches the
+ * platform's effective JDBC posture (sslmode=prefer upgrades to TLS
+ * without verification); libpq calls the same semantic "require".
+ */
+export interface DatabaseSsl {
+  readonly rejectUnauthorized: false;
+}
+
+/**
  * Passed straight to pg.Pool, which accepts either shape. Two sources
  * exist because two worlds hand us connections differently: dev/tests
  * get ONE string from Testcontainers (DATABASE_URL), while deployment
@@ -33,13 +45,14 @@ export interface AuthConfig {
  * percent-encoding would corrupt it silently.
  */
 export type DatabaseConfig =
-  | { readonly connectionString: string }
+  | { readonly connectionString: string; readonly ssl?: DatabaseSsl }
   | {
       readonly host: string;
       readonly port: number;
       readonly database: string;
       readonly user: string;
       readonly password: string;
+      readonly ssl?: DatabaseSsl;
     };
 
 export interface BackendConfig {
@@ -153,6 +166,18 @@ function loadDatabaseFromEnv(
   const discreteNames = ["PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD"] as const;
   const discretePresent = discreteNames.filter((name) => env[name]);
 
+  // "disable" (dev/tests: Testcontainers speaks plaintext) or "require"
+  // (deployment: the operator's pg_hba rejects unencrypted clients).
+  // Other libpq modes are refused rather than approximated: node-pg has
+  // no verify-ca/verify-full equivalent worth pretending to honor.
+  const sslModeRaw = env.PGSSLMODE ?? "disable";
+  if (sslModeRaw !== "disable" && sslModeRaw !== "require") {
+    problems.push(`PGSSLMODE must be 'disable' or 'require', got '${sslModeRaw}'`);
+    return undefined;
+  }
+  const ssl: DatabaseSsl | undefined =
+    sslModeRaw === "require" ? { rejectUnauthorized: false } : undefined;
+
   if (connectionString && discretePresent.length > 0) {
     problems.push(
       `DATABASE_URL and ${discretePresent.join("/")} are mutually exclusive ` +
@@ -163,7 +188,7 @@ function loadDatabaseFromEnv(
   }
 
   if (connectionString) {
-    return { connectionString };
+    return ssl ? { connectionString, ssl } : { connectionString };
   }
 
   if (discretePresent.length === 0) {
@@ -197,5 +222,6 @@ function loadDatabaseFromEnv(
     database: env.PGDATABASE as string,
     user: env.PGUSER as string,
     password: env.PGPASSWORD as string,
+    ...(ssl ? { ssl } : {}),
   };
 }

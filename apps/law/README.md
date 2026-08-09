@@ -51,7 +51,9 @@ accepts exactly one of two forms: `DATABASE_URL` (the dev/test form —
 one string) or the discrete `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`/
 `PGPASSWORD` set (the deployment form — Planton config references
 resolve only as whole values, so a URL cannot be composed in a
-manifest).
+manifest). `PGSSLMODE=require` encrypts without certificate
+verification (the deployed operator rejects unencrypted clients and
+self-signs its certs); the default is `disable` for local plaintext.
 
 ## Authentication and the first user (DD-005)
 

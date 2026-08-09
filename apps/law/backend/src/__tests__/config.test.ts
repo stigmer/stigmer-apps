@@ -180,6 +180,31 @@ describe("loadConfigFromEnv", () => {
         "Invalid backend configuration:\n- PGPORT must be an integer in 1-65535, got 'not-a-number'",
       );
     });
+
+    it("PGSSLMODE=require encrypts without verifying — the operator's certs are self-signed", () => {
+      // Verified live: the deployed operator's pg_hba rejects
+      // unencrypted clients ("no encryption"), and its certs are
+      // self-signed, so require = encrypt, don't verify.
+      const env = discreteEnv();
+      env.PGSSLMODE = "require";
+
+      expect(loadConfigFromEnv(env).database).toMatchObject({
+        ssl: { rejectUnauthorized: false },
+      });
+    });
+
+    it("omits ssl entirely by default (dev/tests speak plaintext)", () => {
+      expect(loadConfigFromEnv(discreteEnv()).database).not.toHaveProperty("ssl");
+    });
+
+    it("refuses PGSSLMODE values it cannot honor", () => {
+      const env = discreteEnv();
+      env.PGSSLMODE = "verify-full";
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(
+        /PGSSLMODE must be 'disable' or 'require'/,
+      );
+    });
   });
 
   it.each([
