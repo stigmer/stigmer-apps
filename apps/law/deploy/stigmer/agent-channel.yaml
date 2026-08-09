@@ -7,6 +7,16 @@
 # THEN this manifest binds cleanly. Applying before the console install
 # was exactly what blocked the reference deployment's last mile.
 #
+# LEARNED AT THE FIRST LIVE BIND (2026-08-10): when the console connect
+# is done FROM THE AGENT ("Agent → Channels → Connect"), it creates the
+# COMPLETE AgentChannel itself — agent_ref, app_ref, environment_refs,
+# and the verified phone_number_id — under its own name
+# ("<agent-slug> WhatsApp" → slug <agent-slug>-whatsapp). In that flow
+# this manifest must NOT be applied under a different name (a second
+# channel would claim the same number): list the org's agent-channels
+# first, and either adopt the console resource's name/slug here as the
+# declarative record or skip the apply entirely.
+#
 # proactive_messaging_enabled stays false until the hearing-reminder
 # stage (T05 stage 6): the send tool and template surface only matter
 # once the Meta UTILITY template is approved, and a smaller surface is
