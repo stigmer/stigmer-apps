@@ -43,3 +43,81 @@ params:
   - name: r2_location
     description: R2 bucket location hint (wnam, enam, weur, eeur, apac, oc)
     value: apac
+
+  # ─── The app (templates/deployment.yaml) ────────────────────────────────────
+  # The image is built by the Service Hub service `law-backend` on every
+  # merge to main and tagged with the git commit SHA. Releases are
+  # deliberate: a firm runs exactly the tag pinned in its values file —
+  # bump it and re-install to release, point it back and re-install to
+  # roll back (T06 topology).
+  - name: image_repo
+    description: Container image repository for the law backend
+    value: ghcr.io/stigmer/stigmer-apps/law-backend
+
+  # REQUIRED, no usable default: the git commit SHA to serve this firm.
+  - name: image_tag
+    description: Image tag (git commit SHA) pinned for this firm; set per install
+    value: ""
+
+  - name: container_registry
+    description: Planton container-registry connection for image pulls (planton.dev/container-registry annotation)
+    value: ghcr-stigmer
+
+  # REQUIRED, no usable default. MUST be a single label under the
+  # platform domain (e.g. <firm>-law.stigmer.ai): the TLS issuer is
+  # derived from everything after the first dot, and only a stigmer.ai
+  # ClusterIssuer exists — a deeper name never gets a certificate, and
+  # without HTTPS nobody can sign in (Secure session cookie).
+  - name: hostname
+    description: Public hostname for the firm's app (single label under stigmer.ai)
+    value: ""
+
+  # Set ONLY during a signing-key rotation window (DD-005): the previous
+  # keypair's base64 SPKI public key, so ~1h-old access tokens stay
+  # verifiable; drop it after the tail expires. Public material.
+  - name: auth_jwt_previous_public_key
+    description: Previous JWT public key (base64 SPKI PEM) during rotation; empty otherwise
+    value: ""
+
+  - name: app_cpu_request
+    description: Backend container CPU request
+    value: 50m
+
+  - name: app_cpu_limit
+    description: Backend container CPU limit
+    value: 500m
+
+  - name: app_memory_request
+    description: Backend container memory request
+    value: 128Mi
+
+  - name: app_memory_limit
+    description: Backend container memory limit
+    value: 512Mi
+
+  # ─── Postgres (templates/postgres.yaml) ─────────────────────────────────────
+  # Sized for a firm of tens of users, not the platform's workload; the
+  # role (law_app) and database (law) are chart constants, not params.
+  - name: postgres_replicas
+    description: Postgres replica count
+    value: "1"
+
+  - name: postgres_disk_size
+    description: Postgres persistent disk size
+    value: 10Gi
+
+  - name: postgres_cpu_request
+    description: Postgres container CPU request
+    value: 50m
+
+  - name: postgres_cpu_limit
+    description: Postgres container CPU limit
+    value: 500m
+
+  - name: postgres_memory_request
+    description: Postgres container memory request
+    value: 128Mi
+
+  - name: postgres_memory_limit
+    description: Postgres container memory limit
+    value: 512Mi

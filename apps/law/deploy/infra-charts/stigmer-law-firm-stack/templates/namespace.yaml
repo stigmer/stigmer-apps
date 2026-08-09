@@ -1,0 +1,27 @@
+---
+# Per-firm namespace: each law firm's whole deployment — database, app,
+# secrets — lives in its own namespace, so isolation is physical
+# (network, secrets, quota) rather than ACL-based, and offboarding a
+# firm is a single-namespace teardown (the isc-infrastructure-stack
+# namespace precedent, DD-004's isolation model applied to compute).
+#
+# pod_security_standard "baseline" blocks privileged containers, host
+# namespaces, and hostPath.
+apiVersion: kubernetes.openmcf.org/v1
+kind: KubernetesNamespace
+metadata:
+  name: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}
+  slug: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}
+  org: {{ values.org }}
+  env: {{ values.env }}
+  labels:
+    project-planton.org/provisioner: pulumi
+    pulumi.project-planton.org/organization: {{ values.pulumi_organization }}
+    pulumi.project-planton.org/project: {{ values.pulumi_project }}
+    pulumi.project-planton.org/stack.name: {{ values.env }}.KubernetesNamespace.{{ values.org }}-{{ values.env }}-law-{{ values.firm }}
+spec:
+  name: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}
+  labels:
+    app.kubernetes.io/managed-by: planton
+    app.kubernetes.io/part-of: stigmer-law
+  pod_security_standard: baseline

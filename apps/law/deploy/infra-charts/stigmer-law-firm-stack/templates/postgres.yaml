@@ -1,0 +1,67 @@
+---
+# Per-firm PostgreSQL: the firm's system of record, alone in the firm's
+# namespace — never a shared cluster with per-firm databases (the same
+# containment reasoning as the per-firm document bucket: one firm, one
+# blast radius, one offboarding lever).
+#
+# Role and database names are the chart's OWN contract, deliberately not
+# parameters: `law_app` / `law` are domain constants shared with the
+# deployment template's PGUSER/PGDATABASE — a firm never has a reason to
+# vary them, and a parameter would just be one more value that can drift
+# between the two templates.
+#
+# The generated password is a MANUAL post-provision step per firm: the
+# operator writes it as the Kubernetes secret
+# law_app.db-<this-resource's-name>.credentials.postgresql.acid.zalan.do,
+# and it must be copied into the config-manager secret
+# stigmer-law-<firm>-postgres-credentials (`planton secret set`) because
+# the deployment's env model resolves config-manager refs, never raw
+# secretKeyRefs (the platform app-postgres precedent, including this
+# exact comment trail).
+#
+# Ingress deliberately disabled: a firm's case data never gets a public
+# endpoint; operators reach it via kubectl port-forward.
+#
+# BACKUPS ARE A RECORDED GATE, NOT PROVIDED HERE (T06): the live
+# operator has no declarative backup path, so a firm must not enter real
+# case data until a backup story exists. Demo data is reseedable.
+apiVersion: kubernetes.openmcf.org/v1
+kind: KubernetesPostgres
+metadata:
+  name: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}-postgres
+  slug: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}-postgres
+  org: {{ values.org }}
+  env: {{ values.env }}
+  labels:
+    project-planton.org/provisioner: pulumi
+    pulumi.project-planton.org/organization: {{ values.pulumi_organization }}
+    pulumi.project-planton.org/project: {{ values.pulumi_project }}
+    pulumi.project-planton.org/stack.name: {{ values.env }}.KubernetesPostgres.{{ values.org }}-{{ values.env }}-law-{{ values.firm }}-postgres
+  relationships:
+    - kind: KubernetesNamespace
+      name: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}
+      type: depends_on
+spec:
+  ingress:
+    enabled: false
+  namespace:
+    value_from:
+      kind: KubernetesNamespace
+      env: {{ values.env }}
+      name: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}
+      field_path: spec.name
+  container:
+    replicas: {{ values.postgres_replicas }}
+    resources:
+      limits:
+        cpu: {{ values.postgres_cpu_limit }}
+        memory: {{ values.postgres_memory_limit }}
+      requests:
+        cpu: {{ values.postgres_cpu_request }}
+        memory: {{ values.postgres_memory_request }}
+    disk_size: {{ values.postgres_disk_size }}
+  users:
+    - name: law_app
+  databases:
+    - name: law
+      ownerRole: law_app

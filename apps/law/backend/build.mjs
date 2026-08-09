@@ -40,8 +40,15 @@ await build({
   // (pure-JS driver), so keep esbuild from trying to resolve it.
   external: ["pg-native"],
   // Bundled CJS dependencies (pg) still call require() at runtime; ESM
-  // output needs a require shim for them.
+  // output needs a require shim for them. The import is aliased because
+  // the banner is spliced in VERBATIM, outside esbuild's scope analysis:
+  // main.ts imports createRequire itself, and the un-aliased form
+  // collides with the bundle's own emitted import — a SyntaxError that
+  // only `node dist/main.js` can surface (bundle.integration.test.ts
+  // exists to catch exactly this class of defect).
   banner: {
-    js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
+    js:
+      "import { createRequire as bannerCreateRequire } from 'node:module'; " +
+      "const require = bannerCreateRequire(import.meta.url);",
   },
 });

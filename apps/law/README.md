@@ -27,7 +27,7 @@ resource, credential storage, and the authenticator chain — DD-005).
 |---|---|
 | `proto/` | Proto contracts (source of truth; TypeScript types are generated). Package convention: `stigmer.law.<resource>.v1` (the domain, never the customer segment or the brand). The envelope (`stigmer/resourceapi/*`) and identity (`stigmer/identity/*`) contracts resolve in-workspace through the root `buf.yaml` |
 | `backend/` | Connect-RPC backend: resource definitions on the commons pipeline, the app's Postgres migrations (composed after `@stigmer/identity`'s as ordered migration sources), acceptance tests |
-| `deploy/infra-charts/` | The reusable per-firm infrastructure chart (`stigmer-law-firm-stack`, DD-004) |
+| `deploy/infra-charts/` | The reusable per-firm infrastructure chart (`stigmer-law-firm-stack`, DD-004) — one install provisions a firm's namespace, Postgres, document bucket, AND the running app; its README is the firm onboarding runbook (T06) |
 
 ## Development
 
@@ -46,7 +46,12 @@ npm run build
 To run the backend locally: `npm run dev -w @law/backend` with
 `AUTH_EPHEMERAL_KEYS=true` and an `AUTH_OPERATOR_KEY_SHA256` (plus the
 database/object-store variables — see `backend/src/config.ts`, which
-names everything it needs when something is missing).
+names everything it needs when something is missing). The database
+accepts exactly one of two forms: `DATABASE_URL` (the dev/test form —
+one string) or the discrete `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`/
+`PGPASSWORD` set (the deployment form — Planton config references
+resolve only as whole values, so a URL cannot be composed in a
+manifest).
 
 ## Authentication and the first user (DD-005)
 

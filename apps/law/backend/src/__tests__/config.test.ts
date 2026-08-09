@@ -30,7 +30,7 @@ describe("loadConfigFromEnv", () => {
     const config = loadConfigFromEnv(fullEnv());
 
     expect(config).toEqual({
-      databaseUrl: "postgres://law:law@localhost:5432/law",
+      database: { connectionString: "postgres://law:law@localhost:5432/law" },
       port: 9090,
       objectStore: {
         endpoint: "http://localhost:9000",
@@ -120,7 +120,66 @@ describe("loadConfigFromEnv", () => {
     const env = fullEnv();
     env.DATABASE_URL = "";
 
-    expect(() => loadConfigFromEnv(env)).toThrowError(/DATABASE_URL is required/);
+    expect(() => loadConfigFromEnv(env)).toThrowError(/DATABASE_URL .* is required/);
+  });
+
+  describe("database sources (T06 — deployment passes discrete PG* values)", () => {
+    /** The deployment form: discrete values instead of one URL. */
+    function discreteEnv(): Record<string, string> {
+      const env = fullEnv();
+      delete env.DATABASE_URL;
+      env.PGHOST = "db.example.internal";
+      env.PGPORT = "5433";
+      env.PGDATABASE = "law";
+      env.PGUSER = "law_app";
+      env.PGPASSWORD = "p@ss:word/needs#no?encoding";
+      return env;
+    }
+
+    it("maps the discrete PG* set onto structured fields, never a composed URL", () => {
+      // The password carries URL-hostile characters on purpose: fields go
+      // to pg.Pool as-is, so no percent-encoding hazard can exist.
+      expect(loadConfigFromEnv(discreteEnv()).database).toEqual({
+        host: "db.example.internal",
+        port: 5433,
+        database: "law",
+        user: "law_app",
+        password: "p@ss:word/needs#no?encoding",
+      });
+    });
+
+    it("defaults PGPORT to 5432", () => {
+      const env = discreteEnv();
+      delete env.PGPORT;
+
+      expect(loadConfigFromEnv(env).database).toMatchObject({ port: 5432 });
+    });
+
+    it("refuses both sources at once — ambiguity is a config error", () => {
+      const env = discreteEnv();
+      env.DATABASE_URL = "postgres://law:law@localhost:5432/law";
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(/mutually exclusive/);
+    });
+
+    it("names the missing variables when the PG* set is incomplete", () => {
+      const env = discreteEnv();
+      delete env.PGDATABASE;
+      delete env.PGPASSWORD;
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(
+        /PGDATABASE, PGPASSWORD are required \(the PG\* set must be complete/,
+      );
+    });
+
+    it("rejects a non-numeric PGPORT", () => {
+      const env = discreteEnv();
+      env.PGPORT = "not-a-number";
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(
+        "Invalid backend configuration:\n- PGPORT must be an integer in 1-65535, got 'not-a-number'",
+      );
+    });
   });
 
   it.each([

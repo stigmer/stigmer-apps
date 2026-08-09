@@ -87,3 +87,30 @@ jobs:
 
       - name: Web E2E
         run: npm run test:e2e -w @law/web
+
+  # The deployed image is built by the Planton pipeline from
+  # apps/law/backend/Dockerfile — and nothing else compiles that file,
+  # so CI builds it (never pushes) to catch a broken Dockerfile before a
+  # release discovers it. Releases themselves are deliberate: the per-firm
+  # chart pins an image tag, so a red commit's image simply never gets
+  # installed (T06 topology).
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build law backend image
+        run: docker build -f apps/law/backend/Dockerfile -t law-backend:ci .
+
+      - name: Boot check
+        # With no environment the bundle must reach the config loader and
+        # fail fast with the accumulated error — not a SyntaxError or a
+        # module crash. The bundle suite (bundle.integration.test.ts)
+        # proves a full boot against real Postgres; this proves the same
+        # artifact inside the image's runtime (alpine, non-root user).
+        run: |
+          set +e
+          output=$(docker run --rm law-backend:ci 2>&1)
+          set -e
+          echo "$output"
+          echo "$output" | grep -q "Invalid backend configuration"

@@ -45,7 +45,9 @@ function migrationSources(): MigrationSource[] {
 
 async function main(): Promise<void> {
   const config = loadConfigFromEnv();
-  const pool = new pg.Pool({ connectionString: config.databaseUrl });
+  // Either DatabaseConfig shape is a valid PoolConfig subset — the URL
+  // is never assembled by hand (see config.ts, DatabaseConfig).
+  const pool = new pg.Pool(config.database);
 
   // Migrate on boot: replicas serialize on the runner's advisory lock, so
   // this is safe under horizontal scaling.

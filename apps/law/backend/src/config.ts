@@ -23,9 +23,28 @@ export interface AuthConfig {
   readonly operatorKeySha256Hex: string;
 }
 
+/**
+ * Passed straight to pg.Pool, which accepts either shape. Two sources
+ * exist because two worlds hand us connections differently: dev/tests
+ * get ONE string from Testcontainers (DATABASE_URL), while deployment
+ * gets discrete values — Planton config references resolve only as
+ * whole env values, so a URL cannot be composed in a manifest (T06).
+ * Never build the URL by concatenation here: a password needing
+ * percent-encoding would corrupt it silently.
+ */
+export type DatabaseConfig =
+  | { readonly connectionString: string }
+  | {
+      readonly host: string;
+      readonly port: number;
+      readonly database: string;
+      readonly user: string;
+      readonly password: string;
+    };
+
 export interface BackendConfig {
-  /** Postgres connection string, e.g. postgres://user:pass@host:5432/db */
-  readonly databaseUrl: string;
+  /** Postgres connection (either shape — see DatabaseConfig). */
+  readonly database: DatabaseConfig;
   /** HTTP listen port. */
   readonly port: number;
   /**
@@ -52,10 +71,7 @@ export function loadConfigFromEnv(
   // variables should fail once with three names, not three times.
   const problems: string[] = [];
 
-  const databaseUrl = env.DATABASE_URL;
-  if (!databaseUrl) {
-    problems.push("DATABASE_URL is required (postgres connection string)");
-  }
+  const database = loadDatabaseFromEnv(env, problems);
 
   const portRaw = env.PORT ?? "8080";
   const port = Number(portRaw);
@@ -102,7 +118,7 @@ export function loadConfigFromEnv(
   }
 
   return {
-    databaseUrl: databaseUrl as string,
+    database: database as DatabaseConfig,
     port,
     objectStore: {
       endpoint: env.OBJECT_STORE_ENDPOINT as string,
@@ -117,5 +133,69 @@ export function loadConfigFromEnv(
       previousPublicKeyBase64: env.AUTH_JWT_PREVIOUS_PUBLIC_KEY,
       operatorKeySha256Hex,
     },
+  };
+}
+
+/**
+ * Exactly ONE database source (the ephemeral-keys precedent: ambiguity
+ * is a config error, not a precedence rule). The discrete names are the
+ * libpq standard — familiar to operators, and psql in a debug pod reads
+ * them natively — but they are read HERE explicitly and passed to
+ * pg.Pool as fields; nothing relies on node-pg's implicit env fallback.
+ * Empty strings count as unset throughout: Kubernetes renders an
+ * unresolved reference as "", which must fail loudly at boot.
+ */
+function loadDatabaseFromEnv(
+  env: Record<string, string | undefined>,
+  problems: string[],
+): DatabaseConfig | undefined {
+  const connectionString = env.DATABASE_URL;
+  const discreteNames = ["PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD"] as const;
+  const discretePresent = discreteNames.filter((name) => env[name]);
+
+  if (connectionString && discretePresent.length > 0) {
+    problems.push(
+      `DATABASE_URL and ${discretePresent.join("/")} are mutually exclusive ` +
+        "(one connection definition, not two — DATABASE_URL is the dev/test form, " +
+        "the PG* set is the deployment form)",
+    );
+    return undefined;
+  }
+
+  if (connectionString) {
+    return { connectionString };
+  }
+
+  if (discretePresent.length === 0) {
+    problems.push(
+      "DATABASE_URL (postgres connection string; dev/tests) or " +
+        "PGHOST/PGDATABASE/PGUSER/PGPASSWORD (+ optional PGPORT; deployment) is required",
+    );
+    return undefined;
+  }
+
+  const requiredDiscrete = ["PGHOST", "PGDATABASE", "PGUSER", "PGPASSWORD"] as const;
+  const missing = requiredDiscrete.filter((name) => !env[name]);
+  if (missing.length > 0) {
+    problems.push(
+      `${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} required ` +
+        "(the PG* set must be complete once any of it is set)",
+    );
+    return undefined;
+  }
+
+  const portRaw = env.PGPORT ?? "5432";
+  const port = Number(portRaw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    problems.push(`PGPORT must be an integer in 1-65535, got '${portRaw}'`);
+    return undefined;
+  }
+
+  return {
+    host: env.PGHOST as string,
+    port,
+    database: env.PGDATABASE as string,
+    user: env.PGUSER as string,
+    password: env.PGPASSWORD as string,
   };
 }

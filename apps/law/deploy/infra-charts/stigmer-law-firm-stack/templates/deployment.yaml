@@ -1,0 +1,185 @@
+---
+# The firm's backend — one container serving the Connect API, the
+# document byte routes, AND the web app (same-origin SPA, T04b D1), so a
+# firm is exactly one service and one hostname.
+#
+# Deployed BY THIS CHART, not by a Service Hub pipeline (T06 topology):
+# the Service Hub service `law-backend` only builds and pushes the image
+# on every merge to main; putting a build in front of a firm is a
+# deliberate act — bump `image_tag` in the firm's values file and
+# re-install. Nothing untested auto-deploys to a firm, and the exact
+# commit serving each firm is recorded in the private ops repo.
+#
+# apiVersion is kubernetes.project-planton.org/v1 — the shape every LIVE
+# KubernetesDeployment uses (Service Hub renders the same kind); the
+# namespace/postgres templates use kubernetes.openmcf.org/v1 because
+# that is the shape the platform's own charts prove. Each template
+# copies its kind's proven form verbatim rather than harmonizing on an
+# unproven one.
+#
+# The container-registry annotation is the InfraChart path's mechanism
+# for image-pull credentials: the platform copies it into the resource's
+# registry field and attaches the docker config at stack-job time.
+#
+# Non-secret runtime config is DERIVED here from the same expressions
+# that render the sibling resources (bucket name, R2 endpoint, postgres
+# endpoint) — never duplicated into config-manager where it could drift.
+# Only credentials live in config-manager, under three chart-contracted
+# slugs per firm:
+#   stigmer-law-<firm>-r2-credentials       (key_value: access-key-id,
+#                                            secret-access-key — the
+#                                            bucket-scoped R2 token)
+#   stigmer-law-<firm>-postgres-credentials (string: the law_app
+#                                            password, copied from the
+#                                            operator-generated secret
+#                                            after the first install)
+#   stigmer-law-<firm>-auth-keys            (key_value: jwt-private-key,
+#                                            operator-key-sha256 — from
+#                                            scripts/generate-auth-secrets.mjs)
+# The platform validates every reference exists at apply time, so the
+# secrets must be applied BEFORE this chart is installed (fail-closed).
+apiVersion: kubernetes.project-planton.org/v1
+kind: KubernetesDeployment
+metadata:
+  name: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}-backend
+  slug: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}-backend
+  org: {{ values.org }}
+  env: {{ values.env }}
+  labels:
+    project-planton.org/provisioner: pulumi
+    pulumi.project-planton.org/organization: {{ values.pulumi_organization }}
+    pulumi.project-planton.org/project: {{ values.pulumi_project }}
+    pulumi.project-planton.org/stack.name: {{ values.env }}.KubernetesDeployment.{{ values.org }}-{{ values.env }}-law-{{ values.firm }}-backend
+  annotations:
+    planton.dev/container-registry: {{ values.container_registry }}
+  relationships:
+    - kind: KubernetesNamespace
+      name: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}
+      type: depends_on
+    - kind: KubernetesPostgres
+      name: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}-postgres
+      type: depends_on
+    - kind: CloudflareR2Bucket
+      name: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}-documents-r2-bucket
+      type: depends_on
+spec:
+  namespace:
+    value: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}
+  version: "{{ values.image_tag }}"
+  container:
+    app:
+      # Built by the Service Hub pipeline from apps/law/backend/Dockerfile
+      # (context = repo root); the tag is the git commit SHA the pipeline
+      # stamped, pinned per firm in the values file.
+      image:
+        repo: {{ values.image_repo }}
+        tag: "{{ values.image_tag }}"
+      resources:
+        limits:
+          cpu: {{ values.app_cpu_limit }}
+          memory: {{ values.app_memory_limit }}
+        requests:
+          cpu: {{ values.app_cpu_request }}
+          memory: {{ values.app_memory_request }}
+      env:
+        variables:
+          - name: PORT
+            value: "8080"
+          # ── Database (discrete PG* form — backend/src/config.ts): a
+          # connection URL cannot be composed from refs (whole-value
+          # resolution), so the deployment speaks libpq names. Host is
+          # the postgres module's kube_endpoint shape, <name>-master in
+          # the firm's namespace; database/user are the chart constants
+          # shared with templates/postgres.yaml.
+          - name: PGHOST
+            value: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}-postgres-master.{{ values.org }}-{{ values.env }}-law-{{ values.firm }}.svc.cluster.local
+          - name: PGDATABASE
+            value: law
+          - name: PGUSER
+            value: law_app
+          # ── Documents (OBJECT_STORE_* contract): same expressions as
+          # templates/r2-bucket-documents.yaml — one render, no drift.
+          # Region defaults to "auto" in the backend; PGPORT to 5432.
+          - name: OBJECT_STORE_ENDPOINT
+            value: https://{{ values.cloudflare_account_id }}.r2.cloudflarestorage.com
+          - name: OBJECT_STORE_BUCKET
+            value: {{ values.org }}-law-{{ values.firm }}-documents-{{ values.env }}
+          {% if values.auth_jwt_previous_public_key %}
+          # Rotation overlap (DD-005): the PREVIOUS keypair's public key,
+          # present only during a key rotation window so ~1h-old access
+          # tokens stay verifiable. Public material — a values-file
+          # entry, not a secret.
+          - name: AUTH_JWT_PREVIOUS_PUBLIC_KEY
+            value: {{ values.auth_jwt_previous_public_key }}
+          {% endif %}
+        secrets:
+          - name: PGPASSWORD
+            value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-postgres-credentials
+          - name: OBJECT_STORE_ACCESS_KEY_ID
+            value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-r2-credentials/access-key-id
+          - name: OBJECT_STORE_SECRET_ACCESS_KEY
+            value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-r2-credentials/secret-access-key
+          - name: AUTH_JWT_PRIVATE_KEY
+            value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-auth-keys/jwt-private-key
+          - name: AUTH_OPERATOR_KEY_SHA256
+            value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-auth-keys/operator-key-sha256
+      # All three probes hit /healthz, which answers before auth and
+      # deliberately does NOT touch the database (server.ts): a store
+      # outage must degrade requests, not restart or de-route the pod —
+      # requests already fail honestly, and a store-aware probe would
+      # turn a degraded read into a crash loop (isc-mcp precedent).
+      readinessProbe:
+        httpGet:
+          path: /healthz
+          portNumber: 8080
+        initialDelaySeconds: 5
+        periodSeconds: 10
+        timeoutSeconds: 3
+        failureThreshold: 3
+      livenessProbe:
+        httpGet:
+          path: /healthz
+          portNumber: 8080
+        initialDelaySeconds: 10
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 3
+      # Startup allows a slow first boot: migrations run before listen
+      # (advisory-locked, so replicas racing a rollout serialize safely).
+      startupProbe:
+        httpGet:
+          path: /healthz
+          portNumber: 8080
+        initialDelaySeconds: 0
+        periodSeconds: 2
+        timeoutSeconds: 3
+        failureThreshold: 30
+      ports:
+        # Public: the firm's staff sign in from anywhere — the web app,
+        # the API, and document routes all ride this one ingress
+        # hostname (same-origin by construction, no CORS anywhere).
+        - name: http-api
+          appProtocol: http
+          networkProtocol: TCP
+          servicePort: 80
+          containerPort: 8080
+          isIngressPort: true
+  ingress:
+    enabled: true
+    # Single label under the platform domain: the certificate issuer is
+    # derived from everything after the hostname's first dot, and
+    # <firm>-law.stigmer.ai lands on the existing stigmer.ai issuer. A
+    # deeper name (nk.law.stigmer.ai) would derive an issuer that does
+    # not exist and TLS would never come up (T06 decision) — and without
+    # HTTPS nobody can sign in: the session cookie is Secure.
+    hostname: {{ values.hostname }}
+  availability:
+    minReplicas: 1
+    horizontalPodAutoscaling:
+      isEnabled: false
+    deploymentStrategy:
+      maxUnavailable: "0"
+      maxSurge: "1"
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: "1"

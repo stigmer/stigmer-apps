@@ -1,0 +1,11 @@
+# The build context is the repo root (see apps/law/backend/Dockerfile):
+# npm ci needs every workspace manifest and the bundle inlines the
+# commons packages from source. Installed and generated trees never
+# enter the context — the image installs from the lockfile and builds
+# its own dist/ (isc-assistant precedent).
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.git
+.github
