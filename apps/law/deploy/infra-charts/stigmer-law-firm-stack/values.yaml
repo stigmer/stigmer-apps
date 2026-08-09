@@ -3,8 +3,9 @@
 # per-firm values file must carry EVERY param below (verified against a
 # live pipeline failure: an omitted cloudflare_account_id rendered an empty
 # accountId and failed stack-input validation). Per-firm values files live
-# under clients/law/<client>/infra-project/ — the confinement folder for
-# customer-named config (DD-A10 as amended by DD-004).
+# in the private ops repo (stigmer-cloud
+# _ops/planton/clients/law/<client>/infra-project/) — this repo is public
+# and carries no customer-named config (DD-A10).
 params:
   # ─── Pulumi / Planton stack identity ────────────────────────────────────────
   - name: pulumi_organization
@@ -26,8 +27,8 @@ params:
   # ─── Firm identity ───────────────────────────────────────────────────────────
   # REQUIRED, no usable default: the firm slug names every resource this chart
   # renders (an empty value would render malformed resource names). Short,
-  # lowercase, DNS-safe — set it ONLY in the client's values file under
-  # clients/law/<client>/, never here.
+  # lowercase, DNS-safe — set it ONLY in the client's values file in the
+  # private ops repo, never here.
   - name: firm
     description: Firm slug (lowercase DNS-safe, e.g. a firm's initials); set per install
     value: ""

@@ -1,15 +1,16 @@
 /**
- * Customer-data guard — build-enforced backing for the confinement rule:
- * customer-specific strings live ONLY under _projects/, _changelog/, and
- * clients/ (working records and per-client deployment config); every
- * other path — code, protos, charts, fixtures, roles, rules, docs —
- * stays publication-ready at all times. Onboarding a customer is
- * configuration only, and that configuration lives under clients/.
+ * Customer-data guard — this repo is PUBLIC, so customer-specific
+ * strings must never appear ANYWHERE in it: not in code, protos, charts,
+ * fixtures, roles, rules, or docs. Everything that names a client —
+ * per-client deployment config, project working records, changelogs —
+ * lives in the private stigmer-cloud repo (the hub model, project
+ * DD-006; the same split the Stigmer OSS repo uses). Onboarding a
+ * customer is configuration only, and that configuration lives there.
  *
- * The repo is private today, but the guard is the insurance that keeps a
- * future open-sourcing a bounded excision (drop the three excluded
- * folders) instead of a forensic scrub of the whole tree (project
- * DD-003; clients/ added by owner direction in DD-004).
+ * Under the pre-open-sourcing confinement rule (DD-003/DD-004) the guard
+ * excluded three in-repo folders; those folders moved to stigmer-cloud
+ * and were excised from history when the repo went public, so the scan
+ * now covers every tracked path.
  *
  * Two layers:
  *
@@ -34,13 +35,6 @@ import { readFileSync } from "node:fs";
 // hashes can coincidentally match the phone pattern.
 const SKIPPED = new Set(["package-lock.json"]);
 
-// The confinement boundary (DD-003, clients/ added by DD-004): project
-// working records, changelogs, and per-client deployment config
-// legitimately carry customer context — they are the ONLY paths allowed
-// to. Everything outside these prefixes must stay publication-ready,
-// which is exactly what the scan enforces.
-const EXCLUDED_PREFIXES = ["_projects/", "_changelog/", "clients/"];
-
 const GENERIC_PATTERNS = [
   { name: "E.164 phone number", regex: /\+[1-9]\d{9,14}\b/ },
   { name: "WhatsApp caller id", regex: /wa[_-]?id["'\s:=]+\d{10,15}/i },
@@ -49,12 +43,7 @@ const GENERIC_PATTERNS = [
 function trackedFiles() {
   return execFileSync("git", ["ls-files"], { encoding: "utf8" })
     .split("\n")
-    .filter(
-      (f) =>
-        f &&
-        !SKIPPED.has(f.split("/").pop()) &&
-        !EXCLUDED_PREFIXES.some((prefix) => f.startsWith(prefix)),
-    );
+    .filter((f) => f && !SKIPPED.has(f.split("/").pop()));
 }
 
 function denylistTerms() {

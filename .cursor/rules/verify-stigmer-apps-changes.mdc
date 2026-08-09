@@ -19,7 +19,7 @@ Run every check whose row matches **any** changed file. All commands run from th
 
 | File pattern | Command | What it checks |
 |---|---|---|
-| Any change at all | `CUSTOMER_DENYLIST=... node scripts/check-customer-data.mjs` | Customer-data confinement (see note below) |
+| Any change at all | `CUSTOMER_DENYLIST=... node scripts/check-customer-data.mjs` | No customer data anywhere — this repo is public (see note below) |
 | `**/*.proto`, `buf.yaml`, `*/buf.gen.yaml` | `npm run codegen && git diff --exit-code -- packages/resource-api/src/gen apps/law/backend/src/gen` | Committed generated code matches the protos (CI fails on drift) |
 | `packages/resource-api/src/**` | `npm run build -w @stigmer/resource-api && npm run typecheck && npm test -w @stigmer/resource-api` | Commons compiles, types hold repo-wide, commons tests pass |
 | `apps/law/backend/**` | `npm run build && npm run typecheck -w @law/backend && npm test -w @law/backend` | App compiles against the built commons and its acceptance tests pass |

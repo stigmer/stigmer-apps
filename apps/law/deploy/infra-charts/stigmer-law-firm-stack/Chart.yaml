@@ -14,9 +14,9 @@ spec:
     Onboarding firm #2 is a new values file plus one `planton chart
     install` (DD-004, the T06 configurability proof). The chart lives
     beside the app it deploys and carries NO customer strings (the
-    customer-data guard enforces this); per-client values files, variable
-    groups, and secrets live under clients/law/<client>/ — the
-    confinement folder for customer-named config.
+    customer-data guard enforces this repo-wide); per-client values
+    files, variable groups, and secrets live in the private ops repo
+    (stigmer-cloud _ops/planton/clients/law/<client>/).
     Deliberately SEPARATE from stigmer-infrastructure-stack: app
     infrastructure must never fan a pipeline across the platform's
     resources (the isc-infrastructure-stack precedent).

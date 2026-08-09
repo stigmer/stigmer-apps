@@ -63,8 +63,9 @@ user row (nothing phishable):
 1. Generate the firm's secrets once:
    `node scripts/generate-auth-secrets.mjs` (from the repo root). Seed
    `AUTH_JWT_PRIVATE_KEY` and `AUTH_OPERATOR_KEY_SHA256` through the
-   firm's config-manager artifacts (`clients/<domain>/<client>/`, the
-   DD-004 model). The raw operator key stays with the operator.
+   firm's config-manager artifacts in the private ops repo
+   (`_ops/planton/clients/<domain>/<client>/` in stigmer-cloud — the
+   DD-004 per-firm model). The raw operator key stays with the operator.
 2. Create the first user and set their password with the operator key:
 
 ```bash

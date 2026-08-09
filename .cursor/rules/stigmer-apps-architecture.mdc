@@ -1,5 +1,5 @@
 ---
-description: Architecture standards for the Stigmer Apps monorepo — commons-vs-app placement, proto naming, licensing boundaries, and the customer-data confinement rule
+description: Architecture standards for the Stigmer Apps monorepo — commons-vs-app placement, proto naming, licensing boundaries, and the no-customer-data rule for this public repo
 globs: packages/**/*.{ts,proto}, apps/**/*.{ts,proto}
 alwaysApply: false
 ---
@@ -81,15 +81,17 @@ license in its own LICENSE file and package.json; the root LICENSE.md is
 the map. Code may move from an app into the commons only with a conscious
 relicensing decision by the owner.
 
-**DD-A10 — Customer-data confinement (project DD-003, amended by DD-004).**
-Customer-specific strings live ONLY under `_projects/`, `_changelog/`, and
-`clients/` (per-client deployment config: infra-project values,
-config-manager manifests, later per-client Kustomize overlays). Code,
-protos, charts, fixtures, roles, rules, and docs stay publication-ready at
-all times — enforced by `scripts/check-customer-data.mjs` in CI (the three
-folders are excluded from its scan; everything else is not). Fixtures are
-fictional by construction: short fictional phones (`+91123456`), invented
-names. Never weaken the guard to make a failure go away; fix the data.
+**DD-A10 — No customer data, anywhere (the hub model — project DD-006,
+superseding DD-003/DD-004 confinement).** This repo is PUBLIC. Everything
+that names a customer — per-client deployment config (infra-project
+values, config-manager manifests, later per-client Kustomize overlays),
+project working records, and changelogs — lives in the private
+stigmer-cloud repo (`_ops/planton/clients/`, `_projects/`, `_changelog/`),
+the same split the Stigmer OSS repo uses. Here, customer strings are a CI
+failure on EVERY path, enforced by `scripts/check-customer-data.mjs`.
+Fixtures are fictional by construction: short fictional phones
+(`+91123456`), invented names, invented client slugs in examples. Never
+weaken the guard to make a failure go away; fix the data.
 
 **DD-A11 — Commons changes are versioned contracts.** `@stigmer/resource-api`
 is 0.x but its API is a contract with every app. Breaking changes land
@@ -111,8 +113,8 @@ adapt is incomplete work.
 5. **No brand strings in protos, apiVersions, table names, headers, or
    package scopes.** Brand lives in READMEs and marketing surfaces only
    (DD-A2).
-6. **No customer strings outside `_projects/`, `_changelog/`, and
-   `clients/`** — and no real-shaped test data anywhere (DD-A10).
+6. **No customer strings anywhere in this repo** — they belong in
+   stigmer-cloud — and no real-shaped test data anywhere (DD-A10).
 7. **No premature web-commons.** The shared UI package earns its existence
    when the second vertical's web app exists; until then, app web code is
    written extraction-ready but stays in the app.
@@ -124,6 +126,6 @@ adapt is incomplete work.
 3. Does every write path go through the pipeline with fail-closed
    authorization? (DD-A4, DD-A5)
 4. Is derived state computed, not stored? (DD-A6)
-5. Are fixtures fictional and customer strings confined? (DD-A10)
+5. Are fixtures fictional, with zero customer strings in this repo? (DD-A10)
 6. If the commons API changes: is every consumer adapted in the same
    change, with the forced changes listed? (DD-A11)

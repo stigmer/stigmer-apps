@@ -2,9 +2,11 @@
 /**
  * Generates a deployment's auth secrets (DD-005 D4/D7): the RS256 signing
  * keypair and the operator key. Run once per firm; paste the values into
- * the firm's config-manager artifacts under clients/<domain>/<client>/
- * (the DD-004 model). Nothing is written to disk — output goes to stdout
- * and the raw operator key exists only in this terminal.
+ * the firm's config-manager artifacts in the private ops repo
+ * (stigmer-cloud `_ops/planton/clients/<domain>/<client>/` — the DD-004
+ * per-firm model, hosted there per DD-006). Nothing is written to disk —
+ * output goes to stdout and the raw operator key exists only in this
+ * terminal.
  *
  *   node scripts/generate-auth-secrets.mjs
  *

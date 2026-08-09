@@ -3,10 +3,10 @@
 # precedent: deploy pipelines build every push to main without running
 # tests), so everything that must hold, holds here.
 #
-# The guard runs FIRST and needs no dependencies: customer-specific
-# strings are allowed only under _projects/, _changelog/, and clients/
-# (the confinement rule, project DD-003 as amended by DD-004); every
-# other path stays publication-ready.
+# The guard runs FIRST and needs no dependencies: this repo is public,
+# so customer-specific strings are a failure on EVERY path (the hub
+# model, project DD-006 — per-client config and operating records live
+# in the private stigmer-cloud repo).
 #
 # Build precedes typecheck and test deliberately: @law/backend resolves
 # @stigmer/resource-api through the workspace link, whose exports point at

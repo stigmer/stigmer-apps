@@ -21,13 +21,13 @@ pipeline across platform resources.
 
 The chart is generic and carries **no customer strings** — the
 customer-data guard (`scripts/check-customer-data.mjs`) enforces that in
-CI. Everything that names a client lives under `clients/law/<client>/`,
-the confinement folder for customer-named config (DD-A10 as amended by
-DD-004):
+CI across this whole public repo (DD-A10). Everything that names a client
+lives in the private ops repo, under stigmer-cloud
+`_ops/planton/clients/law/<client>/`:
 
-- values: `clients/law/<client>/infra-project/prod.yaml`
-- runtime config: `clients/law/<client>/config-manager/variables/`
-- credentials: `clients/law/<client>/config-manager/secrets/`
+- values: `infra-project/prod.yaml`
+- runtime config: `config-manager/variables/`
+- credentials: `config-manager/secrets/`
   (a Cloudflare R2 API token scoped to only that firm's bucket; values
   gitignored under `.secret-values/`)
 
@@ -41,10 +41,11 @@ firm-neutral base lives here.
 # From this directory (publishes to the stigmer org's chart registry):
 planton chart publish
 
-# From the client's folder (see its README for the exact command):
-cd clients/law/<client>
+# From the client's folder in the private ops repo (see its README there
+# for the exact command):
+cd <stigmer-cloud>/_ops/planton/clients/law/<client>
 planton chart install stigmer-prod-law-<firm> \
-  ../../../apps/law/deploy/infra-charts/stigmer-law-firm-stack \
+  <stigmer-apps>/apps/law/deploy/infra-charts/stigmer-law-firm-stack \
   --env prod --values infra-project/prod.yaml
 ```
 

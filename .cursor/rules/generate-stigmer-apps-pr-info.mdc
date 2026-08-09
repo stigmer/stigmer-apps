@@ -65,7 +65,7 @@ Determine the `<scope-path>` from the changed files. Use the most impacted area 
   - Commons change WITH its forced app adaptation → `resource-api` (the commons drives; mention the app adaptation in the body)
   - Root `buf.yaml`, `*/buf.gen.yaml` → `protos`
   - `.github/workflows/**` → `ci`
-  - `_projects/**`, `_changelog/**`, `_roles/**`, `*.md` → `docs`
+  - `_roles/**`, `*.md` → `docs`
   - Root config (`package.json`, `tsconfig.base.json`, `.cursor/**`, `scripts/**`) → `repo`
 
 ### Multi-area changes

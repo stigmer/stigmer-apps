@@ -23,6 +23,7 @@ any rebrand.
 | Package | Purpose | License |
 |---------|---------|---------|
 | [`@stigmer/resource-api`](packages/resource-api) | Proto-first resource API pipeline: common envelope, per-operation step chains (create / update / get / list / custom), store port with Postgres adapter, error contract. The TypeScript sibling of the Java commons (`stigmer-cloud/backend/libs/java`) and the Go commons (`stigmer/backend/libs/go`). | Apache-2.0 |
+| [`@stigmer/identity`](packages/identity) | Shared identity for the verticals: the User resource, authenticator chain (password / RS256 bearer / operator key), dual-transport caller resolver, credential + rotating-refresh stores, AuthService, login rate limiter. | Apache-2.0 |
 
 Commons are business-agnostic by contract: nothing in `packages/` may know
 about any particular product or customer. The placement test for every new
@@ -58,19 +59,17 @@ nothing vendored, nothing pinned between siblings.
 - Comments carry rationale, not narration: they record *why* an ordering,
   divergence, or constraint exists, citing the precedent or issue that
   motivated it.
-- Customer data is confined: customer-specific strings live ONLY under
-  `_projects/` and `_changelog/`. Everything else — code, protos, fixtures,
-  roles, rules — stays publication-ready, enforced by
-  `scripts/check-customer-data.mjs` in CI.
+- No customer data, anywhere: this repo is public, so customer-specific
+  strings are a CI failure on every path, enforced by
+  `scripts/check-customer-data.mjs`. Test fixtures are fictional by
+  construction.
 
 ## Operating model
 
-This repo is self-contained: multi-day work runs through the project
-framework, and every session leaves a record.
+This repo carries the code; per-client deployment configuration and the
+project operating records (plans, checkpoints, design decisions,
+changelogs) live in a private ops repo. What lives here:
 
-- `_projects/` — active and past projects (plans, checkpoints, design
-  decisions, lessons). Start new work with the rules in `_projects/_rules/`.
-- `_changelog/` — one entry per meaningful change, by month.
 - `_roles/` — role prompts (architect, backend, web, UX, tester, docs)
   that set the quality bar for each discipline.
 - `.cursor/rules/` — process rules (commit, verify, PR) and the
