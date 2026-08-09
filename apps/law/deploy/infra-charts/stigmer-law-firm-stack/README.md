@@ -43,7 +43,7 @@ platform validates the references at apply time, so all three must be
 | Slug | Format | Contents / source |
 |---|---|---|
 | `stigmer-law-<firm>-r2-credentials` | key_value | `access-key-id`, `secret-access-key` — a Cloudflare R2 API token scoped to only this firm's bucket (dashboard-created; revoking it offboards one firm) |
-| `stigmer-law-<firm>-postgres-credentials` | string | The `law_app` password. Exists only AFTER the first install provisions Postgres: copy it from the operator-generated Kubernetes secret `law_app.db-{org}-{env}-law-{firm}-postgres.credentials.postgresql.acid.zalan.do` |
+| `stigmer-law-<firm>-postgres-credentials` | string | The `law_app` password. Exists only AFTER the first install provisions Postgres: copy it from the operator-generated Kubernetes secret `law-app.db-{org}-{env}-law-{firm}-postgres.credentials.postgresql.acid.zalan.do` (the operator hyphenates the role name in the secret's name) |
 | `stigmer-law-<firm>-auth-keys` | key_value | `jwt-private-key`, `operator-key-sha256` — from `node scripts/generate-auth-secrets.mjs` (repo root); the raw `opk_` key stays with the operator |
 
 Everything non-secret (bucket name, R2 endpoint, Postgres endpoint,

@@ -65,7 +65,10 @@ metadata:
 spec:
   namespace:
     value: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}
-  version: "{{ values.image_tag }}"
+  # The branch-track label every live service carries (max 30 chars — a
+  # full commit sha is rejected, verified at NK's first install). The
+  # build itself is identified by the pinned image tag below.
+  version: main
   container:
     app:
       # Built by the Service Hub pipeline from apps/law/backend/Dockerfile
@@ -88,11 +91,13 @@ spec:
           # ── Database (discrete PG* form — backend/src/config.ts): a
           # connection URL cannot be composed from refs (whole-value
           # resolution), so the deployment speaks libpq names. Host is
-          # the postgres module's kube_endpoint shape, <name>-master in
-          # the firm's namespace; database/user are the chart constants
-          # shared with templates/postgres.yaml.
+          # the Zalando master service, db-<cluster-name> — VERIFIED
+          # against the live cluster at NK's first install: the module's
+          # kube_endpoint output claims a `<name>-master` service that
+          # is never actually created. Database/user are the chart
+          # constants shared with templates/postgres.yaml.
           - name: PGHOST
-            value: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}-postgres-master.{{ values.org }}-{{ values.env }}-law-{{ values.firm }}.svc.cluster.local
+            value: db-{{ values.org }}-{{ values.env }}-law-{{ values.firm }}-postgres.{{ values.org }}-{{ values.env }}-law-{{ values.firm }}.svc.cluster.local
           - name: PGDATABASE
             value: law
           - name: PGUSER
