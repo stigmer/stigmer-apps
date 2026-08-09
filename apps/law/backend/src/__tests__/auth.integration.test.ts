@@ -290,6 +290,29 @@ describe("Authentication (T04a / DD-005)", () => {
     });
   });
 
+  describe("profile correction (T05: User.Update) meets login", () => {
+    it("login follows an operator email correction immediately — credentials key on the user id, not the email", async () => {
+      const userId = await provision("mistyped@firm.example");
+
+      await users.update(
+        create(UserSchema, {
+          metadata: { id: userId },
+          spec: { email: "corrected@firm.example" },
+        }),
+        auth.asOperator(),
+      );
+
+      // The new email signs in with the UNCHANGED password; the old email
+      // answers the uniform login failure (it is now simply no account).
+      const session = await login("corrected@firm.example");
+      expect(session.res.accessToken).toBeTruthy();
+      await expectCode(
+        authClient.login({ email: "mistyped@firm.example", password: PASSWORD }),
+        Code.Unauthenticated,
+      );
+    });
+  });
+
   describe("offboarding (D9: SetPassword revokes sessions)", () => {
     it("a password reset kills the user's refresh sessions; the ≤1h access tail is the accepted remainder", async () => {
       await provision("departing@firm.example");

@@ -292,13 +292,71 @@ describe("User resource", () => {
     });
   });
 
+  describe("update (T05: the read-only-profile deferral, cashed for channel binding)", () => {
+    it("operator corrects a profile over the wire; the phone lands (the WhatsApp re-binding path)", async () => {
+      const created = await client.create(userInput({ email: "fixme@example.com" }), asOperator());
+      const updated = await client.update(
+        create(UserSchema, {
+          metadata: { id: created.metadata?.id },
+          spec: { email: "fixme@example.com", name: "Asha Verma", phone: "+91123458" },
+        }),
+        asOperator(),
+      );
+      expect(updated.spec?.phone).toBe("+91123458");
+      expect(updated.metadata?.version).toBe(2n);
+
+      const fetched = await client.get({ email: "fixme@example.com" }, asLawyer());
+      expect(fetched.spec?.name).toBe("Asha Verma");
+      expect(fetched.spec?.phone).toBe("+91123458");
+    });
+
+    it("is operator-only: a firm user cannot update anyone", async () => {
+      const created = await client.create(userInput(), asOperator());
+      await expectCode(
+        client.update(
+          create(UserSchema, {
+            metadata: { id: created.metadata?.id },
+            spec: { email: "asha@example.com", name: "Renamed" },
+          }),
+          asLawyer(),
+        ),
+        Code.PermissionDenied,
+        /Only an operator may manage user accounts/,
+      );
+    });
+
+    it("SECURITY (DD-008): a firm user cannot update even THEMSELF — a self-set phone would be a self-service impersonation lever", async () => {
+      // spec.phone decides which verified WhatsApp sender RESOLVES TO this
+      // user. If self-update were allowed, any signed-in clerk could bind
+      // their own handset to the partner's account by editing the
+      // partner's row — or worse, quietly bind a second handset to their
+      // own row and hand it to someone else. The policy branch, not the
+      // pipeline, is what forbids this; this test keeps that line alive.
+      const created = await client.create(userInput({ email: "self@example.com" }), asOperator());
+      const selfId = created.metadata?.id as string;
+      await auth.mint(selfId);
+      await expectCode(
+        client.update(
+          create(UserSchema, {
+            metadata: { id: selfId },
+            spec: { email: "self@example.com", phone: "+91123459" },
+          }),
+          auth.as(selfId),
+        ),
+        Code.PermissionDenied,
+        /Only an operator may manage user accounts/,
+      );
+    });
+  });
+
   describe("the operation matrix is the contract", () => {
-    it("declares exactly create/get/list/setPassword — no update, no delete (FR-USER-001 notes)", () => {
+    it("declares exactly create/update/get/list/setPassword — no delete (FR-USER-001 notes, amended T05)", () => {
       expect(UserService.methods.map((m) => m.localName).sort()).toEqual([
         "create",
         "get",
         "list",
         "setPassword",
+        "update",
       ]);
     });
   });

@@ -31,10 +31,18 @@ export function firmPolicy(): AuthorizationPolicy {
         return deny("Authentication required");
       }
 
-      // Account provisioning and password reset are operator actions
-      // (FR-ADMIN-001; T01 owner decision 1: no self-registration, reset
-      // is an operator action).
-      if (kind === "User" && (operation === "create" || operation === "setPassword")) {
+      // Account provisioning, profile corrections, and password reset are
+      // operator actions (FR-ADMIN-001; T01 owner decision 1: no
+      // self-registration, reset is an operator action). Update belongs in
+      // this branch as a SECURITY boundary, not bookkeeping: User.spec.phone
+      // is the WhatsApp channel binding (DD-008), and this policy's MVP
+      // default below is ALLOW — without this line, any signed-in firm user
+      // could bind their own phone to a partner's account and be that
+      // partner to the assistant (wrong-assumptions/001's class of defect).
+      if (
+        kind === "User" &&
+        (operation === "create" || operation === "update" || operation === "setPassword")
+      ) {
         return caller.kind === "operator"
           ? ALLOW
           : deny("Only an operator may manage user accounts");

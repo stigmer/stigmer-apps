@@ -4,9 +4,10 @@
  * concerns, defined once, consumed by every vertical).
  *
  * Operation matrix (first consumer's contract, adopted as the commons
- * default): create (operator-only by consumer policy), get, list,
- * setPassword (operator-only) — no update (profile read-only until a
- * vertical needs otherwise), no delete.
+ * default): create, update, setPassword (each operator-only by consumer
+ * policy — update included, because spec.phone is a channel binding; see
+ * the proto's Update comment), get, list — no delete (SetPassword's
+ * session revocation is the offboarding lever, DD-005 D9).
  *
  * Credentials never touch this resource: SetPassword bcrypts server-side
  * into the credential store (credential-store.ts). The consuming app's
@@ -29,6 +30,7 @@ import {
   defineResource,
   getOperation,
   listOperation,
+  updateOperation,
 } from "@stigmer/resource-api";
 import type { CredentialStore } from "./credential-store.js";
 import {
@@ -101,6 +103,12 @@ export function userResource(deps: UserResourceDeps) {
     service: UserService,
     operations: {
       create: createOperation<User>({ beforePersist: [normalizeUserStep] }),
+      // The same normalization on both write paths: an update cannot
+      // re-case an email into a second identity any more than a create
+      // can. Full-spec replacement (the commons update flavor) — the
+      // channel binding follows automatically because users.phone is a
+      // column GENERATED from the spec JSON (migration 0002).
+      update: updateOperation<User>({ beforePersist: [normalizeUserStep] }),
       get: getOperation<User, GetUserRequest>({
         ref: (req) => ({
           id: req.id || undefined,
@@ -134,8 +142,9 @@ export function userResource(deps: UserResourceDeps) {
           return create(SetPasswordResponseSchema, {});
         },
       }),
-      // No update: profile is read-only until a vertical needs otherwise —
-      // the service declares no such method, so the contract enforces it.
+      // No delete: with sessions revoked by SetPassword (D9), removal is
+      // an offboarding question no vertical has answered yet — the
+      // service declares no such method, so the contract enforces it.
     },
   });
 }

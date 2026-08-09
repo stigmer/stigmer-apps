@@ -90,6 +90,21 @@ buf curl --schema . -H "Authorization: Bearer $OPERATOR_KEY" \
    are created the same way (no self-registration; password reset is an
    operator action — T01 owner decision 1).
 
+Profile corrections (name, email, phone — the WhatsApp binding) are
+operator actions too, via `Update`. It is a **full spec replacement**
+(read-modify-write: send every field back; an omitted `phone` clears the
+member's WhatsApp binding), targeted by `metadata.id`:
+
+```bash
+buf curl --schema . -H "Authorization: Bearer $OPERATOR_KEY" \
+  -d '{"metadata":{"id":"user_…"},"spec":{"email":"partner@firm.example","name":"A. Partner","phone":"+91123456"}}' \
+  https://<backend>/stigmer.identity.user.v1.UserService/Update
+```
+
+Update is deliberately operator-only, same tier as Create/SetPassword:
+`spec.phone` decides which verified WhatsApp sender resolves to the user
+(DD-008), so profile self-service would be an impersonation lever.
+
 ## The WhatsApp assistant (T05, DD-008)
 
 The backend runs a second listener — the **MCP channel entrance**

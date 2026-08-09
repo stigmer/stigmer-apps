@@ -6,11 +6,14 @@
 // reference, never by widening this message.
 //
 // Deliberate absences carried from the first consumer's contract
-// (Stigmer Law DD-001, T03 D7): no update operation (profile read-only
-// until a vertical needs otherwise), no delete, and NO credential field
+// (Stigmer Law DD-001, T03 D7): no delete, and NO credential field
 // anywhere in this message. Credentials live in the identity-owned
 // user_credentials table, written only by the operator-only SetPassword
 // operation below — no read path can leak what no resource carries.
+// The original "no update" deferral ("profile read-only until a vertical
+// needs otherwise") was cashed by the first consumer's channel binding
+// (T05): a staff member's phone number change must be recordable, so
+// Update exists — operator-only by consumer policy, see the RPC comment.
 syntax = "proto3";
 
 // Package convention (DD-A2 as amended by DD-005): commons resources are
@@ -86,6 +89,18 @@ service UserService {
   // created by an operator, no self-registration. Duplicate emails answer
   // ALREADY_EXISTS naming the value.
   rpc Create(User) returns (User);
+  // Update a user: full spec replacement, the resource-API update
+  // convention (read-modify-write; an omitted optional field — phone —
+  // clears it). Email, the natural key, is editable with uniqueness
+  // re-validated (the case-number-correction precedent); login follows
+  // the new email immediately because credentials key on the user id.
+  // Operator-only (consumer policy), the same tier as Create/SetPassword
+  // — and not one notch lower: spec.phone is the WhatsApp channel
+  // binding, so whoever may update a user decides which verified sender
+  // RESOLVES TO that user. A firm member allowed to update even their
+  // own profile would hold a self-service impersonation lever (the class
+  // of mistake recorded as the first consumer's wrong-assumptions/001).
+  rpc Update(User) returns (User);
   // Get a user by internal id or by email.
   rpc Get(GetUserRequest) returns (User);
   // List users, ordered by email.

@@ -37,6 +37,15 @@ user id**. Verticals extend by reference, never by widening this
 package's proto. A field proposed for `UserSpec` must be an attribute of
 *identity itself*, meaningful to every vertical, or it does not land.
 
+Operation matrix: `create`, `update`, `get`, `list`, `setPassword` — no
+delete (SetPassword's session revocation is the offboarding lever). The
+writes are operator-only by consumer-policy convention, **update
+included and at the same tier**: `spec.phone` is a channel binding, so
+whoever may update a user decides which verified WhatsApp sender
+resolves to them — profile editing one notch below operator would be a
+self-service impersonation lever (the proto's Update comment carries the
+full reasoning).
+
 ## Composing into an app
 
 The app stays the composition root — it declares the chain, owns the

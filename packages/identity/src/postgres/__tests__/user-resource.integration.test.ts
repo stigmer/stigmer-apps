@@ -17,6 +17,10 @@ import {
   composeAuthenticators,
   operatorKeyAuthenticator,
 } from "../../authenticator.js";
+import {
+  createChannelIdentityResolver,
+  WHATSAPP_PHONE_KIND,
+} from "../../channel-identity.js";
 import { UserSchema, UserService } from "../../gen/stigmer/identity/user/v1/user_pb.js";
 import { generateEphemeralSigningKeys } from "../../keys.js";
 import { generateOperatorKey } from "../../operator-key.js";
@@ -33,13 +37,15 @@ const MIGRATIONS_DIR = new URL("../../../migrations", import.meta.url).pathname;
 
 /**
  * The convention consuming apps encode in their policy module: user
- * provisioning and password reset are operator actions. Everything else
- * is any-authenticated (the first consumer's MVP policy).
+ * provisioning, profile corrections, and password reset are operator
+ * actions — update included, because spec.phone is a channel binding
+ * (see the proto's Update comment). Everything else is any-authenticated
+ * (the first consumer's MVP policy).
  */
 const operatorOnlyUserWrites: AuthorizationPolicy = {
   authorize({ caller, operation }) {
     if (!caller) return deny("Authentication required");
-    if (operation === "create" || operation === "setPassword") {
+    if (operation === "create" || operation === "update" || operation === "setPassword") {
       return caller.kind === "operator"
         ? ALLOW
         : deny("Only an operator may manage user accounts");
@@ -238,5 +244,147 @@ describe("User on the commons pipeline (identity edition)", () => {
       asBearer(operatorKey),
     );
     expect(ok.spec?.phone).toBe("+91123456");
+  });
+
+  describe("update (the T05 deferral, cashed: profile corrections exist)", () => {
+    /** Full-spec replacement input targeting an existing user by id. */
+    function updateInput(
+      id: string,
+      spec: { email: string; name?: string; phone?: string },
+    ) {
+      return create(UserSchema, { metadata: { id }, spec });
+    }
+
+    it("operator corrects name and phone; audit and version advance, createdBy survives", async () => {
+      const created = await client.create(
+        userInput("correctable@firm.example", "+91123460"),
+        asBearer(operatorKey),
+      );
+      const id = created.metadata?.id as string;
+
+      const updated = await client.update(
+        updateInput(id, {
+          email: "correctable@firm.example",
+          name: "Asha V.",
+          phone: "+91123461",
+        }),
+        asBearer(operatorKey),
+      );
+
+      expect(updated.spec?.name).toBe("Asha V.");
+      expect(updated.spec?.phone).toBe("+91123461");
+      expect(updated.metadata?.version).toBe(2n);
+      expect(updated.metadata?.createdBy?.id).toBe("operator");
+      expect(updated.metadata?.updatedBy?.id).toBe("operator");
+    });
+
+    it("a user-kind bearer token cannot update — even for a benign name fix (the convention's boundary)", async () => {
+      const created = await client.create(
+        userInput("untouchable@firm.example"),
+        asBearer(operatorKey),
+      );
+      await expectCode(
+        client.update(
+          updateInput(created.metadata?.id as string, {
+            email: "untouchable@firm.example",
+            name: "New Name",
+          }),
+          asBearer(await issuer.issue("user_someone")),
+        ),
+        Code.PermissionDenied,
+        /operator/i,
+      );
+    });
+
+    it("the channel resolver follows the write: a phone set by update resolves, a phone omitted un-resolves", async () => {
+      // The reason Update exists at all (T05): the resolver reads the
+      // GENERATED phone column, so an update IS a channel re-binding.
+      const resolve = createChannelIdentityResolver(
+        new PostgresResourceStore(pool, identityStoreKinds()),
+      );
+      const created = await client.create(
+        userInput("rebindable@firm.example"),
+        asBearer(operatorKey),
+      );
+      const id = created.metadata?.id as string;
+
+      expect((await resolve({ kind: WHATSAPP_PHONE_KIND, value: "91123470" })).outcome).toBe(
+        "unknown",
+      );
+
+      await client.update(
+        updateInput(id, { email: "rebindable@firm.example", phone: "+91123470" }),
+        asBearer(operatorKey),
+      );
+      const bound = await resolve({ kind: WHATSAPP_PHONE_KIND, value: "91123470" });
+      expect(bound.outcome).toBe("resolved");
+      if (bound.outcome === "resolved") expect(bound.principal.id).toBe(id);
+
+      // Full-spec replacement: omitting phone clears the binding — the
+      // number-offboarding path, and the sharp edge the docs warn about.
+      await client.update(
+        updateInput(id, { email: "rebindable@firm.example" }),
+        asBearer(operatorKey),
+      );
+      expect((await resolve({ kind: WHATSAPP_PHONE_KIND, value: "91123470" })).outcome).toBe(
+        "unknown",
+      );
+    });
+
+    it("update enforces the same E.164 validation and normalizes a re-cased email onto itself", async () => {
+      const created = await client.create(
+        userInput("recase@firm.example"),
+        asBearer(operatorKey),
+      );
+      const id = created.metadata?.id as string;
+
+      await expectCode(
+        client.update(
+          updateInput(id, { email: "recase@firm.example", phone: "0044 123" }),
+          asBearer(operatorKey),
+        ),
+        Code.InvalidArgument,
+      );
+
+      // A re-cased email is the SAME natural key after normalization —
+      // it must update in place, never answer ALREADY_EXISTS against
+      // its own row.
+      const recased = await client.update(
+        updateInput(id, { email: "ReCase@Firm.example", name: "Recase" }),
+        asBearer(operatorKey),
+      );
+      expect(recased.metadata?.id).toBe(id);
+      expect(recased.spec?.email).toBe("recase@firm.example");
+    });
+
+    it("an email change re-validates uniqueness (ALREADY_EXISTS on clash) and moves the natural key", async () => {
+      await client.create(userInput("taken@firm.example"), asBearer(operatorKey));
+      const created = await client.create(userInput("movable@firm.example"), asBearer(operatorKey));
+      const id = created.metadata?.id as string;
+      const reader = asBearer(await issuer.issue("user_reader"));
+
+      await expectCode(
+        client.update(updateInput(id, { email: "taken@firm.example" }), asBearer(operatorKey)),
+        Code.AlreadyExists,
+        /taken@firm\.example/,
+      );
+
+      await client.update(updateInput(id, { email: "moved@firm.example" }), asBearer(operatorKey));
+      expect((await client.get({ email: "moved@firm.example" }, reader)).metadata?.id).toBe(id);
+      await expectCode(
+        client.get({ email: "movable@firm.example" }, reader),
+        Code.NotFound,
+      );
+    });
+
+    it("answers NOT_FOUND for an unknown target", async () => {
+      await expectCode(
+        client.update(
+          updateInput("user_00000000000000000000000000", { email: "ghost@firm.example" }),
+          asBearer(operatorKey),
+        ),
+        Code.NotFound,
+      );
+    });
   });
 });
