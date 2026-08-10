@@ -6,6 +6,7 @@
 
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useUnreadCount } from "../screens/inbox/queries.js";
+import { isPartnerRole, useMyRole } from "../session/use-firm-member.js";
 import { useCurrentUser, useSessionKit } from "../session/use-session.js";
 
 /** aria-current styling comes free with NavLink; words, not color alone. */
@@ -19,6 +20,10 @@ export function AppShell() {
   const user = useCurrentUser();
   const kit = useSessionKit();
   const navigate = useNavigate();
+  // The caller's firm role decides which nav the shell offers: money is
+  // a partner surface (the server refuses everyone else — the UI only
+  // hides what would be refused).
+  const partner = isPartnerRole(useMyRole());
   // The derived unread badge (FR-NOTIF-004): the server's total_count,
   // never a client-side count.
   const unread = useUnreadCount();
@@ -43,8 +48,19 @@ export function AppShell() {
             <NavLink to="/cases" className={navClass}>
               Cases
             </NavLink>
+            <NavLink to="/clients" className={navClass}>
+              Clients
+            </NavLink>
             <NavLink to="/tasks" className={navClass}>
               Tasks
+            </NavLink>
+            {partner && (
+              <NavLink to="/money" className={navClass}>
+                Money
+              </NavLink>
+            )}
+            <NavLink to="/members" className={navClass}>
+              The firm
             </NavLink>
             <NavLink
               to="/inbox"

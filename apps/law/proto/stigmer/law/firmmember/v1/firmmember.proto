@@ -1,0 +1,117 @@
+// The FirmMember resource — the vertical-owned identity PROFILE the
+// @stigmer/identity README documents and this app is the first to
+// instantiate: vertical-specific person data (a lawyer's role in the
+// firm hierarchy, a bar number) extends the shared User BY REFERENCE,
+// never by widening the commons proto (DD-005's binding rule).
+//
+// This is where the authorization matrix's first fact lives: the policy
+// module resolves every caller to a FirmMember by user id (the natural
+// key — one profile per user, enforced by the store) and consults
+// `role` plus case membership. No profile, or active=false, means every
+// request is denied — fail-closed.
+//
+// All person references elsewhere in the law app (lead lawyer, case
+// members, deadline owners, task assignees, notification recipients)
+// are FirmMember ids — the app's own person concept. User ids appear
+// only here and in the identity flows.
+syntax = "proto3";
+
+// Package convention: `stigmer.<domain>.<resource>.v1` pairs with
+// apiVersion `<domain>.stigmer.ai/v1`; the domain is "law" (DD-A2).
+package stigmer.law.firmmember.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message FirmMember {
+  string api_version = 1;
+  string kind = 2;
+  // System-managed; the pipeline overwrites whatever a client sends.
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  FirmMemberSpec spec = 4 [(buf.validate.field).required = true];
+  FirmMemberStatus status = 5;
+}
+
+message FirmMemberSpec {
+  // The shared identity User this profile extends — the natural key
+  // (1:1 by construction).
+  string user_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  FirmRole role = 2 [(buf.validate.field).enum = {
+    defined_only: true,
+    not_in: [0]
+  }];
+
+  // Bar Council enrollment ("TS/1234/2015") — lawyers have one; clerks
+  // and office staff do not.
+  optional string bar_enrollment_number = 3 [(buf.validate.field).string.max_len = 50];
+
+  // The offboarding flag (FR-MEMBER-002): false locks the member out on
+  // their next request (the policy checks it on every authorize) and
+  // revokes their refresh sessions; historical attributions stay.
+  // Explicit presence (`optional`) so false survives proto3 JSON
+  // storage as a value (the Notification.read precedent).
+  optional bool active = 4;
+}
+
+enum FirmRole {
+  FIRM_ROLE_UNSPECIFIED = 0;
+  FIRM_ROLE_MANAGING_PARTNER = 1;
+  FIRM_ROLE_PARTNER = 2;
+  FIRM_ROLE_ASSOCIATE = 3;
+  FIRM_ROLE_JUNIOR = 4;
+  FIRM_ROLE_CLERK = 5;
+  FIRM_ROLE_OFFICE_STAFF = 6;
+}
+
+message FirmMemberStatus {
+  // Derived on read from the referenced User (one grouped lookup per
+  // page) — every list of people needs names without joining
+  // client-side. Never stored: an email correction on User must never
+  // leave a stale copy here.
+  string user_name = 1;
+  string user_email = 2;
+}
+
+message GetFirmMemberRequest {
+  // Exactly one of: internal id, or the User id it profiles (how the
+  // policy and the assistant resolve a caller).
+  string id = 1;
+  string user_id = 2;
+}
+
+message ListFirmMembersRequest {
+  // Defaults to 20 (the contract's page size), capped at 100.
+  int32 page_size = 1 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 100
+  }];
+  int32 page_offset = 2 [(buf.validate.field).int32.gte = 0];
+
+  // Include deactivated members (the historical register). Default:
+  // active only.
+  bool include_inactive = 3;
+}
+
+message ListFirmMembersResponse {
+  // Ordered by role seniority then name — how a firm lists itself.
+  repeated FirmMember items = 1;
+  int64 total_count = 2;
+}
+
+service FirmMemberService {
+  // Create a member profile. Operator and managing partner only
+  // (matrix row: manage users/members); the User must exist, and a
+  // second profile for the same user answers ALREADY_EXISTS.
+  rpc Create(FirmMember) returns (FirmMember);
+  // Update a profile (role, bar number, active). Operator and managing
+  // partner only. Setting active=false is the offboarding act
+  // (FR-MEMBER-002).
+  rpc Update(FirmMember) returns (FirmMember);
+  // Get a profile by internal id or by user id.
+  rpc Get(GetFirmMemberRequest) returns (FirmMember);
+  // List the firm's members. Any authenticated member (assignee
+  // pickers, attendee pickers need the roster); money and case content
+  // stay behind their own gates.
+  rpc List(ListFirmMembersRequest) returns (ListFirmMembersResponse);
+}

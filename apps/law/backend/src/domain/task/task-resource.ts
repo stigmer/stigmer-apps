@@ -11,6 +11,7 @@
 import { clone, create } from "@bufbuild/protobuf";
 import type {
   AuthorizationPolicy,
+  FilterValue,
   PipelineStep,
   ResourceEventPublisher,
   ResourceStore,
@@ -21,11 +22,12 @@ import {
   customOperation,
   defineResource,
   getOperation,
-  listOperation,
+  invalidArgument,
   referencesExistStep,
   updateOperation,
 } from "@stigmer/resource-api";
 import type { CallerExtractor } from "@stigmer/resource-api";
+import type { PolicyGuards } from "../authz/policy.js";
 import {
   type GetTaskRequest,
   type ListTasksRequest,
@@ -75,15 +77,57 @@ const openOnCreateStep: PipelineStep<WriteContext<Task>> = {
 export function taskResource(deps: {
   store: ResourceStore;
   policy: AuthorizationPolicy;
+  guards: PolicyGuards;
   publisher?: ResourceEventPublisher;
   caller: CallerExtractor;
 }) {
   // case_id is mandatory (validated), assignee_id optional (the step
   // skips empty) — both must exist when set (FAILED_PRECONDITION, D3).
+  // The assignee is a FirmMember (the rebuilt contract's person refs).
   const referenceChecks = referencesExistStep<Task>(deps.store, [
     { kind: "Case", label: "case", get: (t) => t.spec?.caseId || undefined },
-    { kind: "User", label: "assignee", get: (t) => t.spec?.assigneeId || undefined },
+    { kind: "FirmMember", label: "assignee", get: (t) => t.spec?.assigneeId || undefined },
   ]);
+
+  // Tasks are case content: writes carry the create-input membership
+  // check the authorize slot cannot make (policy.ts, rule shapes).
+  const membershipOnWrite: PipelineStep<WriteContext<Task>> = {
+    name: "assert-case-membership",
+    async execute(ctx) {
+      const caseId = (ctx.newState as Task).spec?.caseId;
+      if (ctx.caller && caseId) {
+        await deps.guards.assertCaseContent(ctx.caller, caseId);
+      }
+    },
+  };
+
+  // Page-shaped (T03 D4): overdue is pure computation; the file number
+  // (T04b D9) is ONE bulk lookup per response — lawyers speak in file
+  // numbers, and every task-listing consumer (web lists, the assistant's
+  // task tools) renders them, so the reference resolves here, never
+  // client-side and never N+1. Named because the CUSTOM list below must
+  // apply it itself (custom operations bypass the automatic derivation).
+  const deriveTaskStatus = async (tasks: readonly Task[]) => {
+    const today = todayInFirmTimezone();
+    const caseIds = [
+      ...new Set(tasks.map((t) => t.spec?.caseId).filter((id): id is string => !!id)),
+    ];
+    const cases = await deps.store.getByIds("Case", caseIds);
+    for (const task of tasks) {
+      const state = task.status?.state ?? TaskState.UNSPECIFIED;
+      const referenced = cases.get(task.spec?.caseId ?? "") as Case | undefined;
+      task.status = create(TaskStatusSchema, {
+        state,
+        // The one overdue rule (overdue.ts) — the OVERDUE list
+        // predicate filters on the same module, and the agreement
+        // test pins that they answer identically.
+        overdue: isOverdue(task.spec?.dueDate, state, today),
+        // Best-effort display data: a dangling reference renders
+        // empty rather than failing the read.
+        caseFileNumber: referenced?.spec?.fileNumber ?? "",
+      });
+    }
+  };
 
   return defineResource({
     definition: {
@@ -95,50 +139,20 @@ export function taskResource(deps: {
       policy: deps.policy,
       publisher: deps.publisher,
       caller: deps.caller,
-      // Page-shaped (T03 D4): overdue is pure computation; case_number
-      // (T04b D9) is ONE bulk lookup per response — lawyers speak in case
-      // numbers, and every task-listing consumer (web lists, WhatsApp
-      // my_open_tasks) renders them, so the reference resolves here, never
-      // client-side and never N+1.
-      deriveStatus: async (tasks: readonly Task[]) => {
-        const today = todayInFirmTimezone();
-        const caseIds = [
-          ...new Set(
-            tasks
-              .map((t) => t.spec?.caseId)
-              .filter((id): id is string => !!id),
-          ),
-        ];
-        const cases = await deps.store.getByIds("Case", caseIds);
-        for (const task of tasks) {
-          const state = task.status?.state ?? TaskState.UNSPECIFIED;
-          const referenced = cases.get(task.spec?.caseId ?? "") as Case | undefined;
-          task.status = create(TaskStatusSchema, {
-            state,
-            // The one overdue rule (overdue.ts) — the OVERDUE list
-            // predicate filters on the same module, and the agreement
-            // test pins that they answer identically.
-            overdue: isOverdue(task.spec?.dueDate, state, today),
-            // A dangling reference (case rows are never deleted in MVP,
-            // but the field is best-effort display data) renders empty
-            // rather than failing the read.
-            caseNumber: referenced?.spec?.caseNumber ?? "",
-          });
-        }
-      },
+      deriveStatus: deriveTaskStatus,
     },
     service: TaskService,
     operations: {
       create: createOperation<Task>({
-        beforePersist: [priorityDefaultStep, openOnCreateStep, referenceChecks],
+        beforePersist: [priorityDefaultStep, openOnCreateStep, membershipOnWrite, referenceChecks],
       }),
       update: updateOperation<Task>({
-        beforePersist: [priorityDefaultStep, referenceChecks],
+        beforePersist: [priorityDefaultStep, membershipOnWrite, referenceChecks],
       }),
       updateStatus: customOperation<Task, UpdateTaskStatusRequest, Task>({
         async handler(ctx) {
-          // load() authorizes "updateStatus" (permissive for any firm
-          // user — FR-USER-001 equal access, a deliberate decision).
+          // load() authorizes "updateStatus": case members and partners
+          // (the rebuilt matrix).
           const task = await ctx.load({ id: ctx.input.id });
           // The pre-mutation state rides the event so subscribers can
           // diff, same as the update pipeline's previous-state contract.
@@ -155,41 +169,66 @@ export function taskResource(deps: {
       get: getOperation<Task, GetTaskRequest>({
         ref: (req) => ({ id: req.id }),
       }),
-      list: listOperation<Task, ListTasksRequest, ListTasksResponse>({
-        // The list contract: soonest due first, dateless last.
-        orderBy: { field: "dueDate", direction: "asc", nulls: "last" },
-        query: (req, caller) => {
-          // Scope first. An explicit case/assignee filter names its own
-          // scope; otherwise "My Tasks" is the contract's default, and
-          // FIRM must be asked for by name (T05) — before the scope
-          // field existed, a firm-wide question was unexpressable and a
-          // firm overview would have silently counted only the caller's
-          // own work.
-          const explicit = req.caseId || req.assigneeId;
-          const scope = explicit
-            ? {
-                ...(req.caseId ? { caseId: req.caseId } : {}),
-                ...(req.assigneeId ? { assigneeId: req.assigneeId } : {}),
-              }
-            : req.scope === TaskListScope.FIRM
-              ? {}
-              : { assigneeId: caller.id };
+      // Custom rather than the list flavor: "My Tasks" needs the
+      // caller's FirmMember (an async fact), and non-partner visibility
+      // scopes to member cases (the matrix, applied as query shaping).
+      list: customOperation<Task, ListTasksRequest, ListTasksResponse>({
+        async handler(ctx) {
+          await ctx.authorize(); // role gate: office staff refused
+          if (!ctx.caller) {
+            throw invalidArgument("caller required");
+          }
+          const member = await deps.guards.requireMember(ctx.caller);
+
+          // Scope first. An explicit case filter is case content and
+          // gates on membership; otherwise "My Tasks" is the contract's
+          // default and FIRM must be asked for by name — for partners
+          // that is the whole firm, for everyone else their member
+          // cases (the request widens the ask, never the visibility).
+          let scope: Record<string, FilterValue>;
+          if (ctx.input.caseId) {
+            await deps.guards.assertCaseContent(ctx.caller, ctx.input.caseId);
+            scope = {
+              caseId: ctx.input.caseId,
+              ...(ctx.input.assigneeId ? { assigneeId: ctx.input.assigneeId } : {}),
+            };
+          } else {
+            const visible = await deps.guards.visibleCaseIds(member);
+            const visibility: Record<string, FilterValue> =
+              visible !== undefined ? { caseId: { in: [...visible] } } : {};
+            if (ctx.input.assigneeId) {
+              scope = { ...visibility, assigneeId: ctx.input.assigneeId };
+            } else if (ctx.input.scope === TaskListScope.FIRM) {
+              scope = visibility;
+            } else {
+              // "My Tasks": my assignments, by my FirmMember id.
+              scope = { assigneeId: member.metadata?.id ?? "" };
+            }
+          }
+
           // Then the named predicate — implemented here exactly once,
           // sharing the overdue module with the derivation.
           const predicate =
-            req.filter === TaskListFilter.OPEN
+            ctx.input.filter === TaskListFilter.OPEN
               ? openStatesFilter()
-              : req.filter === TaskListFilter.OVERDUE
+              : ctx.input.filter === TaskListFilter.OVERDUE
                 ? overdueFilter(todayInFirmTimezone())
                 : {};
-          return {
-            pageSize: req.pageSize,
-            pageOffset: req.pageOffset,
+
+          const { items, totalCount } = await deps.store.list("Task", {
+            limit: ctx.input.pageSize > 0 ? Math.min(ctx.input.pageSize, 100) : 20,
+            offset: ctx.input.pageOffset > 0 ? ctx.input.pageOffset : 0,
+            // The list contract: soonest due first, dateless last.
+            orderBy: { field: "dueDate", direction: "asc", nulls: "last" },
             filter: { ...scope, ...predicate },
-          };
+          });
+          const tasks = items as Task[];
+          await deriveTaskStatus(tasks);
+          return create(ListTasksResponseSchema, {
+            items: tasks,
+            totalCount: BigInt(totalCount),
+          });
         },
-        respond: (items, totalCount) =>
-          create(ListTasksResponseSchema, { items, totalCount: BigInt(totalCount) }),
       }),
       // No delete: the operation matrix is enforced by the proto itself.
     },

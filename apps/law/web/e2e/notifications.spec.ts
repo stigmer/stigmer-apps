@@ -17,12 +17,12 @@ async function signIn(page: Page, email: string, password: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: /Welcome,/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
 }
 
 async function assignTaskToRavi(page: Page, title: string) {
   await page.goto("/tasks/new");
-  await page.getByLabel("Case number").fill(SEED_CASE.caseNumber);
+  await page.getByLabel("File number").fill(SEED_CASE.fileNumber);
   await page.getByLabel("Title").fill(title);
   await page.getByLabel("Assign to").selectOption({ label: RAVI.name });
   await page.getByRole("button", { name: "Create task" }).click();

@@ -49,6 +49,9 @@ describe("loadConfigFromEnv", () => {
         previousPublicKeyBase64: undefined,
         operatorKeySha256Hex: OPERATOR_KEY_HASH,
       },
+      // The sweep default: 15 minutes (calendar reminders tolerate
+      // minutes of latency by nature).
+      reminderIntervalMs: 900_000,
       mcp: {
         port: 8081,
         sharedSecret: MCP_SECRET,

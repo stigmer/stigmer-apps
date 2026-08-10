@@ -79,6 +79,7 @@ async function main(): Promise<void> {
       objectStore: createS3ObjectStore(config.objectStore),
       dispatcher,
       webRoot,
+      reminderIntervalMs: config.reminderIntervalMs,
     },
     { sharedSecret: config.mcp.sharedSecret },
   );

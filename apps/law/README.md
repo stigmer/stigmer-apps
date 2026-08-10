@@ -1,9 +1,16 @@
 # Stigmer Law
 
-Case management for law firms, built on [Stigmer](https://github.com/stigmer/stigmer)
-— a TypeScript system of record with WhatsApp Ops layered on top. Cases,
-tasks, notes, documents, and hearing reminders in a real web app; the
-firm's staff work it over WhatsApp.
+Law-practice management built on [Stigmer](https://github.com/stigmer/stigmer)
+— a TypeScript system of record with a WhatsApp assistant layered on
+top. The model follows how an Indian litigation practice actually runs:
+**matters moving through an appearance/adjournment cycle**, with people
+and money attached. Clients, cases (keyed by the firm's own file
+number), the hearing diary (append-only appearances with recorded
+outcomes that auto-schedule the next date), deadlines with escalating
+reminders, a partner-only fee ledger, tasks, notes, documents, an audit
+trail, and firm-hierarchy authorization (managing partner → partner →
+associate → junior → clerk → office staff) enforced fail-closed by one
+policy module at every entrance.
 
 Stigmer Law is a vertical product **built on** the Stigmer platform, not
 an edition of the platform itself (that's [`stigmer`](https://github.com/stigmer/stigmer)
@@ -86,9 +93,23 @@ buf curl --schema . -H "Authorization: Bearer $OPERATOR_KEY" \
   https://<backend>/stigmer.identity.user.v1.UserService/SetPassword
 ```
 
-3. That user signs into the web app and works normally; further accounts
+3. Give the user a FIRM PROFILE — since the rebuild, a User with no
+   `FirmMember` is refused everywhere (fail-closed): the profile carries
+   the role the authorization matrix reads. The first profile is
+   operator-created (the managing partner then manages the rest
+   in-product):
+
+```bash
+buf curl --schema . -H "Authorization: Bearer $OPERATOR_KEY" \
+  -d '{"spec":{"userId":"user_…","role":"FIRM_ROLE_MANAGING_PARTNER"}}' \
+  https://<backend>/stigmer.law.firmmember.v1.FirmMemberService/Create
+```
+
+4. That user signs into the web app and works normally; further accounts
    are created the same way (no self-registration; password reset is an
-   operator action — T01 owner decision 1).
+   operator action — T01 owner decision 1). Offboarding is
+   `FirmMember.Update` with `active: false` (locks the member out on
+   their next request and revokes their sessions) plus `SetPassword`.
 
 Profile corrections (name, email, phone — the WhatsApp binding) are
 operator actions too, via `Update`. It is a **full spec replacement**
@@ -109,10 +130,11 @@ Update is deliberately operator-only, same tier as Create/SetPassword:
 
 The backend runs a second listener — the **MCP channel entrance**
 (`backend/src/mcp/`, default port 8081, cluster-internal only in
-deployment) — serving seven tools to the firm's agent on the Stigmer
-platform: `my_open_tasks`, `find_tasks`, `get_case`,
-`upcoming_hearings`, `firm_overview`, `update_task_status`,
-`add_case_note`.
+deployment) — serving the journey verbs to the firm's agent on the
+Stigmer platform: `my_day`, `my_deadlines`, `find_tasks`, `case_story`,
+`upcoming_hearings`, `record_hearing_outcome`, `firm_overview`,
+`update_task_status`, `add_case_note`, and the partner-gated
+`outstanding_balances`.
 
 The arrangement that matters: the agent platform verifies the WhatsApp
 sender with Meta and asserts the number in headers (never through the

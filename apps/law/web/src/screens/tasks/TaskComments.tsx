@@ -10,13 +10,13 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { ConnectError } from "@connectrpc/connect";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
 import { formatInstant } from "../../lib/format.js";
-import { useUserDirectory } from "../users/queries.js";
+import { useFirmRoster } from "../members/queries.js";
 import { useAddTaskComment, useTaskComments } from "./queries.js";
 
 export function TaskComments(props: { taskId: string }) {
   const comments = useTaskComments(props.taskId);
   const addComment = useAddTaskComment(props.taskId);
-  const directory = useUserDirectory();
+  const roster = useFirmRoster();
   const [content, setContent] = useState("");
   const [error, setError] = useState<string | undefined>();
 
@@ -50,7 +50,8 @@ export function TaskComments(props: { taskId: string }) {
               <li key={comment.metadata?.id} className="border-b border-line px-3 py-2 last:border-b-0">
                 <p className="text-sm text-ink-muted">
                   <span className="font-medium text-ink">
-                    {directory.data?.nameOf(comment.metadata?.createdBy?.id ?? "") ?? "…"}
+                    {/* Audit fields carry USER ids; the roster maps them. */}
+                    {roster.data?.nameOfUser(comment.metadata?.createdBy?.id ?? "") ?? "…"}
                   </span>
                   {createdAt && <> — {formatInstant(timestampDate(createdAt))}</>}
                 </p>

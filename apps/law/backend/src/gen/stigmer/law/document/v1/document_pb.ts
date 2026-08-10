@@ -19,8 +19,8 @@
 // apiVersion `<domain>.stigmer.ai/v1`; the domain is "law" (DD-002
 // addendum) — never the customer segment, never the brand.
 
-import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import { file_buf_validate_validate } from "../../../../buf/validate/validate_pb.js";
 import type { ResourceMetadata } from "../../../resourceapi/v1/resource_pb.js";
 import { file_stigmer_resourceapi_v1_resource } from "../../../resourceapi/v1/resource_pb.js";
@@ -30,7 +30,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file stigmer/law/document/v1/document.proto.
  */
 export const file_stigmer_law_document_v1_document: GenFile = /*@__PURE__*/
-  fileDesc("CiZzdGlnbWVyL2xhdy9kb2N1bWVudC92MS9kb2N1bWVudC5wcm90bxIXc3RpZ21lci5sYXcuZG9jdW1lbnQudjEipgEKCERvY3VtZW50EhMKC2FwaV92ZXJzaW9uGAEgASgJEgwKBGtpbmQYAiABKAkSOgoIbWV0YWRhdGEYAyABKAsyKC5zdGlnbWVyLnJlc291cmNlYXBpLnYxLlJlc291cmNlTWV0YWRhdGESOwoEc3BlYxgEIAEoCzIlLnN0aWdtZXIubGF3LmRvY3VtZW50LnYxLkRvY3VtZW50U3BlY0IGukgDyAEBIsgBCgxEb2N1bWVudFNwZWMSGAoHY2FzZV9pZBgBIAEoCUIHukgEcgIQARIdCglmaWxlX25hbWUYAiABKAlCCrpIB3IFEAEY/wESQAoJbWltZV90eXBlGAMgASgJQi26SCpyKFIPYXBwbGljYXRpb24vcGRmUglpbWFnZS9wbmdSCmltYWdlL2pwZWcSIAoKc2l6ZV9ieXRlcxgEIAEoA0IMukgJIgcYgIDADCAAEhsKCm9iamVjdF9rZXkYBSABKAlCB7pIBHICEAEiKQoSR2V0RG9jdW1lbnRSZXF1ZXN0EhMKAmlkGAEgASgJQge6SARyAhABImwKFExpc3REb2N1bWVudHNSZXF1ZXN0EhgKB2Nhc2VfaWQYASABKAlCB7pIBHICEAESHAoJcGFnZV9zaXplGAIgASgFQgm6SAYaBBhkKAASHAoLcGFnZV9vZmZzZXQYAyABKAVCB7pIBBoCKAAiXgoVTGlzdERvY3VtZW50c1Jlc3BvbnNlEjAKBWl0ZW1zGAEgAygLMiEuc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuRG9jdW1lbnQSEwoLdG90YWxfY291bnQYAiABKAMyzwEKD0RvY3VtZW50U2VydmljZRJVCgNHZXQSKy5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5HZXREb2N1bWVudFJlcXVlc3QaIS5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5Eb2N1bWVudBJlCgRMaXN0Ei0uc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuTGlzdERvY3VtZW50c1JlcXVlc3QaLi5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5MaXN0RG9jdW1lbnRzUmVzcG9uc2ViBnByb3RvMw", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
+  fileDesc("CiZzdGlnbWVyL2xhdy9kb2N1bWVudC92MS9kb2N1bWVudC5wcm90bxIXc3RpZ21lci5sYXcuZG9jdW1lbnQudjEipgEKCERvY3VtZW50EhMKC2FwaV92ZXJzaW9uGAEgASgJEgwKBGtpbmQYAiABKAkSOgoIbWV0YWRhdGEYAyABKAsyKC5zdGlnbWVyLnJlc291cmNlYXBpLnYxLlJlc291cmNlTWV0YWRhdGESOwoEc3BlYxgEIAEoCzIlLnN0aWdtZXIubGF3LmRvY3VtZW50LnYxLkRvY3VtZW50U3BlY0IGukgDyAEBIrcCCgxEb2N1bWVudFNwZWMSGAoHY2FzZV9pZBgBIAEoCUIHukgEcgIQARIdCglmaWxlX25hbWUYAiABKAlCCrpIB3IFEAEY/wESQAoJbWltZV90eXBlGAMgASgJQi26SCpyKFIPYXBwbGljYXRpb24vcGRmUglpbWFnZS9wbmdSCmltYWdlL2pwZWcSIAoKc2l6ZV9ieXRlcxgEIAEoA0IMukgJIgcYgIDADCAAEhsKCm9iamVjdF9rZXkYBSABKAlCB7pIBHICEAESRQoIY2F0ZWdvcnkYBiABKA4yKS5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5Eb2N1bWVudENhdGVnb3J5Qgi6SAWCAQIQARIXCgpoZWFyaW5nX2lkGAcgASgJSACIAQFCDQoLX2hlYXJpbmdfaWQiKQoSR2V0RG9jdW1lbnRSZXF1ZXN0EhMKAmlkGAEgASgJQge6SARyAhABIqoBChRMaXN0RG9jdW1lbnRzUmVxdWVzdBIPCgdjYXNlX2lkGAEgASgJEhwKCXBhZ2Vfc2l6ZRgCIAEoBUIJukgGGgQYZCgAEhwKC3BhZ2Vfb2Zmc2V0GAMgASgFQge6SAQaAigAEkUKCGNhdGVnb3J5GAQgASgOMikuc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuRG9jdW1lbnRDYXRlZ29yeUIIukgFggECEAEiXgoVTGlzdERvY3VtZW50c1Jlc3BvbnNlEjAKBWl0ZW1zGAEgAygLMiEuc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuRG9jdW1lbnQSEwoLdG90YWxfY291bnQYAiABKAMqxAIKEERvY3VtZW50Q2F0ZWdvcnkSIQodRE9DVU1FTlRfQ0FURUdPUllfVU5TUEVDSUZJRUQQABIeChpET0NVTUVOVF9DQVRFR09SWV9QTEVBRElORxABEiEKHURPQ1VNRU5UX0NBVEVHT1JZX0FQUExJQ0FUSU9OEAISHgoaRE9DVU1FTlRfQ0FURUdPUllfRVZJREVOQ0UQAxIkCiBET0NVTUVOVF9DQVRFR09SWV9PUkRFUl9KVURHTUVOVBAEEiQKIERPQ1VNRU5UX0NBVEVHT1JZX0NPUlJFU1BPTkRFTkNFEAUSIQodRE9DVU1FTlRfQ0FURUdPUllfVkFLQUxBVE5BTUEQBhIeChpET0NVTUVOVF9DQVRFR09SWV9KVURHTUVOVBAHEhsKF0RPQ1VNRU5UX0NBVEVHT1JZX09USEVSEAgyzwEKD0RvY3VtZW50U2VydmljZRJVCgNHZXQSKy5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5HZXREb2N1bWVudFJlcXVlc3QaIS5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5Eb2N1bWVudBJlCgRMaXN0Ei0uc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuTGlzdERvY3VtZW50c1JlcXVlc3QaLi5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5MaXN0RG9jdW1lbnRzUmVzcG9uc2ViBnByb3RvMw", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
 
 /**
  * @generated from message stigmer.law.document.v1.Document
@@ -109,6 +109,27 @@ export type DocumentSpec = Message<"stigmer.law.document.v1.DocumentSpec"> & {
    * @generated from field: string object_key = 5;
    */
   objectKey: string;
+
+  /**
+   * What kind of paper this is (DD-001, adopted 2026-08-10).
+   * VAKALATNAMA is its own category by session-4 correction — the
+   * authority to appear is filed in every litigation matter and must
+   * not land in OTHER. JUDGMENT is the deliberate hook for the deferred
+   * knowledge base (FR-DOC-002): the collection accumulates from day
+   * one, taggable and listable, before the KB feature exists.
+   *
+   * @generated from field: stigmer.law.document.v1.DocumentCategory category = 6;
+   */
+  category: DocumentCategory;
+
+  /**
+   * The hearing this document belongs to, when it belongs to one — an
+   * order to the hearing it was pronounced at, a filing to the listing
+   * it served. Optional; existence checked when set.
+   *
+   * @generated from field: optional string hearing_id = 7;
+   */
+  hearingId?: string | undefined;
 };
 
 /**
@@ -140,7 +161,10 @@ export const GetDocumentRequestSchema: GenMessage<GetDocumentRequest> = /*@__PUR
  */
 export type ListDocumentsRequest = Message<"stigmer.law.document.v1.ListDocumentsRequest"> & {
   /**
-   * Documents are always read in the context of a case.
+   * The case whose documents are asked for. Required unless category is
+   * JUDGMENT — the one firm-wide document view (FR-DOC-002: the
+   * knowledge-base collection), still subject to the caller's case
+   * visibility.
    *
    * @generated from field: string case_id = 1;
    */
@@ -157,6 +181,13 @@ export type ListDocumentsRequest = Message<"stigmer.law.document.v1.ListDocument
    * @generated from field: int32 page_offset = 3;
    */
   pageOffset: number;
+
+  /**
+   * Narrow to one category (a case's orders, the judgment collection).
+   *
+   * @generated from field: stigmer.law.document.v1.DocumentCategory category = 4;
+   */
+  category: DocumentCategory;
 };
 
 /**
@@ -189,6 +220,65 @@ export type ListDocumentsResponse = Message<"stigmer.law.document.v1.ListDocumen
  */
 export const ListDocumentsResponseSchema: GenMessage<ListDocumentsResponse> = /*@__PURE__*/
   messageDesc(file_stigmer_law_document_v1_document, 4);
+
+/**
+ * @generated from enum stigmer.law.document.v1.DocumentCategory
+ */
+export enum DocumentCategory {
+  /**
+   * Treated as OTHER in views; stored as sent (uploads predating the
+   * category, and callers who don't know, both land here honestly).
+   *
+   * @generated from enum value: DOCUMENT_CATEGORY_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: DOCUMENT_CATEGORY_PLEADING = 1;
+   */
+  PLEADING = 1,
+
+  /**
+   * @generated from enum value: DOCUMENT_CATEGORY_APPLICATION = 2;
+   */
+  APPLICATION = 2,
+
+  /**
+   * @generated from enum value: DOCUMENT_CATEGORY_EVIDENCE = 3;
+   */
+  EVIDENCE = 3,
+
+  /**
+   * @generated from enum value: DOCUMENT_CATEGORY_ORDER_JUDGMENT = 4;
+   */
+  ORDER_JUDGMENT = 4,
+
+  /**
+   * @generated from enum value: DOCUMENT_CATEGORY_CORRESPONDENCE = 5;
+   */
+  CORRESPONDENCE = 5,
+
+  /**
+   * @generated from enum value: DOCUMENT_CATEGORY_VAKALATNAMA = 6;
+   */
+  VAKALATNAMA = 6,
+
+  /**
+   * @generated from enum value: DOCUMENT_CATEGORY_JUDGMENT = 7;
+   */
+  JUDGMENT = 7,
+
+  /**
+   * @generated from enum value: DOCUMENT_CATEGORY_OTHER = 8;
+   */
+  OTHER = 8,
+}
+
+/**
+ * Describes the enum stigmer.law.document.v1.DocumentCategory.
+ */
+export const DocumentCategorySchema: GenEnum<DocumentCategory> = /*@__PURE__*/
+  enumDesc(file_stigmer_law_document_v1_document, 0);
 
 /**
  * @generated from service stigmer.law.document.v1.DocumentService

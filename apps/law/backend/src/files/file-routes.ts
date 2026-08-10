@@ -27,6 +27,7 @@ import type {
 import type { CallerResolver } from "@stigmer/identity";
 import {
   type Document,
+  DocumentCategory,
   DocumentSchema,
 } from "../gen/stigmer/law/document/v1/document_pb.js";
 import { create } from "@bufbuild/protobuf";
@@ -128,6 +129,13 @@ async function handleUpload(
     throw new ConnectError("Document: x-file-name header is required", Code.InvalidArgument);
   }
 
+  // The rebuild's Document upgrades ride headers the same way the file
+  // name does: category as the enum's lowercase word ("pleading",
+  // "vakalatnama", …) and an optional hearing link. Both optional —
+  // an uncategorized upload lands honestly in the unspecified bucket.
+  const category = parseCategory(headerValue(req, "x-document-category"));
+  const hearingId = headerValue(req, "x-hearing-id") || undefined;
+
   const body = await readBodyCapped(req);
   if (body.byteLength === 0) {
     throw new ConnectError("Document: the upload body is empty", Code.InvalidArgument);
@@ -150,6 +158,8 @@ async function handleUpload(
           mimeType,
           sizeBytes: BigInt(body.byteLength),
           objectKey,
+          category,
+          hearingId,
         },
       }),
       caller,
@@ -216,6 +226,28 @@ async function handleDownload(
       `filename*=UTF-8''${encodeURIComponent(fileName)}`,
   });
   stored.body.pipe(res);
+}
+
+function headerValue(req: IncomingMessage, name: string): string {
+  const raw = req.headers[name];
+  return (Array.isArray(raw) ? raw[0] : raw) ?? "";
+}
+
+/** "vakalatnama" → the enum; empty → unspecified; anything else is a
+ * client mistake worth naming (a typo'd category silently landing in
+ * OTHER would misfile the record). */
+function parseCategory(word: string): DocumentCategory {
+  if (!word) return DocumentCategory.UNSPECIFIED;
+  const key = word.trim().toUpperCase();
+  const value = (DocumentCategory as Record<string, unknown>)[key];
+  if (typeof value !== "number" || value === DocumentCategory.UNSPECIFIED) {
+    throw new ConnectError(
+      `Document: unknown category '${word}' (use pleading, application, evidence, ` +
+        `order_judgment, correspondence, vakalatnama, judgment, or other)`,
+      Code.InvalidArgument,
+    );
+  }
+  return value as DocumentCategory;
 }
 
 /**

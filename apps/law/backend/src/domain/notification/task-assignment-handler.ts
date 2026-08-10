@@ -12,8 +12,13 @@
 
 import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
-import type { CallerPrincipal, InProcessEventDispatcher } from "@stigmer/resource-api";
+import type {
+  CallerPrincipal,
+  InProcessEventDispatcher,
+  ResourceStore,
+} from "@stigmer/resource-api";
 import { SYSTEM_PRINCIPAL } from "@stigmer/resource-api";
+import type { FirmMember } from "../../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
 import {
   type Notification,
   NotificationSchema,
@@ -23,6 +28,7 @@ import type { Task } from "../../gen/stigmer/law/task/v1/task_pb.js";
 
 export function registerTaskAssignmentHandler(
   dispatcher: InProcessEventDispatcher,
+  store: ResourceStore,
   createNotification: (input: Notification, caller: CallerPrincipal) => Promise<Notification>,
 ): void {
   dispatcher.subscribe("Task", async (event) => {
@@ -34,7 +40,18 @@ export function registerTaskAssignmentHandler(
     // Unchanged assignee (including status-only updates) never notifies;
     // assignment at creation does (previous is undefined there).
     if (previous?.spec?.assigneeId === assigneeId) return;
-    if (event.actor.id === assigneeId) return;
+
+    // The assignee is a FirmMember; the inbox is the login identity —
+    // resolve the profile to its user (the notification proto's
+    // documented exception). No profile or deactivated ⇒ nothing to
+    // deliver to.
+    const assignee = (await store.getById("FirmMember", assigneeId)) as
+      | FirmMember
+      | undefined;
+    const recipientUserId = assignee?.spec?.active === true ? assignee.spec.userId : undefined;
+    if (!recipientUserId) return;
+    // No self-assign notify (scope contract): the actor id is a USER id.
+    if (event.actor.id === recipientUserId) return;
 
     // Dedup owner: the Notification unique constraint — this key is the
     // only sent-state that exists. The task VERSION is part of the key
@@ -47,7 +64,7 @@ export function registerTaskAssignmentHandler(
       await createNotification(
         create(NotificationSchema, {
           spec: {
-            recipientId: assigneeId,
+            recipientId: recipientUserId,
             type: NotificationType.TASK_ASSIGNMENT,
             title: "New task assigned to you",
             body: `You have been assigned: "${task.spec?.title ?? ""}"`,

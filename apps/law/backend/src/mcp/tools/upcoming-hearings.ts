@@ -1,18 +1,22 @@
 /**
- * upcoming_hearings — the firm's court calendar for the next N days,
- * soonest first (the case list's fixed ordering IS this contract). Each
- * line carries the case, the client, and the assigned lawyer's name.
+ * upcoming_hearings — the board for the days ahead (FR-HEAR-004): the
+ * caller's visible scheduled hearings inside a window, date order. For
+ * partners that is the firm's board; for everyone else, their member
+ * cases — the same list the web app's today/tomorrow views read.
  */
 
 import { create } from "@bufbuild/protobuf";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ChannelIdentity } from "@stigmer/identity";
-import { ListUsersRequestSchema } from "@stigmer/identity";
 import { z } from "zod";
-import { ListCasesRequestSchema } from "../../gen/stigmer/law/case/v1/case_pb.js";
-import { countNoun, formatDate } from "../format.js";
+import { addDaysToIsoDate, todayInFirmTimezone } from "../../domain/firm-clock.js";
+import {
+  ListHearingsRequestSchema,
+  type Hearing,
+} from "../../gen/stigmer/law/hearing/v1/hearing_pb.js";
+import { countNoun } from "../format.js";
 import { gated, textResult } from "../gate.js";
-import type { ToolDeps } from "./shared.js";
+import { fileNumbersByCaseId, hearingLine, type ToolDeps } from "./shared.js";
 
 const NAME = "upcoming_hearings";
 
@@ -25,53 +29,62 @@ export function registerUpcomingHearings(
     NAME,
     {
       description:
-        "The firm's hearings for the next N days (default 7), soonest first: " +
-        "date, case number, client, and the assigned lawyer.",
+        "Scheduled hearings in the coming days (default: the next 7), soonest " +
+        "first, with each matter's file number, purpose, and cause-list " +
+        "details where the clerk has recorded them. Partners see the whole " +
+        "firm's board; everyone else sees their own cases.",
       inputSchema: {
-        days_ahead: z
+        within_days: z
           .number()
           .int()
-          .min(1)
+          .min(0)
           .max(90)
           .optional()
-          .describe("How many days ahead to look, counting today. Default 7."),
+          .describe("The window in days from today, inclusive. Default 7; 0 means just today."),
       },
       annotations: { readOnlyHint: true },
     },
     gated(NAME, identity, deps.resolveChannelIdentity, async (args, caller) => {
-      const days = args.days_ahead ?? 7;
-      const [page, people] = await Promise.all([
-        deps.resources.cases.invoke.list(
-          create(ListCasesRequestSchema, { hearingWithinDays: days, pageSize: 20 }),
-          caller.principal,
-        ),
-        // One page of users names every lawyer on the answer — one call,
-        // never one per case.
-        deps.resources.users.invoke.list(
-          create(ListUsersRequestSchema, { pageSize: 100 }),
-          caller.principal,
-        ),
-      ]);
-      const nameById = new Map(people.items.map((u) => [u.metadata?.id, u.spec?.name]));
+      const today = todayInFirmTimezone();
+      const days = args.within_days ?? 7;
+      const page = await deps.resources.hearings.invoke.list(
+        create(ListHearingsRequestSchema, {
+          dateFrom: today,
+          dateTo: addDaysToIsoDate(today, days),
+          pageSize: 50,
+        }),
+        caller.principal,
+      );
 
-      if (page.items.length === 0) {
-        return textResult(`No hearings in the next ${days} days.`);
+      const scheduled = (page.items as Hearing[]).filter(
+        (h) => (h.status?.outcomeKind ?? 0) === 0,
+      );
+      if (scheduled.length === 0) {
+        return textResult(
+          days === 0
+            ? "No hearings on your board today."
+            : `No hearings on your board in the next ${days} days.`,
+        );
       }
-      const lines = page.items.map((c) => {
-        const lawyer = nameById.get(c.spec?.assignedLawyerId) ?? "unassigned";
-        return `${formatDate(c.spec?.nextHearingDate)} — ${c.spec?.caseNumber} (${c.spec?.clientName}), ${lawyer}`;
-      });
+
+      const fileNumber = await fileNumbersByCaseId(
+        deps.store,
+        scheduled.map((h) => h.spec?.caseId ?? ""),
+      );
+      const lines = scheduled.map(
+        (h, i) => `${i + 1}. ${hearingLine(h, fileNumber(h.spec?.caseId))}`,
+      );
       return textResult(
-        `${countNoun(page.totalCount, "hearing")} in the next ${days} days:\n${lines.join("\n")}`,
+        `${countNoun(scheduled.length, "hearing")} in the next ${days} days:\n${lines.join("\n")}`,
         {
-          hearings: page.items.map((c) => ({
-            case_id: c.metadata?.id,
-            case_number: c.spec?.caseNumber,
-            client_name: c.spec?.clientName,
-            hearing_date: c.spec?.nextHearingDate,
-            assigned_lawyer: nameById.get(c.spec?.assignedLawyerId),
+          hearings: scheduled.map((h) => ({
+            id: h.metadata?.id,
+            file_number: fileNumber(h.spec?.caseId),
+            date: h.spec?.date,
+            purpose: h.spec?.purpose,
+            list_serial_number: h.spec?.listSerialNumber,
+            court_hall: h.spec?.courtHall,
           })),
-          total_count: Number(page.totalCount),
         },
       );
     }),

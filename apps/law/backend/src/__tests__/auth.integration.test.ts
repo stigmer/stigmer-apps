@@ -22,6 +22,11 @@ import { createTestAuth, type TestAuth } from "./test-auth.js";
 import { testMigrationSources } from "./test-migrations.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CaseService } from "../gen/stigmer/law/case/v1/case_pb.js";
+import {
+  FirmMemberSchema,
+  FirmMemberService,
+  FirmRole,
+} from "../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
 import { memoryObjectStore } from "./memory-object-store.js";
 import { createBackendServer } from "../server.js";
 import { createResourceStore } from "../storage.js";
@@ -57,16 +62,26 @@ describe("Authentication (T04a / DD-005)", () => {
   let authClient: Client<typeof AuthService>;
   let users: Client<typeof UserService>;
   let cases: Client<typeof CaseService>;
+  let firmMembers: Client<typeof FirmMemberService>;
 
   const PASSWORD = "a sensible passphrase";
 
-  /** Creates a user + password through the real operator path. */
+  /** Creates a user + password + firm profile through the real operator
+   * path — since the rebuild, a User without a FirmMember is refused by
+   * the fail-closed policy on every resource RPC, so a login fixture
+   * must be genuine staff to prove anything about its token. */
   async function provision(email: string, password = PASSWORD): Promise<string> {
     const created = await users.create(
       create(UserSchema, { spec: { email } }),
       auth.asOperator(),
     );
     await users.setPassword({ email, password }, auth.asOperator());
+    await firmMembers.create(
+      create(FirmMemberSchema, {
+        spec: { userId: created.metadata?.id ?? "", role: FirmRole.ASSOCIATE },
+      }),
+      auth.asOperator(),
+    );
     return created.metadata?.id as string;
   }
 
@@ -100,6 +115,7 @@ describe("Authentication (T04a / DD-005)", () => {
     authClient = createClient(AuthService, transport);
     users = createClient(UserService, transport);
     cases = createClient(CaseService, transport);
+    firmMembers = createClient(FirmMemberService, transport);
   }, 120_000);
 
   afterAll(async () => {

@@ -4,23 +4,33 @@
  * upload route (bytes never ride Connect, T03 D6), and download is the
  * streaming HTTP route. Both routes authenticate through the same caller
  * seam and authorize through the same policy module as every RPC.
+ *
+ * Rebuild upgrades (DD-001): `category` (with `vakalatnama` and the
+ * `judgment` knowledge-base hook) and an optional hearing link. List is
+ * now a custom operation: documents are case content, and the one
+ * firm-wide view (the judgment collection, FR-DOC-002) stays subject to
+ * the caller's case visibility via query scoping.
  */
 
 import { create } from "@bufbuild/protobuf";
 import type {
   AuthorizationPolicy,
+  CallerExtractor,
+  PipelineStep,
   ResourceEventPublisher,
   ResourceStore,
+  WriteContext,
 } from "@stigmer/resource-api";
 import {
+  customOperation,
   defineResource,
   getOperation,
-  listOperation,
+  invalidArgument,
   referencesExistStep,
 } from "@stigmer/resource-api";
-import type { CallerExtractor } from "@stigmer/resource-api";
 import {
   type Document,
+  DocumentCategory,
   DocumentSchema,
   DocumentService,
   type GetDocumentRequest,
@@ -28,10 +38,16 @@ import {
   type ListDocumentsResponse,
   ListDocumentsResponseSchema,
 } from "../../gen/stigmer/law/document/v1/document_pb.js";
+import type { PolicyGuards } from "../authz/policy.js";
+
+function categoryText(category: DocumentCategory): string {
+  return `DOCUMENT_CATEGORY_${DocumentCategory[category]}`;
+}
 
 export function documentResource(deps: {
   store: ResourceStore;
   policy: AuthorizationPolicy;
+  guards: PolicyGuards;
   publisher?: ResourceEventPublisher;
   caller: CallerExtractor;
 }) {
@@ -51,28 +67,82 @@ export function documentResource(deps: {
       get: getOperation<Document, GetDocumentRequest>({
         ref: (req) => ({ id: req.id }),
       }),
-      list: listOperation<Document, ListDocumentsRequest, ListDocumentsResponse>({
-        orderBy: { field: "createdAt", direction: "desc", nulls: "last" },
-        query: (req) => ({
-          pageSize: req.pageSize,
-          pageOffset: req.pageOffset,
-          filter: { caseId: req.caseId },
-        }),
-        respond: (items, totalCount) =>
-          create(ListDocumentsResponseSchema, { items, totalCount: BigInt(totalCount) }),
+      list: customOperation<Document, ListDocumentsRequest, ListDocumentsResponse>({
+        async handler(ctx) {
+          await ctx.authorize(); // role gate: office staff refused
+          if (!ctx.caller) {
+            throw invalidArgument("caller required");
+          }
+
+          let scope: Record<string, string | { in: string[] }> = {};
+          if (ctx.input.caseId) {
+            await deps.guards.assertCaseContent(ctx.caller, ctx.input.caseId);
+            scope = { caseId: ctx.input.caseId };
+          } else if (ctx.input.category === DocumentCategory.JUDGMENT) {
+            // The knowledge-base collection (FR-DOC-002): firm-wide for
+            // partners, member cases only for everyone else.
+            const member = await deps.guards.requireMember(ctx.caller);
+            const visible = await deps.guards.visibleCaseIds(member);
+            if (visible !== undefined) {
+              scope = { caseId: { in: [...visible] } };
+            }
+          } else {
+            throw invalidArgument(
+              "Documents are listed per case (case_id), or firm-wide for the " +
+                "judgment collection (category JUDGMENT)",
+            );
+          }
+
+          const { items, totalCount } = await deps.store.list("Document", {
+            limit: ctx.input.pageSize > 0 ? Math.min(ctx.input.pageSize, 100) : 20,
+            offset: ctx.input.pageOffset > 0 ? ctx.input.pageOffset : 0,
+            orderBy: { field: "createdAt", direction: "desc", nulls: "last" },
+            filter: {
+              ...scope,
+              ...(ctx.input.category !== DocumentCategory.UNSPECIFIED
+                ? { category: categoryText(ctx.input.category) }
+                : {}),
+            },
+          });
+          return create(ListDocumentsResponseSchema, {
+            items: items as Document[],
+            totalCount: BigInt(totalCount),
+          });
+        },
       }),
     },
     systemOperations: {
       // Reached only through invoke, from the upload route — which has
       // already put the bytes in the bucket, so a persisted row always
-      // has its object (T03 D6 failure polarity).
+      // has its object (T03 D6 failure polarity). The route passes the
+      // REAL caller, so the policy's create rule AND the membership
+      // guard below apply to the person, never to "system".
       create: {
         beforePersist: [
+          membershipOnWrite(deps),
           referencesExistStep<Document>(deps.store, [
             { kind: "Case", label: "case", get: (d) => d.spec?.caseId || undefined },
+            { kind: "Hearing", label: "hearing", get: (d) => d.spec?.hearingId || undefined },
           ]),
         ],
       },
     },
   });
+}
+
+/** Documents are case content: the uploader must be a member of the
+ * case (or a partner) — the create-input check the authorize slot
+ * cannot make (policy.ts, rule shapes). */
+function membershipOnWrite(deps: {
+  guards: PolicyGuards;
+}): PipelineStep<WriteContext<Document>> {
+  return {
+    name: "assert-case-membership",
+    async execute(ctx) {
+      const caseId = (ctx.newState as Document).spec?.caseId;
+      if (ctx.caller && ctx.caller.kind === "user" && caseId) {
+        await deps.guards.assertCaseContent(ctx.caller, caseId);
+      }
+    },
+  };
 }

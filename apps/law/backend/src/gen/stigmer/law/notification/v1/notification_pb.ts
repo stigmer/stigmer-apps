@@ -27,7 +27,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file stigmer/law/notification/v1/notification.proto.
  */
 export const file_stigmer_law_notification_v1_notification: GenFile = /*@__PURE__*/
-  fileDesc("Ci5zdGlnbWVyL2xhdy9ub3RpZmljYXRpb24vdjEvbm90aWZpY2F0aW9uLnByb3RvEhtzdGlnbWVyLmxhdy5ub3RpZmljYXRpb24udjEi8wEKDE5vdGlmaWNhdGlvbhITCgthcGlfdmVyc2lvbhgBIAEoCRIMCgRraW5kGAIgASgJEjoKCG1ldGFkYXRhGAMgASgLMiguc3RpZ21lci5yZXNvdXJjZWFwaS52MS5SZXNvdXJjZU1ldGFkYXRhEkMKBHNwZWMYBCABKAsyLS5zdGlnbWVyLmxhdy5ub3RpZmljYXRpb24udjEuTm90aWZpY2F0aW9uU3BlY0IGukgDyAEBEj8KBnN0YXR1cxgFIAEoCzIvLnN0aWdtZXIubGF3Lm5vdGlmaWNhdGlvbi52MS5Ob3RpZmljYXRpb25TdGF0dXMi/QEKEE5vdGlmaWNhdGlvblNwZWMSHQoMcmVjaXBpZW50X2lkGAEgASgJQge6SARyAhABEkcKBHR5cGUYAiABKA4yLS5zdGlnbWVyLmxhdy5ub3RpZmljYXRpb24udjEuTm90aWZpY2F0aW9uVHlwZUIKukgHggEEEAEgABIWCgV0aXRsZRgDIAEoCUIHukgEcgIQARIMCgRib2R5GAQgASgJEj8KBnRhcmdldBgFIAEoCzIvLnN0aWdtZXIubGF3Lm5vdGlmaWNhdGlvbi52MS5Ob3RpZmljYXRpb25UYXJnZXQSGgoJZGVkdXBfa2V5GAYgASgJQge6SARyAhABIi4KEk5vdGlmaWNhdGlvblRhcmdldBIMCgRraW5kGAEgASgJEgoKAmlkGAIgASgJIjAKEk5vdGlmaWNhdGlvblN0YXR1cxIRCgRyZWFkGAEgASgISACIAQFCBwoFX3JlYWQiawoYTGlzdE5vdGlmaWNhdGlvbnNSZXF1ZXN0EhwKCXBhZ2Vfc2l6ZRgBIAEoBUIJukgGGgQYZCgAEhwKC3BhZ2Vfb2Zmc2V0GAIgASgFQge6SAQaAigAEhMKC3VucmVhZF9vbmx5GAMgASgIImoKGUxpc3ROb3RpZmljYXRpb25zUmVzcG9uc2USOAoFaXRlbXMYASADKAsyKS5zdGlnbWVyLmxhdy5ub3RpZmljYXRpb24udjEuTm90aWZpY2F0aW9uEhMKC3RvdGFsX2NvdW50GAIgASgDIjIKG01hcmtOb3RpZmljYXRpb25SZWFkUmVxdWVzdBITCgJpZBgBIAEoCUIHukgEcgIQASIhCh9NYXJrQWxsTm90aWZpY2F0aW9uc1JlYWRSZXF1ZXN0IjgKIE1hcmtBbGxOb3RpZmljYXRpb25zUmVhZFJlc3BvbnNlEhQKDG1hcmtlZF9jb3VudBgBIAEoBSqEAQoQTm90aWZpY2F0aW9uVHlwZRIhCh1OT1RJRklDQVRJT05fVFlQRV9VTlNQRUNJRklFRBAAEiYKIk5PVElGSUNBVElPTl9UWVBFX0hFQVJJTkdfUkVNSU5ERVIQARIlCiFOT1RJRklDQVRJT05fVFlQRV9UQVNLX0FTU0lHTk1FTlQQAjKKAwoTTm90aWZpY2F0aW9uU2VydmljZRJ1CgRMaXN0EjUuc3RpZ21lci5sYXcubm90aWZpY2F0aW9uLnYxLkxpc3ROb3RpZmljYXRpb25zUmVxdWVzdBo2LnN0aWdtZXIubGF3Lm5vdGlmaWNhdGlvbi52MS5MaXN0Tm90aWZpY2F0aW9uc1Jlc3BvbnNlEm8KCE1hcmtSZWFkEjguc3RpZ21lci5sYXcubm90aWZpY2F0aW9uLnYxLk1hcmtOb3RpZmljYXRpb25SZWFkUmVxdWVzdBopLnN0aWdtZXIubGF3Lm5vdGlmaWNhdGlvbi52MS5Ob3RpZmljYXRpb24SigEKC01hcmtBbGxSZWFkEjwuc3RpZ21lci5sYXcubm90aWZpY2F0aW9uLnYxLk1hcmtBbGxOb3RpZmljYXRpb25zUmVhZFJlcXVlc3QaPS5zdGlnbWVyLmxhdy5ub3RpZmljYXRpb24udjEuTWFya0FsbE5vdGlmaWNhdGlvbnNSZWFkUmVzcG9uc2ViBnByb3RvMw", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
+  fileDesc("Ci5zdGlnbWVyL2xhdy9ub3RpZmljYXRpb24vdjEvbm90aWZpY2F0aW9uLnByb3RvEhtzdGlnbWVyLmxhdy5ub3RpZmljYXRpb24udjEi8wEKDE5vdGlmaWNhdGlvbhITCgthcGlfdmVyc2lvbhgBIAEoCRIMCgRraW5kGAIgASgJEjoKCG1ldGFkYXRhGAMgASgLMiguc3RpZ21lci5yZXNvdXJjZWFwaS52MS5SZXNvdXJjZU1ldGFkYXRhEkMKBHNwZWMYBCABKAsyLS5zdGlnbWVyLmxhdy5ub3RpZmljYXRpb24udjEuTm90aWZpY2F0aW9uU3BlY0IGukgDyAEBEj8KBnN0YXR1cxgFIAEoCzIvLnN0aWdtZXIubGF3Lm5vdGlmaWNhdGlvbi52MS5Ob3RpZmljYXRpb25TdGF0dXMi/QEKEE5vdGlmaWNhdGlvblNwZWMSHQoMcmVjaXBpZW50X2lkGAEgASgJQge6SARyAhABEkcKBHR5cGUYAiABKA4yLS5zdGlnbWVyLmxhdy5ub3RpZmljYXRpb24udjEuTm90aWZpY2F0aW9uVHlwZUIKukgHggEEEAEgABIWCgV0aXRsZRgDIAEoCUIHukgEcgIQARIMCgRib2R5GAQgASgJEj8KBnRhcmdldBgFIAEoCzIvLnN0aWdtZXIubGF3Lm5vdGlmaWNhdGlvbi52MS5Ob3RpZmljYXRpb25UYXJnZXQSGgoJZGVkdXBfa2V5GAYgASgJQge6SARyAhABIi4KEk5vdGlmaWNhdGlvblRhcmdldBIMCgRraW5kGAEgASgJEgoKAmlkGAIgASgJIjAKEk5vdGlmaWNhdGlvblN0YXR1cxIRCgRyZWFkGAEgASgISACIAQFCBwoFX3JlYWQiawoYTGlzdE5vdGlmaWNhdGlvbnNSZXF1ZXN0EhwKCXBhZ2Vfc2l6ZRgBIAEoBUIJukgGGgQYZCgAEhwKC3BhZ2Vfb2Zmc2V0GAIgASgFQge6SAQaAigAEhMKC3VucmVhZF9vbmx5GAMgASgIImoKGUxpc3ROb3RpZmljYXRpb25zUmVzcG9uc2USOAoFaXRlbXMYASADKAsyKS5zdGlnbWVyLmxhdy5ub3RpZmljYXRpb24udjEuTm90aWZpY2F0aW9uEhMKC3RvdGFsX2NvdW50GAIgASgDIjIKG01hcmtOb3RpZmljYXRpb25SZWFkUmVxdWVzdBITCgJpZBgBIAEoCUIHukgEcgIQASIhCh9NYXJrQWxsTm90aWZpY2F0aW9uc1JlYWRSZXF1ZXN0IjgKIE1hcmtBbGxOb3RpZmljYXRpb25zUmVhZFJlc3BvbnNlEhQKDG1hcmtlZF9jb3VudBgBIAEoBSraAQoQTm90aWZpY2F0aW9uVHlwZRIhCh1OT1RJRklDQVRJT05fVFlQRV9VTlNQRUNJRklFRBAAEiYKIk5PVElGSUNBVElPTl9UWVBFX0hFQVJJTkdfUkVNSU5ERVIQARIlCiFOT1RJRklDQVRJT05fVFlQRV9UQVNLX0FTU0lHTk1FTlQQAhIqCiZOT1RJRklDQVRJT05fVFlQRV9ERUFETElORV9BUFBST0FDSElORxADEigKJE5PVElGSUNBVElPTl9UWVBFX1VOUkVDT1JERURfT1VUQ09NRRAEMooDChNOb3RpZmljYXRpb25TZXJ2aWNlEnUKBExpc3QSNS5zdGlnbWVyLmxhdy5ub3RpZmljYXRpb24udjEuTGlzdE5vdGlmaWNhdGlvbnNSZXF1ZXN0GjYuc3RpZ21lci5sYXcubm90aWZpY2F0aW9uLnYxLkxpc3ROb3RpZmljYXRpb25zUmVzcG9uc2USbwoITWFya1JlYWQSOC5zdGlnbWVyLmxhdy5ub3RpZmljYXRpb24udjEuTWFya05vdGlmaWNhdGlvblJlYWRSZXF1ZXN0Gikuc3RpZ21lci5sYXcubm90aWZpY2F0aW9uLnYxLk5vdGlmaWNhdGlvbhKKAQoLTWFya0FsbFJlYWQSPC5zdGlnbWVyLmxhdy5ub3RpZmljYXRpb24udjEuTWFya0FsbE5vdGlmaWNhdGlvbnNSZWFkUmVxdWVzdBo9LnN0aWdtZXIubGF3Lm5vdGlmaWNhdGlvbi52MS5NYXJrQWxsTm90aWZpY2F0aW9uc1JlYWRSZXNwb25zZWIGcHJvdG8z", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
 
 /**
  * @generated from message stigmer.law.notification.v1.Notification
@@ -73,6 +73,12 @@ export const NotificationSchema: GenMessage<Notification> = /*@__PURE__*/
  */
 export type NotificationSpec = Message<"stigmer.law.notification.v1.NotificationSpec"> & {
   /**
+   * The USER this notification is for — the one deliberate exception to
+   * "person references are FirmMember ids": an inbox belongs to the
+   * login identity (like User itself), which lets recipient scoping and
+   * the recipient-only markRead compare against the caller directly.
+   * Producers that know a FirmMember resolve its user_id when writing.
+   *
    * @generated from field: string recipient_id = 1;
    */
   recipientId: string;
@@ -104,9 +110,12 @@ export type NotificationSpec = Message<"stigmer.law.notification.v1.Notification
    * The dedup owner (natural key, unique): composed by the producer so an
    * identical event can never notify twice, while a legitimately new
    * event (rescheduled hearing, re-assignment) composes a new key.
-   * HEARING_REMINDER: (type, recipient, case, hearing_date);
-   * TASK_ASSIGNMENT: (type, task, assignee, task version) — see the
-   * producer for the exact format.
+   * TASK_ASSIGNMENT: (task, assignee, task version);
+   * HEARING_REMINDER: (hearing, recipient, date);
+   * DEADLINE_APPROACHING: (deadline, recipient, window);
+   * UNRECORDED_OUTCOME: (hearing, recipient) — see each producer for
+   * the exact format. The unique constraint is also what makes the
+   * reminder sweep idempotent and multi-replica safe.
    *
    * @generated from field: string dedup_key = 6;
    */
@@ -125,7 +134,8 @@ export const NotificationSpecSchema: GenMessage<NotificationSpec> = /*@__PURE__*
  */
 export type NotificationTarget = Message<"stigmer.law.notification.v1.NotificationTarget"> & {
   /**
-   * Resource kind of the target: "Case" or "Task".
+   * Resource kind of the target: "Case", "Task", "Hearing", or
+   * "Deadline".
    *
    * @generated from field: string kind = 1;
    */
@@ -283,6 +293,9 @@ export enum NotificationType {
   UNSPECIFIED = 0,
 
   /**
+   * Tomorrow's (and today's) scheduled hearings — in-app; the WhatsApp
+   * push stays deferred on Meta's UTILITY template.
+   *
    * @generated from enum value: NOTIFICATION_TYPE_HEARING_REMINDER = 1;
    */
   HEARING_REMINDER = 1,
@@ -291,6 +304,23 @@ export enum NotificationType {
    * @generated from enum value: NOTIFICATION_TYPE_TASK_ASSIGNMENT = 2;
    */
   TASK_ASSIGNMENT = 2,
+
+  /**
+   * The T-7/T-3/T-1/day-of escalation ladder (FR-DEAD-002); one
+   * notification per (deadline, window), owned by the dedup key.
+   *
+   * @generated from enum value: NOTIFICATION_TYPE_DEADLINE_APPROACHING = 3;
+   */
+  DEADLINE_APPROACHING = 3,
+
+  /**
+   * A hearing's date passed with no outcome recorded (FR-HEAR-005) —
+   * fired once; the home surface keeps nagging until a human records
+   * what happened.
+   *
+   * @generated from enum value: NOTIFICATION_TYPE_UNRECORDED_OUTCOME = 4;
+   */
+  UNRECORDED_OUTCOME = 4,
 }
 
 /**

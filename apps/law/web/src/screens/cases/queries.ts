@@ -1,10 +1,11 @@
 /**
- * Case, note, and document data access (T04b D3). Ordering and derived
- * facts are server contracts: cases soonest-hearing-first dateless-last
- * (FR-CASE-002), notes newest-first (FR-CASE-006), documents newest-first
- * with the derived document_count on the case (FR-CASE-005 AC8). Notes
- * and documents key under ["cases", …, caseId], so a case's whole detail
- * view invalidates with one prefix.
+ * Case data access: the summary list with its named predicates, the
+ * membership-gated full read, the two write paths (full-spec update;
+ * lifecycle ONLY through UpdateStatus), and the case-scoped sections —
+ * notes, documents, members, and the partner-only change history.
+ * Ordering and derived facts are server contracts. Everything under a
+ * case keys with the ["cases"] prefix, so a case's whole detail view
+ * invalidates together.
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,16 +14,54 @@ import { useApiClients } from "../../api/clients.js";
 import { PAGE_SIZE } from "../../lib/contract.js";
 import {
   type Case,
+  type CaseLifecycle,
   CaseSchema,
   type CaseSpec,
   CaseSpecSchema,
 } from "../../gen/stigmer/law/case/v1/case_pb.js";
+import { RoleOnCase } from "../../gen/stigmer/law/casemember/v1/casemember_pb.js";
 
-export function useCaseList(page: number) {
+/** The list's named predicates — each a server-side query, never a client filter. */
+export interface CaseListPredicates {
+  /** Hearings within [today, today+N]; mutually exclusive with noNextDate. */
+  readonly hearingWithinDays?: number;
+  readonly noNextDate?: boolean;
+  readonly mine?: boolean;
+  readonly clientId?: string;
+  /** UNSPECIFIED/absent = the working default (active only). */
+  readonly lifecycle?: CaseLifecycle;
+}
+
+export function useCaseList(predicates: CaseListPredicates, page: number) {
   const { cases } = useApiClients();
   return useQuery({
-    queryKey: ["cases", "list", page],
-    queryFn: () => cases.list({ pageSize: PAGE_SIZE, pageOffset: page * PAGE_SIZE }),
+    queryKey: ["cases", "list", predicates, page],
+    queryFn: () =>
+      cases.list({
+        pageSize: PAGE_SIZE,
+        pageOffset: page * PAGE_SIZE,
+        hearingWithinDays: predicates.hearingWithinDays ?? 0,
+        noNextDate: predicates.noNextDate ?? false,
+        mine: predicates.mine ?? false,
+        clientId: predicates.clientId ?? "",
+        lifecycle: predicates.lifecycle ?? 0,
+      }),
+  });
+}
+
+/**
+ * One summary page fetched for joining file numbers onto case-scoped
+ * rows (home's hearings and deadlines) — one List, mapped by id, never
+ * per-row Gets.
+ */
+export function useCaseSummaryMap() {
+  const { cases } = useApiClients();
+  return useQuery({
+    queryKey: ["cases", "summaryMap"],
+    queryFn: async () => {
+      const page = await cases.list({ pageSize: 100 });
+      return new Map(page.items.map((summary) => [summary.id, summary]));
+    },
   });
 }
 
@@ -54,6 +93,19 @@ export function useUpdateCase() {
   });
 }
 
+/** Lifecycle's ONLY write path — spec updates cannot smuggle it (DD-A6). */
+export function useUpdateCaseLifecycle() {
+  const { cases } = useApiClients();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { readonly id: string; readonly lifecycle: CaseLifecycle }) =>
+      cases.updateStatus({ id: input.id, lifecycle: input.lifecycle }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cases"] }),
+  });
+}
+
+/* ------------------------------- notes ------------------------------- */
+
 export function useCaseNotes(caseId: string, page: number) {
   const { caseNotes } = useApiClients();
   return useQuery({
@@ -71,6 +123,8 @@ export function useAddCaseNote(caseId: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cases", "notes", caseId] }),
   });
 }
+
+/* ----------------------------- documents ----------------------------- */
 
 export function useCaseDocuments(caseId: string, page: number) {
   const { documents } = useApiClients();
@@ -97,4 +151,47 @@ export function useUploadDocuments(caseId: string) {
   });
 }
 
-export { CaseSpecSchema };
+/* ------------------------------ members ------------------------------ */
+
+export function useCaseMembers(caseId: string) {
+  const { caseMembers } = useApiClients();
+  return useQuery({
+    queryKey: ["cases", "members", caseId],
+    queryFn: () => caseMembers.list({ caseId }),
+  });
+}
+
+export function useAddCaseMember(caseId: string) {
+  const { caseMembers } = useApiClients();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { readonly memberId: string; readonly roleOnCase: RoleOnCase }) =>
+      caseMembers.create({
+        spec: { caseId, memberId: input.memberId, roleOnCase: input.roleOnCase },
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cases", "members", caseId] }),
+  });
+}
+
+export function useRemoveCaseMember(caseId: string) {
+  const { caseMembers } = useApiClients();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => caseMembers.remove({ id }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cases", "members", caseId] }),
+  });
+}
+
+/* --------------------------- change history --------------------------- */
+
+/** Partner-only by policy; the screen only mounts it for partners. */
+export function useCaseHistory(caseId: string, page: number) {
+  const { auditEntries } = useApiClients();
+  return useQuery({
+    queryKey: ["cases", "history", caseId, page],
+    queryFn: () =>
+      auditEntries.list({ caseId, pageSize: PAGE_SIZE, pageOffset: page * PAGE_SIZE }),
+  });
+}
+
+export { CaseSpecSchema, RoleOnCase };

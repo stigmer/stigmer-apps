@@ -17,7 +17,7 @@ async function signIn(page: Page) {
   await page.getByLabel("Email").fill(ASHA.email);
   await page.getByLabel("Password").fill(ASHA.password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: /Welcome,/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
 }
 
 test("performance envelope: 2s list loads, 3s mutations (FR-PERF-001)", async ({ page }) => {
@@ -32,7 +32,8 @@ test("performance envelope: 2s list loads, 3s mutations (FR-PERF-001)", async ({
 
   // Mutation: a case note round-trips within 3s.
   await page.goto("/cases");
-  await page.getByRole("link", { name: new RegExp(SEED_CASE.caseNumber.replace("/", "\\/")) }).click();
+  await page.getByRole("link", { name: new RegExp(SEED_CASE.fileNumber.replaceAll("/", "\\/")) }).click();
+  await page.getByRole("button", { name: "Notes" }).click();
   await page.getByLabel("Add a note").fill(`Perf envelope check ${Date.now()}`);
   await page.getByRole("button", { name: "Add note" }).click();
   await expect(page.getByText(/Perf envelope check/).first()).toBeVisible({ timeout: 3_000 });
@@ -59,9 +60,18 @@ test("accessibility: no serious or critical axe violations on any screen", async
   await page.goto("/cases");
   await scan("cases");
 
-  await page.getByRole("link", { name: new RegExp(SEED_CASE.caseNumber.replace("/", "\\/")) }).click();
-  await expect(page.getByRole("heading", { name: /—/ })).toBeVisible();
+  await page.getByRole("link", { name: new RegExp(SEED_CASE.fileNumber.replaceAll("/", "\\/")) }).click();
+  await expect(page.getByRole("heading", { name: SEED_CASE.fileNumber })).toBeVisible();
   await scan("case detail");
+
+  await page.goto("/clients");
+  await scan("clients");
+
+  await page.goto("/money");
+  await scan("money");
+
+  await page.goto("/members");
+  await scan("the firm");
 
   await page.goto("/tasks/new");
   await scan("task create");

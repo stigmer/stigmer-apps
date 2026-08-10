@@ -11,7 +11,12 @@ import { NotFoundScreen } from "./screens/NotFoundScreen.js";
 import { CaseCreateScreen } from "./screens/cases/CaseCreateScreen.js";
 import { CaseDetailScreen } from "./screens/cases/CaseDetailScreen.js";
 import { CaseListScreen } from "./screens/cases/CaseListScreen.js";
+import { ClientCreateScreen } from "./screens/clients/ClientCreateScreen.js";
+import { ClientDetailScreen } from "./screens/clients/ClientDetailScreen.js";
+import { ClientListScreen } from "./screens/clients/ClientListScreen.js";
 import { InboxScreen } from "./screens/inbox/InboxScreen.js";
+import { RosterScreen } from "./screens/members/RosterScreen.js";
+import { MoneyScreen } from "./screens/money/MoneyScreen.js";
 import { ProfileScreen } from "./screens/profile/ProfileScreen.js";
 import { TaskCreateScreen } from "./screens/tasks/TaskCreateScreen.js";
 import { TaskDetailScreen } from "./screens/tasks/TaskDetailScreen.js";
@@ -56,6 +61,11 @@ export function createAppRouter() {
             { path: "/cases", element: <CaseListScreen /> },
             { path: "/cases/new", element: <CaseCreateScreen /> },
             { path: "/cases/:id", element: <CaseDetailScreen /> },
+            { path: "/clients", element: <ClientListScreen /> },
+            { path: "/clients/new", element: <ClientCreateScreen /> },
+            { path: "/clients/:id", element: <ClientDetailScreen /> },
+            { path: "/money", element: <MoneyScreen /> },
+            { path: "/members", element: <RosterScreen /> },
             { path: "/inbox", element: <InboxScreen /> },
             { path: "/profile", element: <ProfileScreen /> },
             { path: "*", element: <NotFoundScreen /> },

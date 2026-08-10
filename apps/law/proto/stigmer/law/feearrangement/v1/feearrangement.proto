@@ -1,0 +1,84 @@
+// The FeeArrangement resource — what the firm agreed to charge for a
+// matter. Half of the money aggregate (with LedgerEntry); money answers
+// exactly one question well: agreed, received, outstanding (DD-001).
+//
+// ITS OWN RESOURCE BY DESIGN (session-4 correction): money is
+// partner-only (FR-AUTHZ-004) while the case is member-visible, so an
+// arrangement on CaseSpec would force field-level redaction inside an
+// allowed read. A separate partner-gated aggregate makes the boundary
+// an allow/deny, which is the only kind of boundary this codebase's
+// pipeline has — authorization by boundary, not by projection.
+//
+// One arrangement per case: case_id is the natural key, so a second
+// arrangement answers ALREADY_EXISTS by construction.
+//
+// BCI Rule 20 prohibits contingency fees; lump-sum / per-appearance /
+// retainer are district practice's real structures. Staged/milestone
+// arrangements are DEFERRED with a trigger (a practitioner says the
+// words) — an additive enum value then, not speculation now.
+syntax = "proto3";
+
+// Package convention: `stigmer.<domain>.<resource>.v1` pairs with
+// apiVersion `<domain>.stigmer.ai/v1`; the domain is "law" (DD-A2).
+package stigmer.law.feearrangement.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message FeeArrangement {
+  string api_version = 1;
+  string kind = 2;
+  // System-managed; the pipeline overwrites whatever a client sends.
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  FeeArrangementSpec spec = 4 [(buf.validate.field).required = true];
+}
+
+message FeeArrangementSpec {
+  // The case this arrangement is for — the natural key (one per case).
+  string case_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  FeeKind fee_kind = 2 [(buf.validate.field).enum = {
+    defined_only: true,
+    not_in: [0]
+  }];
+
+  // Amounts are INTEGER PAISE (1 rupee = 100 paise) — exact arithmetic,
+  // never floats; the ledger and the balance derivation share the unit.
+  // Which field is meaningful follows fee_kind; the others stay unset.
+
+  // NOT_SET carries no amount — the arrangement is recorded as "not yet
+  // agreed", which is itself information the partner glance shows.
+  optional int64 lump_sum_paise = 3 [(buf.validate.field).int64.gt = 0];
+  optional int64 per_appearance_paise = 4 [(buf.validate.field).int64.gt = 0];
+  optional int64 monthly_retainer_paise = 5 [(buf.validate.field).int64.gt = 0];
+
+  // Anything the enum cannot say ("first hearing free", "expenses
+  // billed at actuals") — a note, not a rules engine.
+  string terms_note = 6 [(buf.validate.field).string.max_len = 1000];
+}
+
+enum FeeKind {
+  FEE_KIND_UNSPECIFIED = 0;
+  FEE_KIND_LUMP_SUM = 1;
+  FEE_KIND_PER_APPEARANCE = 2;
+  FEE_KIND_RETAINER = 3;
+  // Recorded, visible, and deliberately nagging: a matter with no agreed
+  // fee is a business fact the partner glance surfaces.
+  FEE_KIND_NOT_SET = 4;
+}
+
+message GetFeeArrangementRequest {
+  // By case — the only way anyone asks ("what did we agree on CS 142?").
+  string case_id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+service FeeArrangementService {
+  // Record the arrangement for a case. Partners only (FR-MONEY-001); a
+  // second arrangement for the same case answers ALREADY_EXISTS.
+  rpc Create(FeeArrangement) returns (FeeArrangement);
+  // Update the arrangement. Partners only.
+  rpc Update(FeeArrangement) returns (FeeArrangement);
+  // Get a case's arrangement. Partners only — NOT_FOUND when none is
+  // recorded yet.
+  rpc Get(GetFeeArrangementRequest) returns (FeeArrangement);
+}

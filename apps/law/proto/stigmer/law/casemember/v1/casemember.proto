@@ -1,0 +1,91 @@
+// The CaseMember resource — the membership FACT the authorization matrix
+// consults (DD-001): who works this matter, in what capacity. Small by
+// design; the policy module reads it on every case-content decision.
+//
+// A membership is a PERIOD: Remove closes it (status.active=false; no
+// row delete — a legal record keeps attribution) and re-adding someone
+// opens a NEW row. The composed key `{case_id}:{member_id}` is unique
+// among ACTIVE periods only (a conditional generated column), so a
+// duplicate live membership is impossible by construction while the
+// history accumulates freely. The policy consults active periods only.
+syntax = "proto3";
+
+// Package convention: `stigmer.<domain>.<resource>.v1` pairs with
+// apiVersion `<domain>.stigmer.ai/v1`; the domain is "law" (DD-A2).
+package stigmer.law.casemember.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message CaseMember {
+  string api_version = 1;
+  string kind = 2;
+  // System-managed; the pipeline overwrites whatever a client sends.
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  CaseMemberSpec spec = 4 [(buf.validate.field).required = true];
+  CaseMemberStatus status = 5;
+}
+
+message CaseMemberSpec {
+  string case_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // The FirmMember working the case. The lead lawyer lives on the Case
+  // itself; members are additive (DD-001).
+  string member_id = 2 [(buf.validate.field).string.min_len = 1];
+
+  RoleOnCase role_on_case = 3 [(buf.validate.field).enum = {
+    defined_only: true,
+    not_in: [0]
+  }];
+}
+
+enum RoleOnCase {
+  ROLE_ON_CASE_UNSPECIFIED = 0;
+  ROLE_ON_CASE_LAWYER = 1;
+  ROLE_ON_CASE_CLERK = 2;
+}
+
+message CaseMemberStatus {
+  // True from creation; false after Remove. Explicit presence
+  // (`optional`) is deliberate: the storage layer filters active rows by
+  // the JSON text 'true'/'false', so false must be a value, not an
+  // omission (the Notification.read precedent).
+  optional bool active = 1;
+}
+
+message RemoveCaseMemberRequest {
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message ListCaseMembersRequest {
+  // The case whose member set is asked for. Required: the member list IS
+  // case content (FR-AUTHZ-002), so the read authorizes against this
+  // case — there is deliberately no firm-wide membership list.
+  string case_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // Include removed memberships (the historical record). Default: active
+  // only — the working view.
+  bool include_removed = 2;
+}
+
+message ListCaseMembersResponse {
+  // Ordered by creation, oldest first — the order people joined the
+  // matter.
+  repeated CaseMember items = 1;
+  int64 total_count = 2;
+}
+
+service CaseMemberService {
+  // Add a member to a case (a new membership period). Partners and the
+  // case's lead lawyer manage the member set (FR-CASE-003); the case
+  // and member must exist. An already-active membership answers
+  // ALREADY_EXISTS.
+  rpc Create(CaseMember) returns (CaseMember);
+  // Remove a member: closes the period (active=false), keeps the row.
+  // The member's historical attributions (notes, outcomes) are
+  // untouched. The current lead lawyer cannot be removed — change the
+  // lead first.
+  rpc Remove(RemoveCaseMemberRequest) returns (CaseMember);
+  // List a case's members. Case content: members and partners only.
+  rpc List(ListCaseMembersRequest) returns (ListCaseMembersResponse);
+}

@@ -7,10 +7,17 @@
 // migration sources beside the bundle (DD-005 D8's packaging rule);
 // main.ts detects `dist/migrations/app` and uses this layout.
 import { existsSync } from "node:fs";
-import { cp } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { build } from "esbuild";
+
+// dist is REBUILT, never accreted: a stale workspace must not ship
+// ghost files — a retired migration lingering in dist/migrations would
+// apply schema the source tree no longer contains (caught live when the
+// rebuild renumbered the baseline and the old 0001_cases.sql survived a
+// dirty dist).
+await rm("dist", { recursive: true, force: true });
 
 const require = createRequire(import.meta.url);
 const identityMigrations = path.join(

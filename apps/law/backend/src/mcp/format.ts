@@ -6,6 +6,7 @@
  * written as things a person would say, not as records.
  */
 
+import { OutcomeKind } from "../gen/stigmer/law/hearing/v1/hearing_pb.js";
 import { TaskState } from "../gen/stigmer/law/task/v1/task_pb.js";
 
 /** "2026-08-14" → "14/08/2026". Unset → the honest phrase, not a dash. */
@@ -33,4 +34,36 @@ export function countNoun(count: number | bigint, singular: string, plural?: str
   const n = typeof count === "bigint" ? Number(count) : count;
   const noun = n === 1 ? singular : (plural ?? `${singular}s`);
   return `${n === 0 ? "no" : n} ${noun}`;
+}
+
+/** The outcome vocabulary as a lawyer says it, not as the enum spells it. */
+export function formatOutcome(kind: OutcomeKind): string {
+  switch (kind) {
+    case OutcomeKind.ADJOURNED:
+      return "adjourned";
+    case OutcomeKind.HEARD:
+      return "heard";
+    case OutcomeKind.ORDERS_RESERVED:
+      return "orders reserved";
+    case OutcomeKind.ORDER_PRONOUNCED:
+      return "order pronounced";
+    case OutcomeKind.NOT_LISTED:
+      return "not listed";
+    case OutcomeKind.NOT_REACHED:
+      return "not reached";
+    case OutcomeKind.OTHER:
+      return "other";
+    default:
+      return "scheduled";
+  }
+}
+
+/** Integer paise → "₹1,23,456.50" (Indian digit grouping). */
+export function formatPaise(paise: bigint): string {
+  const rupees = Number(paise) / 100;
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: rupees % 1 === 0 ? 0 : 2,
+  }).format(rupees);
 }

@@ -56,6 +56,33 @@ message DocumentSpec {
   // inconsistency is an invisible unreferenced object, never a download
   // that 404s. Never exposed to clients as a bucket URL.
   string object_key = 5 [(buf.validate.field).string.min_len = 1];
+
+  // What kind of paper this is (DD-001, adopted 2026-08-10).
+  // VAKALATNAMA is its own category by session-4 correction — the
+  // authority to appear is filed in every litigation matter and must
+  // not land in OTHER. JUDGMENT is the deliberate hook for the deferred
+  // knowledge base (FR-DOC-002): the collection accumulates from day
+  // one, taggable and listable, before the KB feature exists.
+  DocumentCategory category = 6 [(buf.validate.field).enum.defined_only = true];
+
+  // The hearing this document belongs to, when it belongs to one — an
+  // order to the hearing it was pronounced at, a filing to the listing
+  // it served. Optional; existence checked when set.
+  optional string hearing_id = 7;
+}
+
+enum DocumentCategory {
+  // Treated as OTHER in views; stored as sent (uploads predating the
+  // category, and callers who don't know, both land here honestly).
+  DOCUMENT_CATEGORY_UNSPECIFIED = 0;
+  DOCUMENT_CATEGORY_PLEADING = 1;
+  DOCUMENT_CATEGORY_APPLICATION = 2;
+  DOCUMENT_CATEGORY_EVIDENCE = 3;
+  DOCUMENT_CATEGORY_ORDER_JUDGMENT = 4;
+  DOCUMENT_CATEGORY_CORRESPONDENCE = 5;
+  DOCUMENT_CATEGORY_VAKALATNAMA = 6;
+  DOCUMENT_CATEGORY_JUDGMENT = 7;
+  DOCUMENT_CATEGORY_OTHER = 8;
 }
 
 message GetDocumentRequest {
@@ -63,8 +90,11 @@ message GetDocumentRequest {
 }
 
 message ListDocumentsRequest {
-  // Documents are always read in the context of a case.
-  string case_id = 1 [(buf.validate.field).string.min_len = 1];
+  // The case whose documents are asked for. Required unless category is
+  // JUDGMENT — the one firm-wide document view (FR-DOC-002: the
+  // knowledge-base collection), still subject to the caller's case
+  // visibility.
+  string case_id = 1;
 
   // Defaults to 20 (the contract's page size), capped at 100.
   int32 page_size = 2 [(buf.validate.field).int32 = {
@@ -72,6 +102,9 @@ message ListDocumentsRequest {
     lte: 100
   }];
   int32 page_offset = 3 [(buf.validate.field).int32.gte = 0];
+
+  // Narrow to one category (a case's orders, the judgment collection).
+  DocumentCategory category = 4 [(buf.validate.field).enum.defined_only = true];
 }
 
 message ListDocumentsResponse {

@@ -9,7 +9,12 @@ import {
   type RefreshTokenStore,
 } from "@stigmer/identity";
 import type { AuthKit } from "./auth/auth.js";
+import { registerAuditSubscriber } from "./domain/audit/audit-subscriber.js";
+import { registerLeadMembershipHandler } from "./domain/case/lead-membership-handler.js";
+import { registerNextHearingRefreshHandler } from "./domain/case/next-hearing-refresh-handler.js";
+import { registerDeactivationHandler } from "./domain/firmmember/deactivation-handler.js";
 import { registerTaskAssignmentHandler } from "./domain/notification/task-assignment-handler.js";
+import { startReminderSweep } from "./domain/reminders/sweep.js";
 import { createFileRoutes } from "./files/file-routes.js";
 import { createMcpHttpServer } from "./mcp/transport.js";
 import type { ObjectStore } from "./objectstore/object-store.js";
@@ -35,6 +40,12 @@ export interface BackendDeps {
    * present in the built image, detected by main.ts (detectWebRoot).
    */
   readonly webRoot?: string;
+  /**
+   * Reminder sweep tick (Gate-1 Q4); 0/absent disables the loop (tests
+   * drive runSweepOnce directly). Multi-replica safe: the Notification
+   * dedup key absorbs concurrent sweeps.
+   */
+  readonly reminderIntervalMs?: number;
 }
 
 /**
@@ -72,6 +83,7 @@ export function createFirmServers(
         // The channel resolver reads the SAME store the pipelines use;
         // deliberately not in the authenticator chain (identity README).
         resolveChannelIdentity: createChannelIdentityResolver(deps.store),
+        store: deps.store,
       },
     ),
   };
@@ -87,13 +99,57 @@ function assembleApp(deps: BackendDeps): App {
   });
 
   if (deps.dispatcher) {
-    // Notification.create is a system operation: no RPC exists, so the
-    // handler reaches the full pipeline through the invoker (T03 D1).
+    // Every subscriber writes through the in-process invoker — the full
+    // pipeline as the system principal (DD-A4); each is idempotent by a
+    // dedup natural key or by construction.
     registerTaskAssignmentHandler(
       deps.dispatcher,
+      deps.store,
       app.resources.notifications.invoke.create as NonNullable<
         typeof app.resources.notifications.invoke.create
       >,
+    );
+    // The lead lawyer is materialized as an active case member — the
+    // single membership fact "mine" and the policy both read (Gate-1).
+    registerLeadMembershipHandler(
+      deps.dispatcher,
+      deps.store,
+      app.resources.caseMembers.invoke.create as NonNullable<
+        typeof app.resources.caseMembers.invoke.create
+      >,
+    );
+    // Hearing writes refresh the case's stored-derived next-hearing
+    // fact (Gate-1 Q6): the update pipeline's recompute step does the
+    // math; the handler only triggers the write.
+    registerNextHearingRefreshHandler(
+      deps.dispatcher,
+      deps.store,
+      app.resources.cases.invoke.update as NonNullable<
+        typeof app.resources.cases.invoke.update
+      >,
+    );
+    // The append-only change history (FR-AUDIT-001, Gate-1 Q8).
+    registerAuditSubscriber(
+      deps.dispatcher,
+      app.resources.auditEntries.invoke.create as NonNullable<
+        typeof app.resources.auditEntries.invoke.create
+      >,
+    );
+    // Deactivation kills refresh sessions (FR-MEMBER-002).
+    registerDeactivationHandler(deps.dispatcher, deps.refreshTokens);
+  }
+
+  if (deps.reminderIntervalMs && deps.reminderIntervalMs > 0) {
+    // The clock-driven notifications (Gate-1 Q4). The interval timer is
+    // unref'd inside, so it never holds a closing process open.
+    startReminderSweep(
+      {
+        store: deps.store,
+        createNotification: app.resources.notifications.invoke.create as NonNullable<
+          typeof app.resources.notifications.invoke.create
+        >,
+      },
+      deps.reminderIntervalMs,
     );
   }
   return app;

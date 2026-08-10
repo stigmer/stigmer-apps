@@ -22,8 +22,8 @@ export function TaskRow(props: { task: Task; showAssignee?: string }) {
         className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 hover:bg-brand-surface"
       >
         <span className="flex-1 basis-48 font-medium">{task.spec?.title}</span>
-        {task.status?.caseNumber && (
-          <span className="text-sm text-ink-muted">{task.status.caseNumber}</span>
+        {task.status?.caseFileNumber && (
+          <span className="text-sm text-ink-muted">{task.status.caseFileNumber}</span>
         )}
         {props.showAssignee && (
           <span className="text-sm text-ink-muted">{props.showAssignee}</span>

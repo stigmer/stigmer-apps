@@ -35,8 +35,9 @@ message TaskSpec {
 
   string description = 3;
 
-  // Optional single assignee; a change to a different, non-actor user
-  // publishes the TASK_ASSIGNMENT notification (scope contract).
+  // Optional single assignee — a FirmMember id (all person references
+  // in law resources are FirmMember ids); a change to a different,
+  // non-actor member publishes the TASK_ASSIGNMENT notification.
   optional string assignee_id = 4;
 
   // Calendar date (YYYY-MM-DD), not an instant — same reasoning as
@@ -65,12 +66,12 @@ message TaskStatus {
   // (Asia/Kolkata): due_date passed and not CLOSED. Never stored.
   bool overdue = 2;
 
-  // The referenced case's court case number, derived on read (T04b D9) —
-  // lawyers speak in case numbers, and every consumer that lists tasks
-  // (web task lists, the WhatsApp my_open_tasks tool) needs it without
+  // The referenced case's firm FILE number, derived on read (T04b D9) —
+  // lawyers speak in file numbers, and every consumer that lists tasks
+  // (web task lists, the assistant's task tools) needs it without
   // joining client-side. One grouped lookup per page (the document_count
   // arrangement). Never stored.
-  string case_number = 3;
+  string case_file_number = 3;
 }
 
 enum TaskState {
@@ -114,9 +115,10 @@ enum TaskListScope {
   // The caller's own assignments (when no explicit case/assignee filter
   // is set — an explicit filter already names its scope).
   TASK_LIST_SCOPE_MINE = 1;
-  // The whole firm's tasks. Permitted by the MVP policy (FR-USER-001:
-  // every firm member sees everything); scoping enforcement, when
-  // per-case access lands, happens in the policy module — not here.
+  // The whole firm's tasks — for partners, exactly that; for everyone
+  // else the server narrows to the caller's member cases (the matrix,
+  // FR-AUTHZ-002/003, applied by query scoping — the request widens the
+  // ask, never the visibility).
   TASK_LIST_SCOPE_FIRM = 2;
 }
 

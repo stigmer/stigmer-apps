@@ -1,30 +1,31 @@
 /**
- * Tasks (FR-TASK-002): "My Tasks" is the default BY CONTRACT (no filter
+ * Tasks (FR-TASK-001): "My Tasks" is the default BY CONTRACT (no filter
  * means the caller's assignments — the screen sends no filter unless the
  * user picks a colleague). Ordering is the server's: soonest due first,
- * dateless last. The assignee picker reads the user directory — the same
- * bounded set task creation needs.
+ * dateless last. Assignees are FirmMembers, so the picker reads the
+ * roster — the app's one person directory.
  */
 
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
 import { Pagination } from "../../components/Pagination.js";
-import { useCurrentUser } from "../../session/use-session.js";
-import { useUserDirectory } from "../users/queries.js";
+import { useFirmMember } from "../../session/use-firm-member.js";
+import { useFirmRoster } from "../members/queries.js";
 import { TaskRow } from "./TaskRow.js";
 import { useTaskList } from "./queries.js";
 
 export function TaskListScreen() {
-  const me = useCurrentUser();
-  const myId = me.metadata?.id ?? "";
-  const directory = useUserDirectory();
-  const [assigneeId, setAssigneeId] = useState(myId);
+  // "Me" is my FirmMember id — the id task assignments actually carry.
+  const myId = useFirmMember().data?.metadata?.id ?? "";
+  const roster = useFirmRoster();
+  const [assigneeId, setAssigneeId] = useState("");
   const [page, setPage] = useState(0);
 
-  // Selecting yourself = the contract's default (no filter): the wire
-  // shape matches what "My Tasks" means server-side either way.
-  const list = useTaskList(assigneeId === myId ? {} : { assigneeId }, page);
+  // No selection = the contract's default ("My Tasks"); picking a
+  // colleague names the scope explicitly.
+  const effective = assigneeId || myId;
+  const list = useTaskList(effective === myId ? {} : { assigneeId: effective }, page);
 
   return (
     <section aria-label="Tasks">
@@ -44,7 +45,7 @@ export function TaskListScreen() {
         </label>
         <select
           id="assignee-filter"
-          value={assigneeId}
+          value={effective}
           onChange={(e) => {
             setAssigneeId(e.target.value);
             setPage(0);
@@ -52,11 +53,11 @@ export function TaskListScreen() {
           className="h-11 rounded-card border border-line bg-surface px-2"
         >
           <option value={myId}>Me</option>
-          {directory.data?.users
-            .filter((u) => u.metadata?.id !== myId)
-            .map((u) => (
-              <option key={u.metadata?.id} value={u.metadata?.id}>
-                {u.spec?.name || u.spec?.email}
+          {roster.data?.members
+            .filter((member) => member.metadata?.id !== myId)
+            .map((member) => (
+              <option key={member.metadata?.id} value={member.metadata?.id}>
+                {member.status?.userName || member.status?.userEmail}
               </option>
             ))}
         </select>
@@ -66,7 +67,7 @@ export function TaskListScreen() {
       {list.isError && <ErrorState error={list.error} onRetry={() => void list.refetch()} />}
       {list.isSuccess && list.data.items.length === 0 && (
         <EmptyState title="No tasks here">
-          {assigneeId === myId
+          {effective === myId
             ? "Tasks assigned to you appear here, soonest due first."
             : "This person has no assigned tasks."}
         </EmptyState>

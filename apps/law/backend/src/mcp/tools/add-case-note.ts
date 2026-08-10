@@ -12,7 +12,7 @@ import type { ChannelIdentity } from "@stigmer/identity";
 import { z } from "zod";
 import { CaseNoteSchema } from "../../gen/stigmer/law/casenote/v1/casenote_pb.js";
 import { gated, textResult } from "../gate.js";
-import { caseByNumber, type ToolDeps } from "./shared.js";
+import { caseByFileNumber, type ToolDeps } from "./shared.js";
 
 const NAME = "add_case_note";
 
@@ -25,14 +25,14 @@ export function registerAddCaseNote(
     NAME,
     {
       description:
-        "Add a note to a case by its court case number. Notes are permanent " +
+        "Add a note to a matter by its firm file number. Notes are permanent " +
         "case records (append-only, attributed, up to 5000 characters) — read " +
         "the note back and confirm before adding it.",
       inputSchema: {
-        case_number: z
+        file_number: z
           .string()
           .min(1)
-          .describe("The court case number, exactly as the firm uses it."),
+          .describe("The firm's file number for the matter, e.g. 'CS/2026/041'."),
         note: z
           .string()
           .min(1)
@@ -44,7 +44,7 @@ export function registerAddCaseNote(
       // the unattended WhatsApp surface.
     },
     gated(NAME, identity, deps.resolveChannelIdentity, async (args, caller) => {
-      const matter = await caseByNumber(deps.resources, caller.principal, args.case_number);
+      const matter = await caseByFileNumber(deps.resources, caller.principal, args.file_number);
       const saved = await deps.resources.caseNotes.invoke.create(
         create(CaseNoteSchema, {
           spec: { caseId: matter.metadata?.id ?? "", content: args.note },
@@ -52,11 +52,11 @@ export function registerAddCaseNote(
         caller.principal,
       );
       return textResult(
-        `Noted on ${matter.spec?.caseNumber} — recorded under your name.`,
+        `Noted on ${matter.spec?.fileNumber} — recorded under your name.`,
         {
           note_id: saved.metadata?.id,
           case_id: matter.metadata?.id,
-          case_number: matter.spec?.caseNumber,
+          file_number: matter.spec?.fileNumber,
         },
       );
     }),

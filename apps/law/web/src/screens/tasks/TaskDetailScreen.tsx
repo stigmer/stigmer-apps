@@ -11,7 +11,7 @@ import { ConnectError } from "@connectrpc/connect";
 import { ErrorState, Loading } from "../../components/async.js";
 import { TaskState } from "../../gen/stigmer/law/task/v1/task_pb.js";
 import { formatCalendarDate, taskPriorityLabel, taskStateLabel } from "../../lib/format.js";
-import { useUserDirectory } from "../users/queries.js";
+import { useFirmRoster } from "../members/queries.js";
 import { TaskComments } from "./TaskComments.js";
 import { TaskEditForm } from "./TaskEditForm.js";
 import { useTask, useUpdateTaskStatus } from "./queries.js";
@@ -20,7 +20,7 @@ export function TaskDetailScreen() {
   const { id = "" } = useParams();
   const task = useTask(id);
   const updateStatus = useUpdateTaskStatus();
-  const directory = useUserDirectory();
+  const roster = useFirmRoster();
   const [editing, setEditing] = useState(false);
   const [statusError, setStatusError] = useState<string | undefined>();
 
@@ -43,7 +43,7 @@ export function TaskDetailScreen() {
         <Link to="/tasks" className="text-brand underline">
           Tasks
         </Link>{" "}
-        / {t.status?.caseNumber || "…"}
+        / {t.status?.caseFileNumber || "…"}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -68,7 +68,7 @@ export function TaskDetailScreen() {
             <dd>
               {t.spec?.caseId ? (
                 <Link to={`/cases/${t.spec.caseId}`} className="text-brand underline">
-                  {t.status?.caseNumber || t.spec.caseId}
+                  {t.status?.caseFileNumber || t.spec.caseId}
                 </Link>
               ) : (
                 "—"
@@ -102,7 +102,7 @@ export function TaskDetailScreen() {
           <div>
             <dt className="text-sm text-ink-muted">Assigned to</dt>
             <dd>
-              {t.spec?.assigneeId ? directory.data?.nameOf(t.spec.assigneeId) ?? "…" : "Unassigned"}
+              {t.spec?.assigneeId ? roster.data?.nameOf(t.spec.assigneeId) ?? "…" : "Unassigned"}
             </dd>
           </div>
           <div>

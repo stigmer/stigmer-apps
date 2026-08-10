@@ -38,7 +38,7 @@ export function registerUpdateTaskStatus(
     {
       description:
         "Change a task's status (open / in_progress / closed). Use the task " +
-        "id from a previous my_open_tasks or find_tasks answer. Confirm with " +
+        "id from a previous my_day or find_tasks answer. Confirm with " +
         "the person before closing anything.",
       inputSchema: {
         task_id: z
@@ -59,7 +59,7 @@ export function registerUpdateTaskStatus(
         }),
         caller.principal,
       );
-      const caseRef = saved.status?.caseNumber ? ` (case ${saved.status.caseNumber})` : "";
+      const caseRef = saved.status?.caseFileNumber ? ` (${saved.status.caseFileNumber})` : "";
       return textResult(
         `Done — "${saved.spec?.title}"${caseRef} is now ${formatState(saved.status?.state ?? 0)}.`,
         { task: taskRecord(saved) },

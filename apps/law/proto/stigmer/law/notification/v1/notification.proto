@@ -27,6 +27,11 @@ message Notification {
 }
 
 message NotificationSpec {
+  // The USER this notification is for — the one deliberate exception to
+  // "person references are FirmMember ids": an inbox belongs to the
+  // login identity (like User itself), which lets recipient scoping and
+  // the recipient-only markRead compare against the caller directly.
+  // Producers that know a FirmMember resolve its user_id when writing.
   string recipient_id = 1 [(buf.validate.field).string.min_len = 1];
 
   NotificationType type = 2 [(buf.validate.field).enum = {
@@ -45,22 +50,35 @@ message NotificationSpec {
   // The dedup owner (natural key, unique): composed by the producer so an
   // identical event can never notify twice, while a legitimately new
   // event (rescheduled hearing, re-assignment) composes a new key.
-  // HEARING_REMINDER: (type, recipient, case, hearing_date);
-  // TASK_ASSIGNMENT: (type, task, assignee, task version) — see the
-  // producer for the exact format.
+  // TASK_ASSIGNMENT: (task, assignee, task version);
+  // HEARING_REMINDER: (hearing, recipient, date);
+  // DEADLINE_APPROACHING: (deadline, recipient, window);
+  // UNRECORDED_OUTCOME: (hearing, recipient) — see each producer for
+  // the exact format. The unique constraint is also what makes the
+  // reminder sweep idempotent and multi-replica safe.
   string dedup_key = 6 [(buf.validate.field).string.min_len = 1];
 }
 
 message NotificationTarget {
-  // Resource kind of the target: "Case" or "Task".
+  // Resource kind of the target: "Case", "Task", "Hearing", or
+  // "Deadline".
   string kind = 1;
   string id = 2;
 }
 
 enum NotificationType {
   NOTIFICATION_TYPE_UNSPECIFIED = 0;
+  // Tomorrow's (and today's) scheduled hearings — in-app; the WhatsApp
+  // push stays deferred on Meta's UTILITY template.
   NOTIFICATION_TYPE_HEARING_REMINDER = 1;
   NOTIFICATION_TYPE_TASK_ASSIGNMENT = 2;
+  // The T-7/T-3/T-1/day-of escalation ladder (FR-DEAD-002); one
+  // notification per (deadline, window), owned by the dedup key.
+  NOTIFICATION_TYPE_DEADLINE_APPROACHING = 3;
+  // A hearing's date passed with no outcome recorded (FR-HEAR-005) —
+  // fired once; the home surface keeps nagging until a human records
+  // what happened.
+  NOTIFICATION_TYPE_UNRECORDED_OUTCOME = 4;
 }
 
 message NotificationStatus {

@@ -1,0 +1,130 @@
+// The LedgerEntry resource — the money that actually moved (or fell
+// due). The other half of the money aggregate (with FeeArrangement).
+//
+// APPEND-ONLY, absolutely (FR-MONEY-002): no update, no delete, no
+// exceptions — a correction is a contra entry (an offsetting entry with
+// a note), the way every real ledger works. The operation set below IS
+// the whole contract: Create, List, and the derived-balance read.
+//
+// Amounts are INTEGER PAISE, always positive; the entry's KIND carries
+// the sign. Outstanding = charges + expenses − receipts, derived on
+// read (FR-MONEY-003) — never stored, so it can never drift from the
+// entries it summarizes.
+syntax = "proto3";
+
+// Package convention: `stigmer.<domain>.<resource>.v1` pairs with
+// apiVersion `<domain>.stigmer.ai/v1`; the domain is "law" (DD-A2).
+package stigmer.law.ledgerentry.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message LedgerEntry {
+  string api_version = 1;
+  string kind = 2;
+  // System-managed; the pipeline overwrites whatever a client sends.
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  LedgerEntrySpec spec = 4 [(buf.validate.field).required = true];
+}
+
+message LedgerEntrySpec {
+  string case_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  LedgerEntryKind entry_kind = 2 [(buf.validate.field).enum = {
+    defined_only: true,
+    not_in: [0]
+  }];
+
+  // Integer paise, strictly positive — the kind carries the direction.
+  // A contra entry offsets by pairing the opposite kind with a note.
+  int64 amount_paise = 3 [(buf.validate.field).int64.gt = 0];
+
+  // The value date (YYYY-MM-DD) — when the fee fell due or the money
+  // moved, which is not necessarily the day it was typed in.
+  string date = 4 [(buf.validate.field).string.pattern = "^\\d{4}-\\d{2}-\\d{2}$"];
+
+  // "Appearance 12 Sep", "advance received by UPI", "contra: receipt
+  // 14-08 entered twice".
+  string note = 5 [(buf.validate.field).string.max_len = 500];
+}
+
+enum LedgerEntryKind {
+  LEDGER_ENTRY_KIND_UNSPECIFIED = 0;
+  // Fee fallen due (adds to outstanding).
+  LEDGER_ENTRY_KIND_CHARGE = 1;
+  // Money received (reduces outstanding).
+  LEDGER_ENTRY_KIND_RECEIPT = 2;
+  // Firm outlay billed to the client — court fees, process, copying
+  // (adds to outstanding).
+  LEDGER_ENTRY_KIND_EXPENSE = 3;
+}
+
+message ListLedgerEntriesRequest {
+  // Defaults to 20 (the contract's page size), capped at 100.
+  int32 page_size = 1 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 100
+  }];
+  int32 page_offset = 2 [(buf.validate.field).int32.gte = 0];
+
+  // The case whose ledger is asked for. Required: a ledger is read per
+  // matter; the cross-matter view is ListOutstanding.
+  string case_id = 3 [(buf.validate.field).string.min_len = 1];
+}
+
+message ListLedgerEntriesResponse {
+  // Ordered by value date descending, newest first — how a partner reads
+  // a ledger.
+  repeated LedgerEntry items = 1;
+  int64 total_count = 2;
+}
+
+// The partner's money glance (J5, FR-MONEY-003): outstanding per case,
+// optionally narrowed to one client. Balances are derived from the
+// entries in one grouped query per page — never stored.
+message ListOutstandingRequest {
+  // Defaults to 20 (the contract's page size), capped at 100.
+  int32 page_size = 1 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 100
+  }];
+  int32 page_offset = 2 [(buf.validate.field).int32.gte = 0];
+
+  // Narrow to one client's matters — "what does Meridian owe us?".
+  string client_id = 3;
+}
+
+message CaseOutstanding {
+  string case_id = 1;
+  string file_number = 2;
+  string client_id = 3;
+  int64 charges_paise = 4;
+  int64 receipts_paise = 5;
+  int64 expenses_paise = 6;
+  // charges + expenses − receipts. Negative means the client is in
+  // advance — real, and worth seeing.
+  int64 outstanding_paise = 7;
+}
+
+message ListOutstandingResponse {
+  // One line per case (cases with no ledger activity show zeros).
+  // Pages follow the case list (newest matters first); within a page,
+  // largest outstanding first. A globally balance-ordered view would
+  // need the store to order by a computed aggregate — deliberately not
+  // built for a firm-scale ledger (hundreds of matters, one page of
+  // real balances).
+  repeated CaseOutstanding items = 1;
+  int64 total_count = 2;
+}
+
+service LedgerEntryService {
+  // Record a ledger entry. Partners record anything; office staff may
+  // record RECEIPTS only — without ever reading arrangements or
+  // balances (FR-AUTHZ-004's entry-only carve-out).
+  rpc Create(LedgerEntry) returns (LedgerEntry);
+  // List a case's ledger, newest first. Partners only.
+  rpc List(ListLedgerEntriesRequest) returns (ListLedgerEntriesResponse);
+  // The money glance: outstanding per case, optionally per client.
+  // Partners only.
+  rpc ListOutstanding(ListOutstandingRequest) returns (ListOutstandingResponse);
+}

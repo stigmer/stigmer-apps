@@ -20,7 +20,13 @@ import { createConnectTransport } from "@connectrpc/connect-node";
 import { InProcessEventDispatcher } from "@stigmer/resource-api";
 import { runMigrations } from "@stigmer/resource-api/postgres";
 import { UserSchema, UserService } from "@stigmer/identity";
-import { CaseSchema, CaseService } from "../gen/stigmer/law/case/v1/case_pb.js";
+import { CaseSchema, CaseService, ClientRole, ForumKind } from "../gen/stigmer/law/case/v1/case_pb.js";
+import { ClientSchema, ClientService } from "../gen/stigmer/law/client/v1/client_pb.js";
+import {
+  FirmMemberSchema,
+  FirmMemberService,
+  FirmRole,
+} from "../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
 import { createPgCredentialStore, createPgRefreshTokenStore } from "@stigmer/identity/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { createTestAuth } from "../__tests__/test-auth.js";
@@ -35,10 +41,24 @@ const MCP_PORT = Number(process.env.E2E_MCP_PORT ?? 8798);
 /** Dev-only, obviously fictional; printed below for the smoke script. */
 const MCP_SECRET = "e2e-dev-mcp-shared-secret-0123456789";
 
-/** Must match apps/law/web/e2e/fixtures.ts. */
+/** Must match apps/law/web/e2e/fixtures.ts. Roles matter now: the
+ * matrix (FR-AUTHZ-*) makes a partner's and an associate's screens
+ * genuinely different, and the E2E suite proves both. */
 const SEED_USERS = [
-  { email: "asha@acme.example", name: "Asha Rao", password: "sensible-e2e-passphrase", phone: "+91123456" },
-  { email: "ravi@acme.example", name: "Ravi Iyer", password: "sensible-e2e-passphrase", phone: "+91123457" },
+  {
+    email: "asha@acme.example",
+    name: "Asha Rao",
+    password: "sensible-e2e-passphrase",
+    phone: "+91123456",
+    role: FirmRole.MANAGING_PARTNER,
+  },
+  {
+    email: "ravi@acme.example",
+    name: "Ravi Iyer",
+    password: "sensible-e2e-passphrase",
+    phone: "+91123457",
+    role: FirmRole.ASSOCIATE,
+  },
 ];
 
 const container = await new PostgreSqlContainer("postgres:17-alpine").start();
@@ -65,7 +85,9 @@ await new Promise<void>((resolve) => mcp.listen(MCP_PORT, resolve));
 
 const transport = createConnectTransport({ baseUrl: `http://localhost:${PORT}`, httpVersion: "1.1" });
 const users = createClient(UserService, transport);
+const firmMembers = createClient(FirmMemberService, transport);
 const userIds: string[] = [];
+const memberIds: string[] = [];
 for (const seed of SEED_USERS) {
   const created = await users.create(
     // Fictional short phones (the guard's convention): they make the
@@ -73,29 +95,49 @@ for (const seed of SEED_USERS) {
     create(UserSchema, { spec: { email: seed.email, name: seed.name, phone: seed.phone } }),
     auth.asOperator(),
   );
-  userIds.push(created.metadata?.id as string);
+  const userId = created.metadata?.id as string;
+  userIds.push(userId);
   await users.setPassword({ email: seed.email, password: seed.password }, auth.asOperator());
+  // The firm profile — without it the policy denies everything
+  // (fail-closed): a User with no FirmMember is not firm staff.
+  const profile = await firmMembers.create(
+    create(FirmMemberSchema, { spec: { userId, role: seed.role } }),
+    auth.asOperator(),
+  );
+  memberIds.push(profile.metadata?.id as string);
 }
 
-// One seeded case so task flows have something real to bind to — created
-// through the wire AS THE FIRST SEEDED USER, so its audit fields carry a
+// One client + one case so every flow has something real to bind to —
+// created through the wire AS THE ASSOCIATE (who becomes the lead, and
+// therefore a case member by materialization), so audit fields carry a
 // user principal exactly like production rows.
-const firstUserId = userIds[0] as string;
-await auth.mint(firstUserId);
+const associateUserId = userIds[1] as string;
+const associateMemberId = memberIds[1] as string;
+await auth.mint(associateUserId);
+const clients = createClient(ClientService, transport);
+const seededClient = await clients.create(
+  create(ClientSchema, { spec: { displayName: "Acme Traders", notes: "fictional e2e client" } }),
+  auth.as(associateUserId),
+);
 const cases = createClient(CaseService, transport);
 await cases.create(
   create(CaseSchema, {
     spec: {
-      caseNumber: "WP-1234/2026",
-      clientName: "Acme Traders",
-      caseType: "civil",
-      assignedLawyerId: firstUserId,
+      fileNumber: "WP/2026/1234",
+      clientId: seededClient.metadata?.id as string,
+      clientRole: ClientRole.PETITIONER,
+      opposingParties: [{ name: "State of Telangana" }],
+      forum: { forumKind: ForumKind.HIGH_COURT, name: "High Court for the State of Telangana" },
+      caseType: "writ",
+      leadLawyerId: associateMemberId,
     },
   }),
-  auth.as(firstUserId),
+  auth.as(associateUserId),
 );
 
-console.log(`e2e backend ready on :${PORT} (seeded ${SEED_USERS.length} users, 1 case)`);
+console.log(
+  `e2e backend ready on :${PORT} (seeded ${SEED_USERS.length} users with firm profiles, 1 client, 1 case)`,
+);
 console.log(
   `mcp entrance on :${MCP_PORT} — smoke it with: npx tsx scripts/mcp-smoke.ts ` +
     `--url http://localhost:${MCP_PORT} --secret ${MCP_SECRET} --wa 91123456`,

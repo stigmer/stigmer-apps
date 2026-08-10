@@ -1,0 +1,134 @@
+// The Client resource — the relationship anchor the MVP reduced to a
+// free-text string on Case (DD-001, adopted 2026-08-10). A client is a
+// person or organization the firm represents, across matters: the
+// cross-case view is what makes the informal conflict check possible.
+//
+// Deliberately NO natural key: client names collide legitimately (two
+// unrelated "S. Reddy"s are two clients). Duplicate prevention is a UX
+// concern (suggest-while-typing at intake), never a uniqueness
+// constraint. No delete — a legal system of record archives.
+syntax = "proto3";
+
+// Package convention: `stigmer.<domain>.<resource>.v1` pairs with
+// apiVersion `<domain>.stigmer.ai/v1`; the domain is "law" (DD-A2) —
+// never the customer segment, never the brand.
+package stigmer.law.client.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message Client {
+  string api_version = 1;
+  string kind = 2;
+  // System-managed; the pipeline overwrites whatever a client sends.
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  ClientSpec spec = 4 [(buf.validate.field).required = true];
+}
+
+message ClientSpec {
+  // The name the firm uses for this client — a person's name or an
+  // organization's. Searchable (the conflict check's first half).
+  string display_name = 1 [(buf.validate.field).string = {
+    min_len: 1,
+    max_len: 200
+  }];
+
+  ClientKind client_kind = 2 [(buf.validate.field).enum.defined_only = true];
+
+  // Contact reality: one client, many numbers. Free-form strings, NOT
+  // the identity package's strict E.164 — these are contact details for
+  // humans to dial, never a channel identity binding (that is
+  // User.spec.phone, operator-controlled, DD-005 addendum).
+  repeated string phones = 3;
+
+  string email = 4;
+
+  string address = 5;
+
+  string notes = 6 [(buf.validate.field).string.max_len = 5000];
+}
+
+enum ClientKind {
+  // Treated as INDIVIDUAL for display; stored as sent.
+  CLIENT_KIND_UNSPECIFIED = 0;
+  CLIENT_KIND_INDIVIDUAL = 1;
+  CLIENT_KIND_ORGANIZATION = 2;
+}
+
+message GetClientRequest {
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message ListClientsRequest {
+  // Defaults to 20 (the contract's page size), capped at 100.
+  int32 page_size = 1 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 100
+  }];
+  int32 page_offset = 2 [(buf.validate.field).int32.gte = 0];
+}
+
+message ListClientsResponse {
+  // Ordered by display_name ascending — the register a clerk flips
+  // through alphabetically.
+  repeated Client items = 1;
+  int64 total_count = 2;
+}
+
+// The intake conversation's one search box (J4): case-insensitive
+// substring search across client names AND opposing-party names in the
+// same request — the informal conflict check (FR-CLIENT-003). One RPC by
+// design: the web app must not compose two searches client-side, and the
+// user's mental model is one question ("have we seen this name?").
+message SearchClientsRequest {
+  // The name fragment. Two-character minimum: a one-letter query returns
+  // the whole firm and answers nothing.
+  string query = 1 [(buf.validate.field).string = {
+    min_len: 2,
+    max_len: 200
+  }];
+
+  // Per-side result cap (clients and opposing-party hits are capped
+  // independently). Defaults to 10; capped at 50 — this is a
+  // did-we-already-know-them check, not a report.
+  int32 limit = 2 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 50
+  }];
+}
+
+// A case matched because an opposing party's name contains the query.
+// Carries the list line only (never case content): the searcher may not
+// be a member of the matched case, and the conflict check needs
+// existence, not detail — the same shape non-member lawyers see in case
+// lists (FR-AUTHZ-003).
+message OpposingPartyHit {
+  string case_id = 1;
+  string file_number = 2;
+  // The party name that matched, verbatim from the case record.
+  string matched_party_name = 3;
+  // "A vs B" — client display name vs first opposing party.
+  string caption = 4;
+}
+
+message SearchClientsResponse {
+  // Clients whose display name contains the query, best matches first.
+  repeated Client clients = 1;
+  // Cases where an OPPOSING party's name contains the query — the half
+  // of the conflict check that catches "we're against them already".
+  repeated OpposingPartyHit opposing_party_hits = 2;
+}
+
+service ClientService {
+  // Create a client. Anyone who can create a case can create a client
+  // (matrix: partners and associates).
+  rpc Create(Client) returns (Client);
+  // Update a client: full spec replacement.
+  rpc Update(Client) returns (Client);
+  // Get a client by internal id.
+  rpc Get(GetClientRequest) returns (Client);
+  // List the firm's clients, alphabetically.
+  rpc List(ListClientsRequest) returns (ListClientsResponse);
+  // Search client names and opposing-party names — the conflict check.
+  rpc Search(SearchClientsRequest) returns (SearchClientsResponse);
+}

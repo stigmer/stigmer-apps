@@ -141,7 +141,8 @@ describe("the bundled artifact", () => {
     expect(line).toBeDefined();
     const applied = (line as string).replace("migrations applied: ", "").split(", ");
     expect(applied[0]).toBe("identity/0001_users.sql");
-    expect(applied).toContain("app/0001_cases.sql");
+    expect(applied).toContain("app/0003_cases.sql");
+    expect(applied).toContain("app/0014_audit_entries.sql");
   });
 
   it("serves /healthz before auth", async () => {
@@ -165,8 +166,8 @@ describe("the bundled artifact", () => {
     const denied = await fetch(`${mcpBase}/mcp`, { method: "POST", body: "{}" });
     expect(denied.status).toBe(401);
 
-    // With it: a real MCP tools/list answers with the seven tools — the
-    // MCP SDK survived bundling (conditional imports are exactly the
+    // With it: a real MCP tools/list answers with the journey verbs —
+    // the MCP SDK survived bundling (conditional imports are exactly the
     // kind of thing esbuild can break while source tests stay green).
     const listed = await fetch(`${mcpBase}/mcp`, {
       method: "POST",
@@ -182,10 +183,13 @@ describe("the bundled artifact", () => {
     expect(body.result?.tools?.map((t) => t.name).sort()).toEqual(
       [
         "add_case_note",
+        "case_story",
         "find_tasks",
         "firm_overview",
-        "get_case",
-        "my_open_tasks",
+        "my_day",
+        "my_deadlines",
+        "outstanding_balances",
+        "record_hearing_outcome",
         "upcoming_hearings",
         "update_task_status",
       ].sort(),

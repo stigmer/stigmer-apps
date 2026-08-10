@@ -8,45 +8,64 @@
  *    phone-screen sentences. The moment a tool derives a business fact,
  *    that fact belongs in the contract instead — the discipline that
  *    keeps the web app a thin shell applies here verbatim.
- * 2. **Ids travel in the answer.** Tasks deliberately have no
- *    user-facing identifier (no natural key, by contract), so a write
- *    like update_task_status can only be reached through an id a
- *    previous read returned. Ids ride the text lines (the model's
- *    only guaranteed view) AND structuredContent; the agent's
- *    instructions keep them out of the human-facing reply.
+ * 2. **Ids travel in the answer.** Writes like update_task_status can
+ *    only be reached through an id a previous read returned. Ids ride
+ *    the text lines (the model's only guaranteed view) AND
+ *    structuredContent; the agent's instructions keep them out of the
+ *    human-facing reply.
  */
 
 import { create } from "@bufbuild/protobuf";
-import type { ChannelIdentityResolver, User } from "@stigmer/identity";
-import { ListUsersRequestSchema } from "@stigmer/identity";
+import type { ChannelIdentityResolver } from "@stigmer/identity";
+import type { CallerPrincipal, ResourceStore } from "@stigmer/resource-api";
 import type { Case } from "../../gen/stigmer/law/case/v1/case_pb.js";
 import { GetCaseRequestSchema } from "../../gen/stigmer/law/case/v1/case_pb.js";
+import type { Deadline } from "../../gen/stigmer/law/deadline/v1/deadline_pb.js";
+import type { FirmMember } from "../../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
+import { ListFirmMembersRequestSchema } from "../../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
+import type { Hearing } from "../../gen/stigmer/law/hearing/v1/hearing_pb.js";
 import type { Task } from "../../gen/stigmer/law/task/v1/task_pb.js";
 import type { AppResources } from "../../routes.js";
-import type { CallerPrincipal } from "@stigmer/resource-api";
-import { formatDate, formatState } from "../format.js";
+import { formatDate, formatOutcome, formatState } from "../format.js";
 
 export interface ToolDeps {
   readonly resources: AppResources;
   readonly resolveChannelIdentity: ChannelIdentityResolver;
+  /**
+   * The one shared store — for page-shaped DISPLAY lookups only (file
+   * numbers for lines the caller already received through authorized
+   * pipelines). Tools never write through it and never widen access
+   * with it (DD-A4: writes ride invoke).
+   */
+  readonly store: ResourceStore;
+}
+
+/** File numbers for answer lines — one bulk lookup, never N+1. */
+export async function fileNumbersByCaseId(
+  store: ResourceStore,
+  caseIds: readonly string[],
+): Promise<(caseId: string | undefined) => string | undefined> {
+  const unique = [...new Set(caseIds.filter((id): id is string => !!id))];
+  const cases = await store.getByIds("Case", unique);
+  return (caseId) =>
+    ((cases.get(caseId ?? "") as Case | undefined)?.spec?.fileNumber) || undefined;
 }
 
 /**
- * Resolves a person the caller NAMED (an assignee argument) — distinct
- * from resolving the caller themself, but under the same discipline:
- * exact match on email or display name, exactly one or refuse naming
- * the candidates. Deliberately not fuzzy search — search is out of the
- * MVP scope contract, and a wrong guess about "Ravi" answers with the
- * wrong person's caseload.
+ * Resolves a person the caller NAMED (an assignee, a deadline owner) to
+ * their FirmMember — spec person references are FirmMember ids on the
+ * rebuilt contract. Exact match on the profile's derived name or email,
+ * exactly one or refuse naming the candidates: a wrong guess about
+ * "Ravi" answers with the wrong person's caseload.
  */
-export async function resolvePersonByNameOrEmail(
+export async function resolveMemberByNameOrEmail(
   resources: AppResources,
   principal: CallerPrincipal,
   nameOrEmail: string,
-): Promise<{ readonly user: User } | { readonly refusal: string }> {
+): Promise<{ readonly member: FirmMember } | { readonly refusal: string }> {
   const needle = nameOrEmail.trim().toLowerCase();
-  const page = await resources.users.invoke.list(
-    create(ListUsersRequestSchema, { pageSize: 100 }),
+  const page = await resources.firmMembers.invoke.list(
+    create(ListFirmMembersRequestSchema, { pageSize: 100 }),
     principal,
   );
   if (page.totalCount > 100n) {
@@ -56,13 +75,13 @@ export async function resolvePersonByNameOrEmail(
         "exact email address instead.",
     };
   }
-  const matches = page.items.filter(
-    (u) =>
-      u.spec?.email?.toLowerCase() === needle ||
-      u.spec?.name?.toLowerCase() === needle,
+  const matches = (page.items as FirmMember[]).filter(
+    (m) =>
+      m.status?.userEmail?.toLowerCase() === needle ||
+      m.status?.userName?.toLowerCase() === needle,
   );
   if (matches.length === 1) {
-    return { user: matches[0] as User };
+    return { member: matches[0] as FirmMember };
   }
   if (matches.length === 0) {
     return {
@@ -70,21 +89,22 @@ export async function resolvePersonByNameOrEmail(
     };
   }
   const candidates = matches
-    .map((u) => `${u.spec?.name} (${u.spec?.email})`)
+    .map((m) => `${m.status?.userName} (${m.status?.userEmail})`)
     .join(", ");
   return {
     refusal: `More than one person matches "${nameOrEmail.trim()}": ${candidates}. Use the email address to be exact.`,
   };
 }
 
-/** Loads a case by its court number — NOT_FOUND relays a clean sentence. */
-export function caseByNumber(
+/** Loads a case by the firm's file number — NOT_FOUND (and the policy's
+ * membership denial) relay clean sentences through the gate. */
+export function caseByFileNumber(
   resources: AppResources,
   principal: CallerPrincipal,
-  caseNumber: string,
+  fileNumber: string,
 ): Promise<Case> {
   return resources.cases.invoke.get(
-    create(GetCaseRequestSchema, { caseNumber: caseNumber.trim() }),
+    create(GetCaseRequestSchema, { fileNumber: fileNumber.trim() }),
     principal,
   );
 }
@@ -94,7 +114,7 @@ export function taskLine(task: Task): string {
   const due = task.spec?.dueDate
     ? `due ${formatDate(task.spec.dueDate)}${task.status?.overdue ? " (OVERDUE)" : ""}`
     : "no due date";
-  const caseRef = task.status?.caseNumber ? ` · case ${task.status.caseNumber}` : "";
+  const caseRef = task.status?.caseFileNumber ? ` · ${task.status.caseFileNumber}` : "";
   return `${task.spec?.title} — ${due}, ${formatState(task.status?.state ?? 0)}${caseRef} · id ${task.metadata?.id}`;
 }
 
@@ -103,10 +123,39 @@ export function taskRecord(task: Task): Record<string, unknown> {
   return {
     id: task.metadata?.id,
     title: task.spec?.title,
-    case_number: task.status?.caseNumber || undefined,
+    file_number: task.status?.caseFileNumber || undefined,
     due_date: task.spec?.dueDate,
     state: formatState(task.status?.state ?? 0),
     overdue: task.status?.overdue ?? false,
     assignee_id: task.spec?.assigneeId,
   };
+}
+
+/** One hearing as a diary/board line. */
+export function hearingLine(hearing: Hearing, fileNumber?: string): string {
+  const listing = [
+    hearing.spec?.listSerialNumber ? `item ${hearing.spec.listSerialNumber}` : "",
+    hearing.spec?.courtHall ? `hall ${hearing.spec.courtHall}` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const state = hearing.status?.outcomeKind
+    ? formatOutcome(hearing.status.outcomeKind) +
+      (hearing.status.nextDate ? `, next ${formatDate(hearing.status.nextDate)}` : "")
+    : "scheduled";
+  return [
+    fileNumber ? `${fileNumber} — ` : "",
+    formatDate(hearing.spec?.date),
+    hearing.spec?.purpose ? ` for ${hearing.spec.purpose}` : "",
+    listing ? ` (${listing})` : "",
+    `: ${state}`,
+    ` · id ${hearing.metadata?.id}`,
+  ].join("");
+}
+
+/** One deadline as a nudge line. */
+export function deadlineLine(deadline: Deadline, fileNumber?: string): string {
+  const overdue = deadline.status?.overdue ? " (OVERDUE)" : "";
+  const caseRef = fileNumber ? ` · ${fileNumber}` : "";
+  return `${deadline.spec?.title} — due ${formatDate(deadline.spec?.dueDate)}${overdue}${caseRef} · id ${deadline.metadata?.id}`;
 }

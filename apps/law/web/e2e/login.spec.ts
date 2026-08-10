@@ -29,14 +29,15 @@ test("sign in → resumed session on reload → sign out", async ({ page }) => {
   await page.getByLabel("Password").fill(ASHA.password);
   await page.getByRole("button", { name: "Sign in" }).click();
 
-  // Signed in: the shell greets the WhoAmI identity (the authorized call).
-  await expect(page.getByRole("heading", { name: `Welcome, ${ASHA.name}` })).toBeVisible();
+  // Signed in: the shell carries the WhoAmI identity (the authorized
+  // call) — the profile link is the user's own name.
+  await expect(page.getByRole("banner").getByRole("link", { name: ASHA.name })).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
 
   // Reload drops the in-memory access token — the session must resume
   // from the refresh cookie without showing the login form.
   await page.reload();
-  await expect(page.getByRole("heading", { name: `Welcome, ${ASHA.name}` })).toBeVisible();
+  await expect(page.getByRole("banner").getByRole("link", { name: ASHA.name })).toBeVisible();
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login$/);

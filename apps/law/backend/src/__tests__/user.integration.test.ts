@@ -26,6 +26,11 @@ import { createTestAuth, type TestAuth } from "./test-auth.js";
 import { testMigrationSources } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { memoryObjectStore } from "./memory-object-store.js";
+import {
+  FirmMemberSchema,
+  FirmMemberService,
+  FirmRole,
+} from "../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
 import { createBackendServer } from "../server.js";
 import { createResourceStore } from "../storage.js";
 
@@ -33,7 +38,13 @@ import { createResourceStore } from "../storage.js";
 // is the per-deployment opk_ key (DD-005 D7), a real credential here too.
 let auth: TestAuth;
 const asOperator = () => auth.asOperator();
-const asLawyer = (id = "lawyer-one") => auth.as(id);
+// A REAL firm member (user + FirmMember profile, seeded in beforeAll):
+// since the rebuild's fail-closed policy, a bare token with no firm
+// profile is refused with "No active firm membership" before any
+// operator-only branch can speak — the suite tests the branch, so the
+// caller must be genuine staff.
+let staffUserId = "";
+const asLawyer = () => auth.as(staffUserId);
 
 function userInput(overrides: Partial<{ email: string; name: string; phone: string }> = {}) {
   return create(UserSchema, {
@@ -80,17 +91,36 @@ describe("User resource", () => {
     });
     await new Promise<void>((resolve) => server.listen(0, resolve));
     const { port } = server.address() as AddressInfo;
-    client = createClient(
-      UserService,
-      createConnectTransport({ baseUrl: `http://localhost:${port}`, httpVersion: "1.1" }),
+    const transport = createConnectTransport({
+      baseUrl: `http://localhost:${port}`,
+      httpVersion: "1.1",
+    });
+    client = createClient(UserService, transport);
+
+    // The genuine staff caller (see asLawyer above), through the same
+    // operator path production onboarding uses.
+    const staff = await client.create(
+      create(UserSchema, { spec: { email: "staff.caller@example.com" } }),
+      auth.asOperator(),
     );
+    staffUserId = staff.metadata?.id ?? "";
+    const firmMembers = createClient(FirmMemberService, transport);
+    await firmMembers.create(
+      create(FirmMemberSchema, {
+        spec: { userId: staffUserId, role: FirmRole.ASSOCIATE },
+      }),
+      auth.asOperator(),
+    );
+    await auth.mint(staffUserId);
   }, 120_000);
 
   afterEach(async () => {
     // Credentials and refresh sessions reference users; children first.
+    // The seeded staff caller (and their firm profile) survives every
+    // test — it is the suite's identity fixture, not test data.
     await pool.query("DELETE FROM refresh_tokens");
-    await pool.query("DELETE FROM user_credentials");
-    await pool.query("DELETE FROM users");
+    await pool.query("DELETE FROM user_credentials WHERE user_id <> $1", [staffUserId]);
+    await pool.query("DELETE FROM users WHERE id <> $1", [staffUserId]);
   });
 
   afterAll(async () => {
@@ -143,12 +173,13 @@ describe("User resource", () => {
       // The dead shim accepted `x-dev-caller-kind: system` from anyone.
       // Its replacement mints user-kind principals unconditionally: a
       // token whose SUBJECT is the string "system" is still an ordinary
-      // user and bounces off the operator-only branch like anyone else.
+      // user — and since the rebuild, one with no firm profile at all,
+      // refused at the membership gate before any branch can widen.
       await auth.mint("system");
       await expectCode(
         client.create(userInput(), auth.as("system")),
         Code.PermissionDenied,
-        /Only an operator/,
+        /No active firm membership/,
       );
     });
 
@@ -191,15 +222,27 @@ describe("User resource", () => {
     });
   });
 
-  describe("get (FR-USER-001)", () => {
-    it("loads by internal id and by email, case-insensitively", async () => {
+  describe("get (FR-USER-001, narrowed by the rebuild: self or operator)", () => {
+    it("loads by internal id and by email, case-insensitively (operator)", async () => {
       const created = await client.create(userInput({ email: "get@example.com" }), asOperator());
 
-      const byId = await client.get({ id: created.metadata?.id ?? "" }, asLawyer());
+      const byId = await client.get({ id: created.metadata?.id ?? "" }, asOperator());
       expect(byId.spec?.email).toBe("get@example.com");
 
-      const byEmail = await client.get({ email: "GET@Example.COM" }, asLawyer());
+      const byEmail = await client.get({ email: "GET@Example.COM" }, asOperator());
       expect(byEmail.metadata?.id).toBe(created.metadata?.id);
+    });
+
+    it("a firm member reads their OWN record; anyone else's is operator territory", async () => {
+      const own = await client.get({ id: staffUserId }, asLawyer());
+      expect(own.spec?.email).toBe("staff.caller@example.com");
+
+      const other = await client.create(userInput({ email: "other@example.com" }), asOperator());
+      await expectCode(
+        client.get({ id: other.metadata?.id ?? "" }, asLawyer()),
+        Code.PermissionDenied,
+        /operator/,
+      );
     });
 
     it("answers NOT_FOUND naming the reference", async () => {
@@ -215,18 +258,24 @@ describe("User resource", () => {
     });
   });
 
-  describe("list (FR-USER-001)", () => {
-    it("orders by email ascending with a stable total", async () => {
+  describe("list (FR-USER-001, narrowed by the rebuild: the account register is operator territory)", () => {
+    it("orders by email ascending with a stable total (operator)", async () => {
       for (const email of ["c@example.com", "a@example.com", "b@example.com"]) {
         await client.create(userInput({ email }), asOperator());
       }
-      const res = await client.list({}, asLawyer());
+      const res = await client.list({}, asOperator());
       expect(res.items.map((u) => u.spec?.email)).toEqual([
         "a@example.com",
         "b@example.com",
         "c@example.com",
+        // The suite's seeded staff caller — always present.
+        "staff.caller@example.com",
       ]);
-      expect(res.totalCount).toBe(3n);
+      expect(res.totalCount).toBe(4n);
+    });
+
+    it("a firm member does not read the account register — the roster is FirmMember.List", async () => {
+      await expectCode(client.list({}, asLawyer()), Code.PermissionDenied, /operator/);
     });
 
     it("requires authentication", async () => {
@@ -305,7 +354,7 @@ describe("User resource", () => {
       expect(updated.spec?.phone).toBe("+91123458");
       expect(updated.metadata?.version).toBe(2n);
 
-      const fetched = await client.get({ email: "fixme@example.com" }, asLawyer());
+      const fetched = await client.get({ email: "fixme@example.com" }, asOperator());
       expect(fetched.spec?.name).toBe("Asha Verma");
       expect(fetched.spec?.phone).toBe("+91123458");
     });
@@ -332,16 +381,16 @@ describe("User resource", () => {
       // partner's row — or worse, quietly bind a second handset to their
       // own row and hand it to someone else. The policy branch, not the
       // pipeline, is what forbids this; this test keeps that line alive.
-      const created = await client.create(userInput({ email: "self@example.com" }), asOperator());
-      const selfId = created.metadata?.id as string;
-      await auth.mint(selfId);
+      // The seeded staff caller updating THEIR OWN row — a genuine firm
+      // member hitting the operator-only wall, not a stranger hitting
+      // the membership gate.
       await expectCode(
         client.update(
           create(UserSchema, {
-            metadata: { id: selfId },
-            spec: { email: "self@example.com", phone: "+91123459" },
+            metadata: { id: staffUserId },
+            spec: { email: "staff.caller@example.com", phone: "+91123459" },
           }),
-          auth.as(selfId),
+          asLawyer(),
         ),
         Code.PermissionDenied,
         /Only an operator may manage user accounts/,

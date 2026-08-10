@@ -16,12 +16,12 @@ import {
   TaskPriority,
   TaskSpecSchema,
 } from "../../gen/stigmer/law/task/v1/task_pb.js";
-import { useUserDirectory } from "../users/queries.js";
+import { useFirmRoster } from "../members/queries.js";
 import { useUpdateTask } from "./queries.js";
 
 export function TaskEditForm(props: { task: Task; onDone: () => void }) {
   const { task } = props;
-  const directory = useUserDirectory();
+  const roster = useFirmRoster();
   const updateTask = useUpdateTask();
 
   const [title, setTitle] = useState(task.spec?.title ?? "");
@@ -96,9 +96,9 @@ export function TaskEditForm(props: { task: Task; onDone: () => void }) {
         className={field}
       >
         <option value="">Unassigned</option>
-        {directory.data?.users.map((u) => (
-          <option key={u.metadata?.id} value={u.metadata?.id}>
-            {u.spec?.name || u.spec?.email}
+        {roster.data?.members.map((member) => (
+          <option key={member.metadata?.id} value={member.metadata?.id}>
+            {member.status?.userName || member.status?.userEmail}
           </option>
         ))}
       </select>

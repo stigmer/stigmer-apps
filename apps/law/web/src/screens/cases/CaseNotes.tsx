@@ -10,14 +10,14 @@ import { ConnectError } from "@connectrpc/connect";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
 import { Pagination } from "../../components/Pagination.js";
 import { formatInstant } from "../../lib/format.js";
-import { useUserDirectory } from "../users/queries.js";
+import { useFirmRoster } from "../members/queries.js";
 import { useAddCaseNote, useCaseNotes } from "./queries.js";
 
 export function CaseNotes(props: { caseId: string }) {
   const [page, setPage] = useState(0);
   const notes = useCaseNotes(props.caseId, page);
   const addNote = useAddCaseNote(props.caseId);
-  const directory = useUserDirectory();
+  const roster = useFirmRoster();
   const [content, setContent] = useState("");
   const [error, setError] = useState<string | undefined>();
 
@@ -80,7 +80,8 @@ export function CaseNotes(props: { caseId: string }) {
                 <li key={note.metadata?.id} className="border-b border-line px-3 py-2 last:border-b-0">
                   <p className="text-sm text-ink-muted">
                     <span className="font-medium text-ink">
-                      {directory.data?.nameOf(note.metadata?.createdBy?.id ?? "") ?? "…"}
+                      {/* Audit fields carry USER ids; the roster maps them. */}
+                      {roster.data?.nameOfUser(note.metadata?.createdBy?.id ?? "") ?? "…"}
                     </span>
                     {createdAt && <> — {formatInstant(timestampDate(createdAt))}</>}
                   </p>

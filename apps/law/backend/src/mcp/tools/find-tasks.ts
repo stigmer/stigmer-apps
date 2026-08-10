@@ -17,8 +17,8 @@ import {
 import { countNoun } from "../format.js";
 import { errorResult, gated, textResult } from "../gate.js";
 import {
-  caseByNumber,
-  resolvePersonByNameOrEmail,
+  caseByFileNumber,
+  resolveMemberByNameOrEmail,
   taskLine,
   taskRecord,
   type ToolDeps,
@@ -42,21 +42,22 @@ export function registerFindTasks(
     NAME,
     {
       description:
-        "Find tasks across the whole firm, soonest due first: filter by the " +
-        "assigned person (exact name or email), by a case number, by status " +
-        "(open / overdue / all), or any combination. With no arguments it " +
-        "lists the firm's tasks. Answers include each task's id.",
+        "Find tasks across the caller's visible cases, soonest due first: " +
+        "filter by the assigned person (exact name or email), by a matter's " +
+        "file number, by status (open / overdue / all), or any combination. " +
+        "With no arguments it lists everything visible. Answers include each " +
+        "task's id.",
       inputSchema: {
         assignee: z
           .string()
           .min(1)
           .optional()
           .describe("The assigned person's exact name or email, e.g. 'Asha' or 'asha@firm.in'."),
-        case_number: z
+        file_number: z
           .string()
           .min(1)
           .optional()
-          .describe("A court case number, exactly as the firm uses it."),
+          .describe("The firm's file number for a matter, e.g. 'CS/2026/041'."),
         status: z
           .enum(FILTERS)
           .optional()
@@ -68,7 +69,7 @@ export function registerFindTasks(
       let assigneeId: string | undefined;
       let assigneeName: string | undefined;
       if (args.assignee) {
-        const resolved = await resolvePersonByNameOrEmail(
+        const resolved = await resolveMemberByNameOrEmail(
           deps.resources,
           caller.principal,
           args.assignee,
@@ -76,14 +77,15 @@ export function registerFindTasks(
         if ("refusal" in resolved) {
           return errorResult(resolved.refusal);
         }
-        assigneeId = resolved.user.metadata?.id;
-        assigneeName = resolved.user.spec?.name;
+        assigneeId = resolved.member.metadata?.id;
+        assigneeName = resolved.member.status?.userName;
       }
 
       let caseId: string | undefined;
-      if (args.case_number) {
-        // NOT_FOUND relays "Case 'X' not found" verbatim through the gate.
-        caseId = (await caseByNumber(deps.resources, caller.principal, args.case_number))
+      if (args.file_number) {
+        // NOT_FOUND (and the membership denial) relay verbatim through
+        // the gate.
+        caseId = (await caseByFileNumber(deps.resources, caller.principal, args.file_number))
           .metadata?.id;
       }
 
@@ -105,7 +107,7 @@ export function registerFindTasks(
       ][0] as string;
       const where = [
         assigneeName ? `for ${assigneeName}` : "",
-        args.case_number ? `on case ${args.case_number.trim()}` : "",
+        args.file_number ? `on ${args.file_number.trim()}` : "",
       ]
         .filter(Boolean)
         .join(" ");

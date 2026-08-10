@@ -76,6 +76,14 @@ export interface BackendConfig {
   /** Authentication (DD-005): signing keys + operator key hash. */
   readonly auth: AuthConfig;
   /**
+   * The reminder sweep's tick interval in milliseconds (Gate-1 Q4):
+   * deadline escalation, unrecorded-outcome nags, hearing reminders.
+   * 0 disables the loop (tests drive runSweepOnce directly; dev may not
+   * want background writes). Calendar reminders tolerate minutes of
+   * latency by nature, so the default is 15 minutes.
+   */
+  readonly reminderIntervalMs: number;
+  /**
    * The MCP channel entrance (T05, DD-008): a second listener serving
    * the agent platform's tool calls, guarded by a shared secret that is
    * THE authorization boundary for asserted channel identities — which
@@ -154,6 +162,15 @@ export function loadConfigFromEnv(
     );
   }
 
+  const reminderIntervalRaw = env.REMINDER_SWEEP_INTERVAL_SECONDS ?? "900";
+  const reminderIntervalSeconds = Number(reminderIntervalRaw);
+  if (!Number.isInteger(reminderIntervalSeconds) || reminderIntervalSeconds < 0) {
+    problems.push(
+      `REMINDER_SWEEP_INTERVAL_SECONDS must be a non-negative integer (0 disables), ` +
+        `got '${reminderIntervalRaw}'`,
+    );
+  }
+
   if (problems.length > 0) {
     throw new Error(`Invalid backend configuration:\n- ${problems.join("\n- ")}`);
   }
@@ -174,6 +191,7 @@ export function loadConfigFromEnv(
       previousPublicKeyBase64: env.AUTH_JWT_PREVIOUS_PUBLIC_KEY,
       operatorKeySha256Hex,
     },
+    reminderIntervalMs: reminderIntervalSeconds * 1000,
     mcp: {
       port: mcpPort,
       sharedSecret: mcpSharedSecret,
