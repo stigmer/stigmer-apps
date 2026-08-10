@@ -139,7 +139,10 @@ describe("create", () => {
         return real.getByNaturalKey(kind, value);
       },
       list: (kind, q) => real.list(kind, q),
-      countBy: (kind, field, values) => real.countBy(kind, field, values),
+      countBy: (kind, field, values, filter) => real.countBy(kind, field, values, filter),
+      sumBy: (kind, groupField, valueField, values, filter) =>
+        real.sumBy(kind, groupField, valueField, values, filter),
+      searchText: (kind, field, query, limit) => real.searchText(kind, field, query, limit),
       getByIds: (kind, ids) => real.getByIds(kind, ids),
     };
     const { client } = makeClient({ store: racy });
