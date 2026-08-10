@@ -1,7 +1,9 @@
 # One pipeline for the whole monorepo — commons and apps together. CI is
-# the only gate between a commit and production (the isc-assistant
-# precedent: deploy pipelines build every push to main without running
-# tests), so everything that must hold, holds here.
+# the only gate between a commit and production AND, since T06 of the
+# law-practice-platform project, the only producer of the production
+# image (the Planton Service Hub build is retired; its push trigger
+# never fired — the repo had no webhook). Everything that must hold,
+# holds here.
 #
 # The guard runs FIRST and needs no dependencies: this repo is public,
 # so customer-specific strings are a failure on EVERY path (the hub
@@ -17,6 +19,11 @@ on:
   push:
     branches: [main]
   pull_request:
+
+# Least privilege by default; the image job alone elevates to
+# packages: write for the ghcr push.
+permissions:
+  contents: read
 
 jobs:
   check:
@@ -37,6 +44,12 @@ jobs:
         env:
           CUSTOMER_DENYLIST: ${{ secrets.CUSTOMER_DENYLIST }}
         run: node scripts/check-customer-data.mjs
+
+      - name: Image-reference guard
+        # The image job pushes where the chart's image_repo default says
+        # firms pull from; a rename in one file must fail here, not as a
+        # pull error during a production install.
+        run: node scripts/check-image-reference.mjs
 
       - name: Install
         run: npm ci
@@ -88,19 +101,46 @@ jobs:
       - name: Web E2E
         run: npm run test:e2e -w @law/web
 
-  # The deployed image is built by the Planton pipeline from
-  # apps/law/backend/Dockerfile — and nothing else compiles that file,
-  # so CI builds it (never pushes) to catch a broken Dockerfile before a
-  # release discovers it. Releases themselves are deliberate: the per-firm
-  # chart pins an image tag, so a red commit's image simply never gets
-  # installed (T06 topology).
+  # CI is the ONLY producer of the deployed image: every merge to main
+  # pushes ghcr.io/stigmer/stigmer-apps/law-backend:<git-sha>. The push
+  # sits behind the full suite (needs: check + e2e) and this job's own
+  # boot check, so an image no test has seen cannot exist in the
+  # registry. Releases stay deliberate: the per-firm chart pins an exact
+  # sha as image_tag, so publishing an image deploys nothing.
+  #
+  # The tag is the FULL 40-char commit sha — every firm's private values
+  # file pins that exact format; a short sha would strand every pin. The
+  # registry path is hardcoded (not derived from github.repository) on
+  # purpose: it is a wire contract with those values files, and the
+  # check job's image-reference guard greps for the literal.
+  #
+  # No path filter, deliberately: every green main commit gets an image,
+  # so "any green sha is pinnable" holds with no exceptions (GitHub's
+  # event-level paths: filter is also silently skipped on oversized
+  # pushes — see release.sandbox-cloud.yaml in stigmer/stigmer).
+  #
+  # The package must stay PUBLIC: the deployed platform version ignores
+  # the registry-connection annotation on chart-rendered deployments, so
+  # firm image pulls are unauthenticated. If the package is ever deleted,
+  # a GITHUB_TOKEN push recreates it PRIVATE and every firm install
+  # starts failing at pull time — restore public visibility in the org
+  # package settings.
   image:
+    needs: [check, e2e]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
       - name: Build law backend image
-        run: docker build -f apps/law/backend/Dockerfile -t law-backend:ci .
+        # Explicit platform: the GKE nodes are amd64, and a future
+        # arm64 runner default must not silently produce an image the
+        # cluster cannot run.
+        run: |
+          docker build --platform linux/amd64 \
+            -f apps/law/backend/Dockerfile -t law-backend:ci .
 
       - name: Boot check
         # With no environment the bundle must reach the config loader and
@@ -114,3 +154,24 @@ jobs:
           set -e
           echo "$output"
           echo "$output" | grep -q "Invalid backend configuration"
+
+      # Push only on merges to main (the push trigger is already
+      # main-only, so the event name is the complete condition). PRs run
+      # the build and boot check but never publish.
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push the boot-checked image
+        # Tag and push the SAME local image the boot check ran — never a
+        # buildx --push rebuild — so what ships is byte-for-byte what
+        # booted.
+        if: github.event_name == 'push'
+        run: |
+          docker tag law-backend:ci ghcr.io/stigmer/stigmer-apps/law-backend:${{ github.sha }}
+          docker push ghcr.io/stigmer/stigmer-apps/law-backend:${{ github.sha }}
+          echo "Pushed ghcr.io/stigmer/stigmer-apps/law-backend:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"

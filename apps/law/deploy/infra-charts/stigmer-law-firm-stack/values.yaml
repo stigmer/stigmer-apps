@@ -45,8 +45,9 @@ params:
     value: apac
 
   # ─── The app (templates/deployment.yaml) ────────────────────────────────────
-  # The image is built by the Service Hub service `law-backend` on every
-  # merge to main and tagged with the git commit SHA. Releases are
+  # The image is built and pushed by this repo's CI (the `image` job in
+  # .github/workflows/ci.yml) on every merge to main, gated behind the
+  # full test suite and tagged with the full git commit SHA. Releases are
   # deliberate: a firm runs exactly the tag pinned in its values file —
   # bump it and re-install to release, point it back and re-install to
   # roll back (T06 topology).
