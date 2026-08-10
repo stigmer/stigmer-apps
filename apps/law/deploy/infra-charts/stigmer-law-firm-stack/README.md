@@ -26,13 +26,15 @@ the firm's Stigmer `McpServer` manifest points at
 
 ## The release model (T06 topology)
 
-The Service Hub service `law-backend` (private ops repo) **builds and
-pushes** `ghcr.io/stigmer/stigmer-apps/law-backend:<git-sha>` on every
-merge to main — and deploys nothing. A firm runs exactly the tag pinned
-as `image_tag` in its values file; releasing is bumping that pin and
-re-installing, and rolling back is pointing it at the previous tag and
-re-installing. Nothing untested ever auto-deploys to a firm, and the
-commit serving each firm is recorded in the private ops repo's history.
+This repo's CI (the `image` job in `.github/workflows/ci.yml`) **builds
+and pushes** `ghcr.io/stigmer/stigmer-apps/law-backend:<full-git-sha>`
+on every merge to main, gated behind the full test suite — and deploys
+nothing. A firm runs exactly the tag pinned as `image_tag` in its values
+file; releasing is bumping that pin and re-installing, and rolling back
+is pointing it at the previous tag and re-installing. Nothing untested
+ever reaches the registry, nothing in the registry auto-deploys to a
+firm, and the commit serving each firm is recorded in the private ops
+repo's history.
 
 Corollary, and it is load-bearing: **a routine release changes
 `image_tag` and nothing else.** Every install re-evaluates all four

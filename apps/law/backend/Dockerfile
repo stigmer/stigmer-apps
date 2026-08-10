@@ -4,11 +4,10 @@
 # public/ (T04b D1) — and no node_modules (see backend/build.mjs for why
 # the bundle, not tsc output).
 #
-# BUILD CONTEXT IS THE REPO ROOT (the Planton platform pipeline builds
-# `dockerfilePath: apps/law/backend/Dockerfile` from the root, same as
-# the isc-assistant mcp-server image). The context must span the npm
-# workspace: `npm ci` needs every workspace manifest, and the bundle
-# inlines @stigmer/resource-api and @stigmer/identity from source.
+# BUILD CONTEXT IS THE REPO ROOT (CI's image job builds
+# `-f apps/law/backend/Dockerfile` from the root). The context must span
+# the npm workspace: `npm ci` needs every workspace manifest, and the
+# bundle inlines @stigmer/resource-api and @stigmer/identity from source.
 #
 # Base is the ECR mirror, not docker.io, to stay clear of Docker Hub
 # rate limits in CI (same choice as the other Stigmer images).

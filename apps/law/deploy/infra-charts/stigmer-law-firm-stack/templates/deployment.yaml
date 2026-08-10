@@ -3,9 +3,9 @@
 # document byte routes, AND the web app (same-origin SPA, T04b D1), so a
 # firm is exactly one service and one hostname.
 #
-# Deployed BY THIS CHART, not by a Service Hub pipeline (T06 topology):
-# the Service Hub service `law-backend` only builds and pushes the image
-# on every merge to main; putting a build in front of a firm is a
+# Deployed BY THIS CHART, not by any build pipeline (T06 topology): the
+# repo's CI builds and pushes the image on every merge to main, gated
+# behind the full test suite; putting an image in front of a firm is a
 # deliberate act — bump `image_tag` in the firm's values file and
 # re-install. Nothing untested auto-deploys to a firm, and the exact
 # commit serving each firm is recorded in the private ops repo.
@@ -72,8 +72,8 @@ spec:
   version: main
   container:
     app:
-      # Built by the Service Hub pipeline from apps/law/backend/Dockerfile
-      # (context = repo root); the tag is the git commit SHA the pipeline
+      # Built by CI's image job from apps/law/backend/Dockerfile
+      # (context = repo root); the tag is the full git commit SHA CI
       # stamped, pinned per firm in the values file.
       image:
         repo: {{ values.image_repo }}
