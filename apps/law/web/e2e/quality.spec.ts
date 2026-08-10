@@ -17,7 +17,7 @@ async function signIn(page: Page) {
   await page.getByLabel("Email").fill(ASHA.email);
   await page.getByLabel("Password").fill(ASHA.password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
 }
 
 test("performance envelope: 2s list loads, 3s mutations (FR-PERF-001)", async ({ page }) => {

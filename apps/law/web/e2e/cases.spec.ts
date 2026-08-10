@@ -26,13 +26,13 @@ async function signIn(page: Page) {
   await page.getByLabel("Email").fill(ASHA.email);
   await page.getByLabel("Password").fill(ASHA.password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
 }
 
 /** Intake with a brand-new client, created inline (J4). */
 async function createMatter(page: Page, fileNumber: string, clientName: string) {
   await page.goto("/cases/new");
-  await page.getByLabel("Client").fill(clientName);
+  await page.getByLabel("Client", { exact: true }).fill(clientName);
   await page.getByRole("button", { name: "Add a new client" }).click();
   await page.getByRole("button", { name: "Add client" }).click();
   await expect(page.getByText(clientName)).toBeVisible();
@@ -117,7 +117,7 @@ test("the conflict check fires DURING intake when the name is on the other side"
   // Second intake: typing the opposing name into the CLIENT search
   // surfaces the conflict panel before anything is created.
   await page.goto("/cases/new");
-  await page.getByLabel("Client").fill("Sunrise Traders");
+  await page.getByLabel("Client", { exact: true }).fill("Sunrise Traders");
   const conflict = page.getByTestId("conflict-check");
   await expect(conflict).toContainText("Sunrise Traders");
   await expect(conflict).toContainText("CRL/2026/077");
@@ -128,7 +128,7 @@ test("a duplicate file number answers the server's ALREADY_EXISTS sentence", asy
   await createMatter(page, "CRL/2026/088", "Epsilon & Co");
 
   await page.goto("/cases/new");
-  await page.getByLabel("Client").fill("Epsilon & Co");
+  await page.getByLabel("Client", { exact: true }).fill("Epsilon & Co");
   await page.getByTestId("client-search-results").getByRole("button", { name: /Epsilon & Co/ }).click();
   await page.getByLabel("File number").fill("CRL/2026/088");
   await page.getByLabel("Our client is the").selectOption({ label: "Defendant" });

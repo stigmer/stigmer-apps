@@ -41,6 +41,9 @@ export function useClient(id: string) {
   return useQuery({
     queryKey: ["clients", "byId", id],
     queryFn: () => clients.get({ id }),
+    // Callers pass "" while their parent record is still loading (the
+    // case detail resolving its client) — don't fire a doomed request.
+    enabled: id !== "",
   });
 }
 
