@@ -31,6 +31,8 @@ runStoreContractTests("PostgresResourceStore", async () => {
           ownerId: "owner_id",
           retired: "retired",
           createdAt: "created_at",
+          name: "name",
+          weightGrams: "weight_grams",
         },
       },
     }),

@@ -14,6 +14,8 @@ runStoreContractTests("MemoryResourceStore", async () => ({
         ownerId: "spec.ownerId",
         retired: "status.retired",
         createdAt: "metadata.createdAt",
+        name: "spec.name",
+        weightGrams: "spec.weightGrams",
       },
     },
   }),

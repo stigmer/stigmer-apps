@@ -186,8 +186,18 @@ export interface ResourceStore {
    * deriveStatus (e.g. Case.document_count over 20 cases) is never an
    * N+1. Values absent from the result have count 0. Forced by the first
    * derived-count consumer (T03 D4).
+   *
+   * The optional filter narrows which rows are counted, with the same
+   * closed vocabulary and AND semantics as list — forced by the first
+   * conditional-count consumer ("open deadlines per case": counting
+   * only rows whose state is open).
    */
-  countBy(kind: string, field: string, values: readonly string[]): Promise<Map<string, number>>;
+  countBy(
+    kind: string,
+    field: string,
+    values: readonly string[],
+    filter?: Readonly<Record<string, FilterValue>>,
+  ): Promise<Map<string, number>>;
 
   /**
    * Bulk getById — one round trip for a page's worth of references, so a
@@ -197,4 +207,58 @@ export interface ResourceStore {
    * map. Forced by the first derived-reference consumer (T04b D9).
    */
   getByIds(kind: string, ids: readonly string[]): Promise<Map<string, ResourceMessage>>;
+
+  /**
+   * Sums a registered INTEGER field grouped by another registered field,
+   * for the group values given — countBy's shape applied to addition,
+   * forced by the first derived-balance consumer (a ledger's outstanding
+   * per case; amounts are integer paise precisely so this is exact
+   * arithmetic). One round trip regardless of page size. Groups absent
+   * from the result sum to 0; groups whose rows exist but whose value
+   * field is absent contribute nothing. The value field must render as
+   * an integer — a non-integer rendering is a loud error in both
+   * adapters, never a silent 0 (the unregistered-field rule applied to
+   * content). Sums must stay within the safe JavaScript integer range;
+   * the port answers plain numbers.
+   *
+   * The optional filter narrows which rows contribute, with the same
+   * closed vocabulary and AND semantics as list (a ledger sums charges
+   * and receipts separately — the kind is a filter, not a second
+   * grouping).
+   */
+  sumBy(
+    kind: string,
+    groupField: string,
+    valueField: string,
+    values: readonly string[],
+    filter?: Readonly<Record<string, FilterValue>>,
+  ): Promise<Map<string, number>>;
+
+  /**
+   * Case-insensitive substring search over ONE registered field — forced
+   * by the first name-search consumer (a conflict check: "have we seen
+   * this name?"). Returns at most `limit` rows ordered by the searched
+   * field ascending (ties by id), never a total count: this is a
+   * suggestion list, not a report.
+   *
+   * The query matches literally — `%` and `_` in the query are
+   * characters, not wildcards (the Postgres adapter escapes; the memory
+   * adapter never had wildcards). Rows where the field is absent never
+   * match. An empty query is a programming error, loudly rejected: the
+   * caller decides the minimum useful length, the port refuses the
+   * meaningless case.
+   *
+   * A registered search field MAY render a structured node (e.g. a
+   * party-name array) as its JSON text; matching is then substring over
+   * that rendering. Adapters may differ in container punctuation and
+   * whitespace, so register structured fields only where the searched
+   * content is scalar text inside them (names) — the contract suite
+   * pins name-matching, not punctuation.
+   */
+  searchText(
+    kind: string,
+    field: string,
+    query: string,
+    limit: number,
+  ): Promise<readonly ResourceMessage[]>;
 }

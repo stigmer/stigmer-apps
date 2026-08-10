@@ -10,6 +10,7 @@ import { clone, type DescMessage, toJson } from "@bufbuild/protobuf";
 import type { ResourceMessage } from "../envelope.js";
 import {
   DuplicateNaturalKeyError,
+  type FilterValue,
   type ListQuery,
   type ListResult,
   type NormalizedFilter,
@@ -22,6 +23,14 @@ export interface MemoryKindConfig {
   readonly schema: DescMessage;
   /** Spec proto3-JSON key of the natural key (e.g. "serialNumber"). */
   readonly naturalKeyField?: string;
+  /**
+   * Composite/derived natural keys: the fake's analogue of a Postgres
+   * generated-column EXPRESSION (e.g. `caseId || ':' || memberId`).
+   * When set, uniqueness and getByNaturalKey use this function and
+   * naturalKeyField is ignored. Undefined return means "no key on this
+   * row" (never unique-checked, never matched).
+   */
+  readonly naturalKeyOf?: (resource: ResourceMessage) => string | undefined;
   /**
    * Logical field name → proto3-JSON path under the resource root (e.g.
    * "spec.ownerId", "status.retired", "metadata.createdAt") — mirrors the
@@ -48,14 +57,12 @@ export class MemoryResourceStore implements ResourceStore {
       throw new Error(`Cannot save ${kind} without metadata.id (pipeline bug)`);
     }
 
-    if (config.naturalKeyField) {
-      const value = this.#jsonValue(kind, resource, `spec.${config.naturalKeyField}`);
-      if (value !== undefined) {
-        for (const [otherId, other] of this.#table(kind)) {
-          if (otherId === id) continue;
-          if (this.#jsonValue(kind, other, `spec.${config.naturalKeyField}`) === value) {
-            throw new DuplicateNaturalKeyError(kind, value);
-          }
+    const value = this.#naturalKey(kind, resource);
+    if (value !== undefined) {
+      for (const [otherId, other] of this.#table(kind)) {
+        if (otherId === id) continue;
+        if (this.#naturalKey(kind, other) === value) {
+          throw new DuplicateNaturalKeyError(kind, value);
         }
       }
     }
@@ -73,12 +80,23 @@ export class MemoryResourceStore implements ResourceStore {
   }
 
   async getByNaturalKey(kind: string, value: string): Promise<ResourceMessage | undefined> {
-    const field = this.#config(kind).naturalKeyField;
-    if (!field) return undefined;
+    const config = this.#config(kind);
+    if (!config.naturalKeyField && !config.naturalKeyOf) return undefined;
     for (const row of this.#table(kind).values()) {
-      if (this.#jsonValue(kind, row, `spec.${field}`) === value) {
+      if (this.#naturalKey(kind, row) === value) {
         return this.#cloneOut(kind, row);
       }
+    }
+    return undefined;
+  }
+
+  #naturalKey(kind: string, row: ResourceMessage): string | undefined {
+    const config = this.#config(kind);
+    if (config.naturalKeyOf) {
+      return config.naturalKeyOf(row);
+    }
+    if (config.naturalKeyField) {
+      return this.#jsonValue(kind, row, `spec.${config.naturalKeyField}`);
     }
     return undefined;
   }
@@ -149,18 +167,96 @@ export class MemoryResourceStore implements ResourceStore {
     kind: string,
     field: string,
     values: readonly string[],
+    filter?: Readonly<Record<string, FilterValue>>,
   ): Promise<Map<string, number>> {
     this.#config(kind);
     const path = this.#fieldPath(kind, field);
     const wanted = new Set(values);
     const counts = new Map<string, number>();
-    for (const row of this.#table(kind).values()) {
+    for (const row of this.#filteredRows(kind, filter)) {
       const value = this.#jsonValue(kind, row, path);
       if (value !== undefined && wanted.has(value)) {
         counts.set(value, (counts.get(value) ?? 0) + 1);
       }
     }
     return counts;
+  }
+
+  async sumBy(
+    kind: string,
+    groupField: string,
+    valueField: string,
+    values: readonly string[],
+    filter?: Readonly<Record<string, FilterValue>>,
+  ): Promise<Map<string, number>> {
+    this.#config(kind);
+    const groupPath = this.#fieldPath(kind, groupField);
+    const valuePath = this.#fieldPath(kind, valueField);
+    const wanted = new Set(values);
+    const sums = new Map<string, number>();
+    for (const row of this.#filteredRows(kind, filter)) {
+      const group = this.#jsonValue(kind, row, groupPath);
+      if (group === undefined || !wanted.has(group)) continue;
+      const rendered = this.#jsonValue(kind, row, valuePath);
+      // Absent contributes nothing (the SQL SUM-over-NULL behavior);
+      // present-but-not-an-integer is a loud error, matching the
+      // Postgres adapter's ::bigint cast failure.
+      if (rendered === undefined) continue;
+      if (!/^-?\d+$/.test(rendered)) {
+        throw new Error(
+          `sumBy on '${kind}.${valueField}': value '${rendered}' is not an integer ` +
+            `(row ${row.metadata?.id})`,
+        );
+      }
+      sums.set(group, (sums.get(group) ?? 0) + Number(rendered));
+    }
+    return sums;
+  }
+
+  async searchText(
+    kind: string,
+    field: string,
+    query: string,
+    limit: number,
+  ): Promise<readonly ResourceMessage[]> {
+    this.#config(kind);
+    const path = this.#fieldPath(kind, field);
+    if (query.length === 0) {
+      throw new Error(`searchText on '${kind}.${field}': query must not be empty`);
+    }
+    const needle = query.toLowerCase();
+    const hits: { rendered: string; row: ResourceMessage }[] = [];
+    for (const row of this.#table(kind).values()) {
+      const rendered = this.#searchValue(kind, row, path);
+      if (rendered !== undefined && rendered.toLowerCase().includes(needle)) {
+        hits.push({ rendered, row });
+      }
+    }
+    // Searched-field ascending with the id tiebreak — the list ordering
+    // discipline applied to search results.
+    hits.sort((a, b) => {
+      if (a.rendered !== b.rendered) return a.rendered < b.rendered ? -1 : 1;
+      const aid = a.row.metadata?.id ?? "";
+      const bid = b.row.metadata?.id ?? "";
+      return aid < bid ? -1 : aid > bid ? 1 : 0;
+    });
+    return hits.slice(0, Math.max(0, limit)).map((h) => this.#cloneOut(kind, h.row));
+  }
+
+  /** Rows passing a list-shaped filter — shared by countBy and sumBy. */
+  #filteredRows(
+    kind: string,
+    filter: Readonly<Record<string, FilterValue>> | undefined,
+  ): ResourceMessage[] {
+    let rows = [...this.#table(kind).values()];
+    if (filter) {
+      for (const [field, value] of Object.entries(filter)) {
+        const path = this.#fieldPath(kind, field);
+        const condition = normalizeFilterValue(field, value);
+        rows = rows.filter((r) => matchesCondition(this.#jsonValue(kind, r, path), condition));
+      }
+    }
+    return rows;
   }
 
   #config(kind: string): MemoryKindConfig {
@@ -207,15 +303,34 @@ export class MemoryResourceStore implements ResourceStore {
    * empty strings read as undefined (an absent JSON key and `->>` NULL).
    */
   #jsonValue(kind: string, row: ResourceMessage, path: string): string | undefined {
+    const node = this.#jsonNode(kind, row, path);
+    if (node === undefined || node === null) return undefined;
+    if (typeof node === "string") return node === "" ? undefined : node;
+    if (typeof node === "boolean" || typeof node === "number") return String(node);
+    return undefined;
+  }
+
+  /**
+   * The search rendering: scalars as #jsonValue; structured nodes as
+   * their JSON text (the Postgres `(...)::text` analogue — container
+   * punctuation is unspecified by the port contract, scalar content is
+   * what search matches).
+   */
+  #searchValue(kind: string, row: ResourceMessage, path: string): string | undefined {
+    const node = this.#jsonNode(kind, row, path);
+    if (node === undefined || node === null) return undefined;
+    if (typeof node === "string") return node === "" ? undefined : node;
+    if (typeof node === "boolean" || typeof node === "number") return String(node);
+    return JSON.stringify(node);
+  }
+
+  #jsonNode(kind: string, row: ResourceMessage, path: string): unknown {
     let node: unknown = toJson(this.#config(kind).schema, row as never);
     for (const key of path.split(".")) {
       if (node === null || typeof node !== "object") return undefined;
       node = (node as Record<string, unknown>)[key];
     }
-    if (node === undefined || node === null) return undefined;
-    if (typeof node === "string") return node === "" ? undefined : node;
-    if (typeof node === "boolean" || typeof node === "number") return String(node);
-    return undefined;
+    return node;
   }
 }
 

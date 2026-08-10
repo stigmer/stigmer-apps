@@ -31,6 +31,7 @@ import type pg from "pg";
 import type { ResourceMessage } from "../envelope.js";
 import {
   DuplicateNaturalKeyError,
+  type FilterValue,
   type ListQuery,
   type ListResult,
   normalizeFilterValue,
@@ -128,40 +129,8 @@ export class PostgresResourceStore implements ResourceStore {
   async list(kind: string, query: ListQuery): Promise<ListResult<ResourceMessage>> {
     const config = this.#config(kind);
 
-    const where: string[] = [];
     const params: unknown[] = [];
-    for (const [field, value] of Object.entries(query.filter ?? {})) {
-      const column = this.#column(kind, config, field);
-      // normalizeFilterValue lives on the port so a malformed filter fails
-      // with the same error here and in the memory fake. Values are always
-      // bound parameters; only the registered column name reaches the SQL.
-      const condition = normalizeFilterValue(field, value);
-      switch (condition.op) {
-        case "eq":
-          params.push(condition.value);
-          where.push(`${column} = $${params.length}`);
-          break;
-        case "in":
-          // `= ANY('{}')` is false: an empty set matches nothing, which is
-          // the contract (and what the fake's `[].includes` yields).
-          params.push([...condition.values]);
-          where.push(`${column} = ANY($${params.length}::text[])`);
-          break;
-        case "range":
-          for (const bound of condition.bounds) {
-            params.push(bound.value);
-            const sqlCmp =
-              bound.cmp === "gte" ? ">=" : bound.cmp === "gt" ? ">" : bound.cmp === "lte" ? "<=" : "<";
-            where.push(`${column} ${sqlCmp} $${params.length}`);
-          }
-          break;
-        case "absent":
-          // Absent from the stored proto3 JSON ⇒ the generated column is
-          // NULL (rows where the field is set never match, including "").
-          where.push(`${column} IS NULL`);
-          break;
-      }
-    }
+    const where = this.#filterConditions(kind, config, query.filter, params);
     const whereSql = where.length > 0 ? ` WHERE ${where.join(" AND ")}` : "";
 
     let orderSql = "";
@@ -216,6 +185,7 @@ export class PostgresResourceStore implements ResourceStore {
     kind: string,
     field: string,
     values: readonly string[],
+    filter?: Readonly<Record<string, FilterValue>>,
   ): Promise<Map<string, number>> {
     const config = this.#config(kind);
     const column = this.#column(kind, config, field);
@@ -223,19 +193,134 @@ export class PostgresResourceStore implements ResourceStore {
     if (values.length === 0) {
       return counts;
     }
+    const params: unknown[] = [[...values]];
+    const where = [`${column} = ANY($1::text[])`, ...this.#filterConditions(kind, config, filter, params)];
     // One GROUP BY regardless of how many values: this method exists so
     // page-shaped status derivation is never an N+1 (T03 D4).
     const res = await this.#pool.query(
       `SELECT ${column} AS value, count(*)::int AS n
          FROM ${config.table}
-        WHERE ${column} = ANY($1::text[])
+        WHERE ${where.join(" AND ")}
         GROUP BY ${column}`,
-      [[...values]],
+      params,
     );
     for (const row of res.rows) {
       counts.set(row.value as string, row.n as number);
     }
     return counts;
+  }
+
+  async sumBy(
+    kind: string,
+    groupField: string,
+    valueField: string,
+    values: readonly string[],
+    filter?: Readonly<Record<string, FilterValue>>,
+  ): Promise<Map<string, number>> {
+    const config = this.#config(kind);
+    const groupColumn = this.#column(kind, config, groupField);
+    const valueColumn = this.#column(kind, config, valueField);
+    const sums = new Map<string, number>();
+    if (values.length === 0) {
+      return sums;
+    }
+    const params: unknown[] = [[...values]];
+    const where = [
+      `${groupColumn} = ANY($1::text[])`,
+      ...this.#filterConditions(kind, config, filter, params),
+    ];
+    // ::bigint on the text generated column: int64 fields render as JSON
+    // strings, and a non-integer rendering fails the cast LOUDLY — the
+    // memory adapter throws the matching error. The total returns as
+    // text so a sum past int4 cannot be silently truncated by the
+    // driver; the port answers plain numbers (safe-range by contract).
+    const res = await this.#pool.query(
+      `SELECT ${groupColumn} AS value, SUM((${valueColumn})::bigint)::text AS total
+         FROM ${config.table}
+        WHERE ${where.join(" AND ")}
+        GROUP BY ${groupColumn}`,
+      params,
+    );
+    for (const row of res.rows) {
+      // SUM over only-NULL contributions yields NULL — the group's rows
+      // exist but carry no value; the contract says it contributes
+      // nothing, so skip rather than report 0 vs absent inconsistently.
+      if (row.total === null) continue;
+      sums.set(row.value as string, Number(row.total));
+    }
+    return sums;
+  }
+
+  async searchText(
+    kind: string,
+    field: string,
+    query: string,
+    limit: number,
+  ): Promise<readonly ResourceMessage[]> {
+    const config = this.#config(kind);
+    const column = this.#column(kind, config, field);
+    if (query.length === 0) {
+      throw new Error(`searchText on '${kind}.${field}': query must not be empty`);
+    }
+    // The query matches LITERALLY: escape LIKE's wildcards so a '%' in
+    // user input is a character, not a match-anything (the memory
+    // adapter's substring semantics never had wildcards to begin with).
+    const escaped = query.replace(/[\\%_]/g, (c) => `\\${c}`);
+    const res = await this.#pool.query(
+      `SELECT resource FROM ${config.table}
+        WHERE ${column} ILIKE $1 ESCAPE '\\'
+        ORDER BY ${column} ASC, id ASC
+        LIMIT $2`,
+      [`%${escaped}%`, Math.max(0, limit)],
+    );
+    return res.rows.map((r) => this.#toMessage(config, r.resource));
+  }
+
+  /**
+   * Renders a list-shaped filter to SQL conditions, appending bound
+   * parameters — shared by list, countBy, and sumBy so the closed filter
+   * vocabulary has exactly one SQL rendering. normalizeFilterValue lives
+   * on the port so a malformed filter fails with the same error here and
+   * in the memory fake. Values are always bound parameters; only the
+   * registered column name reaches the SQL.
+   */
+  #filterConditions(
+    kind: string,
+    config: PostgresKindConfig,
+    filter: Readonly<Record<string, FilterValue>> | undefined,
+    params: unknown[],
+  ): string[] {
+    const where: string[] = [];
+    for (const [field, value] of Object.entries(filter ?? {})) {
+      const column = this.#column(kind, config, field);
+      const condition = normalizeFilterValue(field, value);
+      switch (condition.op) {
+        case "eq":
+          params.push(condition.value);
+          where.push(`${column} = $${params.length}`);
+          break;
+        case "in":
+          // `= ANY('{}')` is false: an empty set matches nothing, which is
+          // the contract (and what the fake's `[].includes` yields).
+          params.push([...condition.values]);
+          where.push(`${column} = ANY($${params.length}::text[])`);
+          break;
+        case "range":
+          for (const bound of condition.bounds) {
+            params.push(bound.value);
+            const sqlCmp =
+              bound.cmp === "gte" ? ">=" : bound.cmp === "gt" ? ">" : bound.cmp === "lte" ? "<=" : "<";
+            where.push(`${column} ${sqlCmp} $${params.length}`);
+          }
+          break;
+        case "absent":
+          // Absent from the stored proto3 JSON ⇒ the generated column is
+          // NULL (rows where the field is set never match, including "").
+          where.push(`${column} IS NULL`);
+          break;
+      }
+    }
+    return where;
   }
 
   #config(kind: string): PostgresKindConfig {

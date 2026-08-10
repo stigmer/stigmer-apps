@@ -27,6 +27,7 @@ export function makeWidget(overrides: {
   retired?: boolean;
   version?: bigint;
   createdAt?: string;
+  weightGrams?: bigint;
 }): Widget {
   return create(WidgetSchema, {
     apiVersion: "testing.stigmer.ai/v1",
@@ -44,6 +45,7 @@ export function makeWidget(overrides: {
       name: overrides.name ?? `widget ${overrides.serialNumber}`,
       inspectionDate: overrides.inspectionDate,
       ownerId: overrides.ownerId ?? "",
+      weightGrams: overrides.weightGrams,
     },
     status: { retired: overrides.retired ?? false },
   });
@@ -468,6 +470,145 @@ export function runStoreContractTests(
             filter: { ownerId: { in: ["x"], lt: "y" } as never },
           }),
         ).rejects.toThrowError(/ownerId/);
+      });
+    });
+
+    // ── Filtered aggregation: countBy/sumBy (the balance seam) ──────────
+
+    it("countBy narrows by a list-shaped filter (the open-deadline shape)", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_1", serialNumber: "S1", ownerId: "owner-a", retired: true }));
+        await store.save("Widget", makeWidget({ id: "wdg_2", serialNumber: "S2", ownerId: "owner-a", retired: false }));
+        await store.save("Widget", makeWidget({ id: "wdg_3", serialNumber: "S3", ownerId: "owner-b", retired: true }));
+
+        const counts = await store.countBy("Widget", "ownerId", ["owner-a", "owner-b"], {
+          retired: "true",
+        });
+        expect(counts.get("owner-a")).toBe(1);
+        expect(counts.get("owner-b")).toBe(1);
+      });
+    });
+
+    it("sums an integer field grouped by another, one call per page", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_1", serialNumber: "S1", ownerId: "owner-a", weightGrams: 1500n }));
+        await store.save("Widget", makeWidget({ id: "wdg_2", serialNumber: "S2", ownerId: "owner-a", weightGrams: 2500n }));
+        await store.save("Widget", makeWidget({ id: "wdg_3", serialNumber: "S3", ownerId: "owner-b", weightGrams: 100n }));
+        // owner-c's row exists but carries no weight: contributes nothing.
+        await store.save("Widget", makeWidget({ id: "wdg_4", serialNumber: "S4", ownerId: "owner-c" }));
+
+        const sums = await store.sumBy("Widget", "ownerId", "weightGrams", [
+          "owner-a",
+          "owner-b",
+          "owner-c",
+          "owner-none",
+        ]);
+        expect(sums.get("owner-a")).toBe(4000);
+        expect(sums.get("owner-b")).toBe(100);
+        // Absent means zero — a group with no contributing rows is not
+        // reported (the countBy convention).
+        expect(sums.has("owner-c")).toBe(false);
+        expect(sums.has("owner-none")).toBe(false);
+      });
+    });
+
+    it("sumBy narrows by a list-shaped filter (the charge-vs-receipt shape)", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_1", serialNumber: "S1", ownerId: "owner-a", weightGrams: 10n, retired: true }));
+        await store.save("Widget", makeWidget({ id: "wdg_2", serialNumber: "S2", ownerId: "owner-a", weightGrams: 7n, retired: false }));
+
+        const retiredOnly = await store.sumBy(
+          "Widget",
+          "ownerId",
+          "weightGrams",
+          ["owner-a"],
+          { retired: "true" },
+        );
+        expect(retiredOnly.get("owner-a")).toBe(10);
+      });
+    });
+
+    it("sumBy with no group values returns an empty map without touching the store", async () => {
+      await withStore(async (store) => {
+        expect((await store.sumBy("Widget", "ownerId", "weightGrams", [])).size).toBe(0);
+      });
+    });
+
+    it("sumBy rejects a non-integer value field loudly, never a silent 0", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_1", serialNumber: "S1", ownerId: "owner-a", name: "not a number" }));
+        // `name` is a registered field whose rendering is text — summing
+        // it is a programming error both adapters must refuse the same way.
+        await expect(
+          store.sumBy("Widget", "ownerId", "name", ["owner-a"]),
+        ).rejects.toThrowError();
+      });
+    });
+
+    it("rejects sumBy on unregistered fields loudly", async () => {
+      await withStore(async (store) => {
+        await expect(
+          store.sumBy("Widget", "noSuchField", "weightGrams", ["x"]),
+        ).rejects.toThrowError(/noSuchField/);
+      });
+    });
+
+    // ── searchText (the conflict-check seam) ────────────────────────────
+
+    it("searches case-insensitively by substring, ordered by the field", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_1", serialNumber: "S1", name: "Meridian Textiles" }));
+        await store.save("Widget", makeWidget({ id: "wdg_2", serialNumber: "S2", name: "Blue Harbour Logistics" }));
+        await store.save("Widget", makeWidget({ id: "wdg_3", serialNumber: "S3", name: "meridian holdings" }));
+
+        const hits = (await store.searchText("Widget", "name", "MERIDIAN", 10)) as Widget[];
+        expect(hits.map((w) => w.metadata?.id)).toEqual(["wdg_1", "wdg_3"]);
+      });
+    });
+
+    it("search caps at the limit and never counts", async () => {
+      await withStore(async (store) => {
+        for (let i = 0; i < 5; i++) {
+          await store.save("Widget", makeWidget({ id: `wdg_${i}`, serialNumber: `S${i}`, name: `common name ${i}` }));
+        }
+        const hits = await store.searchText("Widget", "name", "common", 2);
+        expect(hits.length).toBe(2);
+      });
+    });
+
+    it("search matches % and _ literally — user input is never a wildcard", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_pct", serialNumber: "S1", name: "100% Cotton Mills" }));
+        await store.save("Widget", makeWidget({ id: "wdg_plain", serialNumber: "S2", name: "Cotton Mills" }));
+
+        const hits = (await store.searchText("Widget", "name", "100% cot", 10)) as Widget[];
+        expect(hits.map((w) => w.metadata?.id)).toEqual(["wdg_pct"]);
+
+        // A bare % must not become match-everything.
+        const pct = (await store.searchText("Widget", "name", "%", 10)) as Widget[];
+        expect(pct.map((w) => w.metadata?.id)).toEqual(["wdg_pct"]);
+      });
+    });
+
+    it("search never matches rows whose field is absent", async () => {
+      await withStore(async (store) => {
+        // inspectionDate doubles as an optional searchable field here.
+        await store.save("Widget", makeWidget({ id: "wdg_dated", serialNumber: "S1", inspectionDate: "2026-08-01" }));
+        await store.save("Widget", makeWidget({ id: "wdg_undated", serialNumber: "S2" }));
+
+        const hits = (await store.searchText("Widget", "inspectionDate", "2026", 10)) as Widget[];
+        expect(hits.map((w) => w.metadata?.id)).toEqual(["wdg_dated"]);
+      });
+    });
+
+    it("rejects search on unregistered fields and empty queries loudly", async () => {
+      await withStore(async (store) => {
+        await expect(store.searchText("Widget", "noSuchField", "x", 10)).rejects.toThrowError(
+          /noSuchField/,
+        );
+        await expect(store.searchText("Widget", "name", "", 10)).rejects.toThrowError(
+          /empty/,
+        );
       });
     });
 

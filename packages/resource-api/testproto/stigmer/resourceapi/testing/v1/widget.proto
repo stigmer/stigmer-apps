@@ -40,6 +40,11 @@ message WidgetSpec {
 
   // Reference-shaped field used by filter tests ("my widgets").
   string owner_id = 4;
+
+  // Numeric field used by the sumBy contract tests — int64 renders as a
+  // JSON string, exactly like the consuming products' integer-paise
+  // money fields, so the fixture exercises the same cast path.
+  optional int64 weight_grams = 5 [(buf.validate.field).int64.gt = 0];
 }
 
 message WidgetStatus {

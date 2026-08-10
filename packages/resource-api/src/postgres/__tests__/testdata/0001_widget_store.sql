@@ -16,6 +16,13 @@ CREATE TABLE widgets (
   -- ordering IS chronological ordering).
   retired    text GENERATED ALWAYS AS (resource->'status'->>'retired') STORED,
   created_at text GENERATED ALWAYS AS (resource->'metadata'->>'createdAt') STORED,
+  -- The searchText seam: a scalar text column searched with ILIKE. Real
+  -- consumers add a trigram index (pg_trgm) beside it; the fixture's
+  -- volume never needs one.
+  name text GENERATED ALWAYS AS (resource->'spec'->>'name') STORED,
+  -- The sumBy seam: int64 renders as JSON text; the adapter casts
+  -- ::bigint at aggregation time, so a non-integer rendering fails loud.
+  weight_grams text GENERATED ALWAYS AS (resource->'spec'->>'weightGrams') STORED,
   CONSTRAINT widgets_natural_key UNIQUE (serial_number)
 );
 
