@@ -15,7 +15,7 @@
  *     --secret <MCP_SHARED_SECRET> --wa <staff-wa-id>
  *
  * Read-only by design: it lists tools, asks firm_overview and
- * my_open_tasks, and proves the identity gate (an anonymous call must
+ * my_day, and proves the identity gate (an anonymous call must
  * be refused with the no-identity sentence). It never calls a write
  * tool — a smoke test that mutates a firm's records is not a smoke
  * test.
@@ -71,10 +71,10 @@ async function main(): Promise<void> {
     if (!ok) failures += 1;
   };
 
-  // 1. Anonymous discovery lists the seven tools.
+  // 1. Anonymous discovery lists the ten journey verbs.
   const anonymous = await connect();
   const { tools } = await anonymous.listTools();
-  check(tools.length === 7, `discovery lists 7 tools`, tools.map((t) => t.name).join(", "));
+  check(tools.length === 10, `discovery lists 10 tools`, tools.map((t) => t.name).join(", "));
 
   // 2. An anonymous CALL is refused (the identity gate holds).
   const refused = (await anonymous.callTool({
@@ -87,7 +87,7 @@ async function main(): Promise<void> {
   // 3. As a staff identity: the two read answers a demo leans on.
   if (wa) {
     const staff = await connect({ kind: "whatsapp_phone", value: wa });
-    for (const name of ["firm_overview", "my_open_tasks"]) {
+    for (const name of ["firm_overview", "my_day"]) {
       const result = (await staff.callTool({ name, arguments: {} })) as CallToolResult;
       check(!result.isError, name, text(result).split("\n")[0]);
       console.log(text(result).replace(/^/gm, "      "));
