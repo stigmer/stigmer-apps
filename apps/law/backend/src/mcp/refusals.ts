@@ -15,15 +15,27 @@
 
 /** No caller identity at all (console test call, misconfigured channel). */
 export const REFUSAL_NO_IDENTITY =
-  "I can only act for a verified WhatsApp sender, and this conversation " +
-  "did not carry one. If you are testing from the console, this is " +
-  "expected — the tools work only on the WhatsApp channel.";
+  "I can only act for a verified caller — a WhatsApp sender or a " +
+  "signed-in user of the firm's app — and this conversation did not " +
+  "carry one. If you are testing from the console, this is expected.";
 
 /** A verified number that matches no user — teach the way in. */
 export const REFUSAL_UNKNOWN_CALLER =
   "I don't recognize this WhatsApp number yet. Ask your firm " +
   "administrator to add it to your profile in the case system, then " +
   "message me again.";
+
+/**
+ * A platform-verified user whose email matches no account — on the web
+ * path this is almost always the #377 stale-email shape (the account's
+ * email was corrected in the case system, the agent platform still
+ * presents the old one), which only an administrator can reconcile.
+ * The words teach that, not the mechanism.
+ */
+export const REFUSAL_UNKNOWN_WEB_CALLER =
+  "Your assistant access needs attention — the account you're signed " +
+  "in with doesn't match a member of the firm. Ask your firm " +
+  "administrator to check your profile in the case system.";
 
 /** A verified number matching MORE than one user — refuse, never guess. */
 export const REFUSAL_AMBIGUOUS_CALLER =

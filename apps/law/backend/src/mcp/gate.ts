@@ -19,13 +19,19 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { Code, ConnectError } from "@connectrpc/connect";
 import type { CallerPrincipal } from "@stigmer/resource-api";
-import type { CallerIdentity, CallerIdentityResolver, User } from "@stigmer/identity";
+import {
+  STIGMER_USER_KIND,
+  type CallerIdentity,
+  type CallerIdentityResolver,
+  type User,
+} from "@stigmer/identity";
 import { identityLogToken } from "./identity.js";
 import {
   REFUSAL_AMBIGUOUS_CALLER,
   REFUSAL_NO_IDENTITY,
   REFUSAL_RECORDS_UNAVAILABLE,
   REFUSAL_UNKNOWN_CALLER,
+  REFUSAL_UNKNOWN_WEB_CALLER,
 } from "./refusals.js";
 
 /** A resolved staff caller: the principal for pipelines, the user for copy. */
@@ -90,7 +96,13 @@ export function gated<Args>(
       const resolution = await resolveCallerIdentity(identity);
       if (resolution.outcome === "unknown") {
         logCall("refused:unknown");
-        return errorResult(REFUSAL_UNKNOWN_CALLER);
+        // The refusal teaches the caller's OWN way in, so it is worded
+        // per surface: a web caller has no WhatsApp number to fix.
+        return errorResult(
+          identity.kind.trim().toLowerCase() === STIGMER_USER_KIND
+            ? REFUSAL_UNKNOWN_WEB_CALLER
+            : REFUSAL_UNKNOWN_CALLER,
+        );
       }
       if (resolution.outcome === "ambiguous") {
         logCall("refused:ambiguous");
