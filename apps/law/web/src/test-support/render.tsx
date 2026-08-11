@@ -54,7 +54,7 @@ export function fakeFirmMembers() {
   };
 }
 
-function fakeSessionKit(): SessionKit {
+function fakeSessionKit(overrides?: Partial<SessionKit>): SessionKit {
   // Stable snapshot reference — useSyncExternalStore loops on a getState
   // that manufactures a new object per call (the same reason the real
   // kit holds one state object between transitions).
@@ -67,6 +67,9 @@ function fakeSessionKit(): SessionKit {
     signOut: async () => undefined,
     getAccessToken: async () => "tok_test",
     invalidateAccessToken: () => undefined,
+    redeemActivationCode: async () => undefined,
+    changePassword: async () => undefined,
+    ...overrides,
   };
 }
 
@@ -75,6 +78,7 @@ export function renderScreen(
   clients: Partial<ApiClients>,
   routes: { path: string; element: ReactNode }[],
   initialPath: string,
+  options?: { session?: Partial<SessionKit> },
 ) {
   const router = createMemoryRouter(
     routes.map((r) => ({ path: r.path, element: r.element })),
@@ -84,7 +88,7 @@ export function renderScreen(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <SessionProvider kit={fakeSessionKit()}>
+      <SessionProvider kit={fakeSessionKit(options?.session)}>
         <ApiClientsProvider clients={clients as ApiClients}>
           <RouterProvider router={router} />
         </ApiClientsProvider>

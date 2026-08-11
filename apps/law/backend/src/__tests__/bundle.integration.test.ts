@@ -33,12 +33,14 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { startTestAuthz, type TestAuthz } from "./test-authz.js";
 
 const PACKAGE_DIR = fileURLToPath(new URL("../..", import.meta.url));
 const BUNDLE = fileURLToPath(new URL("../../dist/main.js", import.meta.url));
 const STARTUP_TIMEOUT_MS = 30_000;
 
 let container: StartedPostgreSqlContainer;
+let authz: TestAuthz;
 let child: ChildProcess;
 let base: string;
 let mcpBase: string;
@@ -74,6 +76,10 @@ async function startBundle(port: number, mcpPort: number): Promise<ChildProcess>
       AUTH_OPERATOR_KEY_SHA256: "a".repeat(64),
       MCP_PORT: String(mcpPort),
       MCP_SHARED_SECRET: MCP_SECRET,
+      // A real engine: main.ts bootstraps the FGA store/model before it
+      // listens (DD-003), so the artifact cannot boot against a stub.
+      FGA_API_URL: authz.server.connection.apiUrl,
+      FGA_API_TOKEN: authz.server.connection.apiToken as string,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -120,6 +126,7 @@ beforeAll(async () => {
   expect(build.status, String(build.stderr)).toBe(0);
 
   container = await new PostgreSqlContainer("postgres:17-alpine").start();
+  authz = await startTestAuthz();
   const port = await freePort();
   const mcpPort = await freePort();
   child = await startBundle(port, mcpPort);
@@ -130,6 +137,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (child && child.exitCode === null) child.kill("SIGKILL");
   if (container) await container.stop();
+  if (authz) await authz.stop();
 });
 
 describe("the bundled artifact", () => {

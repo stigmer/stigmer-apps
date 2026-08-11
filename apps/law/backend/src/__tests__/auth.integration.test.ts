@@ -14,11 +14,16 @@ import { Code, ConnectError, createClient, type Client, type Transport } from "@
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { runMigrations } from "@stigmer/resource-api/postgres";
 import { AuthService, UserSchema, UserService } from "@stigmer/identity";
-import { createPgCredentialStore, createPgRefreshTokenStore } from "@stigmer/identity/postgres";
+import {
+  createPgActivationCodeStore,
+  createPgCredentialStore,
+  createPgRefreshTokenStore,
+} from "@stigmer/identity/postgres";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import pg from "pg";
 import { createTestPool } from "./test-pool.js";
 import { createTestAuth, type TestAuth } from "./test-auth.js";
+import { startTestAuthz, type TestAuthz } from "./test-authz.js";
 import { testMigrationSources } from "./test-migrations.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CaseService } from "../gen/stigmer/law/case/v1/case_pb.js";
@@ -32,6 +37,7 @@ import { createBackendServer } from "../server.js";
 import { createResourceStore } from "../storage.js";
 
 let auth: TestAuth;
+let authz: TestAuthz;
 
 async function expectCode(promise: Promise<unknown>, code: Code, pattern?: RegExp) {
   try {
@@ -101,12 +107,15 @@ describe("Authentication (T04a / DD-005)", () => {
     pool = createTestPool(container.getConnectionUri());
     await runMigrations(pool, testMigrationSources());
     auth = await createTestAuth();
+    authz = await startTestAuthz();
 
     server = createBackendServer({
       store: createResourceStore(pool),
       auth: auth.kit,
+      authz: await authz.newEngine(),
       credentials: createPgCredentialStore(pool),
       refreshTokens: createPgRefreshTokenStore(pool),
+      activationCodes: createPgActivationCodeStore(pool),
       objectStore: memoryObjectStore(),
     });
     await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -124,6 +133,7 @@ describe("Authentication (T04a / DD-005)", () => {
     );
     await pool.end();
     await container.stop();
+    await authz.stop();
   });
 
   describe("login", () => {

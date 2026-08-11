@@ -32,10 +32,16 @@ const operatorKeySha256 = createHash("sha256").update(operatorKey).digest("hex")
 // entrance — 32 random bytes, and the listener has no public exposure.
 const mcpSharedSecret = randomBytes(32).toString("base64url");
 
+// DD-003: the FGA engine's preshared key. The engine shares the pod with
+// the backend but its port is reachable at the pod IP on a cluster agent
+// sandboxes also run in — the key is the wall.
+const fgaPresharedKey = randomBytes(32).toString("base64url");
+
 console.log(`# Backend environment (config-manager variable/secret values)
 AUTH_JWT_PRIVATE_KEY=${Buffer.from(privateKey).toString("base64")}
 AUTH_OPERATOR_KEY_SHA256=${operatorKeySha256}
 MCP_SHARED_SECRET=${mcpSharedSecret}
+FGA_PRESHARED_KEY=${fgaPresharedKey}
 
 # Keep for the NEXT rotation (goes into AUTH_JWT_PREVIOUS_PUBLIC_KEY then):
 # public key (base64 SPKI PEM)
@@ -46,4 +52,8 @@ ${Buffer.from(publicKey).toString("base64")}
 ${operatorKey}
 
 # THE MCP SHARED SECRET also goes into the firm's Stigmer environment
-# (the agent platform presents it as the Bearer secret on tool calls).`);
+# (the agent platform presents it as the Bearer secret on tool calls).
+
+# THE FGA PRESHARED KEY goes into the firm's auth-keys secret as
+# fga-preshared-key — both the backend (FGA_API_TOKEN) and the OpenFGA
+# sidecar (OPENFGA_AUTHN_PRESHARED_KEYS) read it from there.`);

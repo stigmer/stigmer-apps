@@ -18,22 +18,27 @@ import type {
 import {
   createOperation,
   defineResource,
+  failedPrecondition,
   getOperation,
   listOperation,
+  permissionDenied,
   referencesExistStep,
   updateOperation,
 } from "@stigmer/resource-api";
 import type { User } from "@stigmer/identity";
+import type { AuthorizationEngine } from "@stigmer/authorization";
 import {
   FirmMemberSchema,
   FirmMemberService,
   FirmMemberStatusSchema,
+  FirmRole,
   type FirmMember,
   type GetFirmMemberRequest,
   type ListFirmMembersRequest,
   type ListFirmMembersResponse,
   ListFirmMembersResponseSchema,
 } from "../../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
+import { applyTupleDeltaSafely, firmMemberTupleDelta } from "../authz/tuples.js";
 
 /**
  * Explicit presence makes `active: false` a stored VALUE (the
@@ -54,12 +59,81 @@ const activeDefaultStep: PipelineStep<WriteContext<FirmMember>> = {
 export function firmMemberResource(deps: {
   store: ResourceStore;
   policy: AuthorizationPolicy;
+  authz: AuthorizationEngine;
   publisher?: ResourceEventPublisher;
   caller: CallerExtractor;
 }) {
   const referenceChecks = referencesExistStep<FirmMember>(deps.store, [
     { kind: "User", label: "user", get: (m) => m.spec?.userId || undefined },
   ]);
+
+  /**
+   * The lockout guards (DD-003 D4): a firm must never be able to
+   * administer itself into a state only the operator can undo.
+   *
+   * 1. Nobody deactivates their OWN account — the managing partner
+   *    included; a second administrator (or the operator) does it.
+   * 2. The last active managing partner can be neither demoted nor
+   *    deactivated — data invariant, so it binds the operator too
+   *    (FAILED_PRECONDITION, not a permission answer): the recovery
+   *    path is creating another managing partner first, never a
+   *    firm with zero administrators.
+   */
+  const lockoutGuards: PipelineStep<WriteContext<FirmMember>> = {
+    name: "protect-firm-administration",
+    async execute(ctx) {
+      const previous = ctx.existing;
+      if (!previous) return; // create cannot lock anyone out
+      const next = ctx.newState as FirmMember;
+      const wasActive = previous.spec?.active === true;
+      const staysActive = next.spec?.active === true;
+
+      if (
+        ctx.caller?.kind === "user" &&
+        previous.spec?.userId === ctx.caller.id &&
+        wasActive &&
+        !staysActive
+      ) {
+        throw permissionDenied("You cannot deactivate your own account");
+      }
+
+      const wasActingManagingPartner =
+        wasActive && previous.spec?.role === FirmRole.MANAGING_PARTNER;
+      const staysActingManagingPartner =
+        staysActive && next.spec?.role === FirmRole.MANAGING_PARTNER;
+      if (wasActingManagingPartner && !staysActingManagingPartner) {
+        const { items } = await deps.store.list("FirmMember", {
+          limit: 2,
+          offset: 0,
+          orderBy: { field: "createdAt", direction: "asc", nulls: "last" },
+          filter: { role: "FIRM_ROLE_MANAGING_PARTNER", active: "true" },
+        });
+        const others = items.filter(
+          (m) => (m as FirmMember).metadata?.id !== previous.metadata?.id,
+        );
+        if (others.length === 0) {
+          throw failedPrecondition(
+            "The firm must keep at least one active managing partner — " +
+              "assign another managing partner before changing this one",
+          );
+        }
+      }
+    },
+  };
+
+  /** Role/active → engine tuple, in the SAME request (DD-003 D1a — the
+   * event bus is best-effort and authorization facts must not ride it).
+   * Contained: a sync failure logs and the reconcile heals it. */
+  const syncTuples: PipelineStep<WriteContext<FirmMember>> = {
+    name: "sync-authz-tuples",
+    async execute(ctx) {
+      await applyTupleDeltaSafely(
+        deps.authz,
+        firmMemberTupleDelta(ctx.existing, ctx.newState as FirmMember),
+        `FirmMember ${(ctx.newState as FirmMember).metadata?.id ?? "(new)"}`,
+      );
+    },
+  };
 
   return defineResource({
     definition: {
@@ -96,9 +170,11 @@ export function firmMemberResource(deps: {
     operations: {
       create: createOperation<FirmMember>({
         beforePersist: [activeDefaultStep, referenceChecks],
+        afterPersist: [syncTuples],
       }),
       update: updateOperation<FirmMember>({
-        beforePersist: [activeDefaultStep, referenceChecks],
+        beforePersist: [activeDefaultStep, lockoutGuards, referenceChecks],
+        afterPersist: [syncTuples],
       }),
       get: getOperation<FirmMember, GetFirmMemberRequest>({
         ref: (req) => ({ id: req.id || undefined, naturalKey: req.userId || undefined }),

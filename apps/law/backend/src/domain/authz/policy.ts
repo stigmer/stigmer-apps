@@ -7,18 +7,28 @@
  * DENY BY DEFAULT, for real: the module's final answer is deny, and the
  * matrix below enumerates what each role MAY do (DD-001's who-sees-what
  * table is the source; FR-AUTHZ-005 pins every row with a test that
- * proves the DENIAL). This inverts the MVP module, whose final answer
- * was ALLOW.
+ * proves the DENIAL).
  *
- * The policy consults exactly two stored facts (Gate-1 Q1):
- *   1. the caller's FirmMember profile — resolved by user id (the
- *      natural key), refused when missing or inactive;
- *   2. active case membership — resolved by the composed
- *      `{caseId}:{memberId}` natural key.
- * Both loads happen inside authorize; a store failure propagates and
- * fails the request (INTERNAL) — fail-closed by construction, never a
- * silent allow. The pipeline invokes authorize once per operation, so
- * there is deliberately no cross-request cache to go stale.
+ * THE ENGINE SPLIT (project DD-003): relationship questions — role
+ * groups, case membership, the matter's lead, list scoping — are
+ * answered by the FGA engine against the model in model.ts, whose
+ * tuples are a projection of this app's own rows (tuples.ts).
+ * Attribute-shaped rules stay in code: receipts-only ledger creation,
+ * notification recipient, deadline owner, and the TaskComment→Task hop.
+ * This module remains the one place that decides WHICH question each
+ * operation asks.
+ *
+ * TWO FACTS STILL LOAD FROM THE STORE, deliberately:
+ *   1. the caller's FirmMember profile — the LIVENESS gate (D1a):
+ *      missing or inactive refuses everything before the engine is even
+ *      asked, so deactivation can never depend on tuple sync
+ *      (FR-MEMBER-002's every-access-path revocation);
+ *   2. a TaskComment's case — reached through its Task (a store hop the
+ *      relationship model deliberately does not flatten).
+ * A store OR engine failure propagates and fails the request (INTERNAL)
+ * — fail-closed by construction, never a silent allow. The pipeline
+ * invokes authorize once per operation, so there is deliberately no
+ * cross-request cache to go stale.
  *
  * TWO RULE SHAPES, ONE MODULE: the authorize slot sees the loaded
  * resource for update/get/custom operations but NOT the input of a
@@ -39,29 +49,11 @@ import {
   type CallerPrincipal,
   type ResourceStore,
 } from "@stigmer/resource-api";
-import {
-  FirmRole,
-  type FirmMember,
-} from "../../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
+import { idOf, type AuthorizationEngine } from "@stigmer/authorization";
+import type { FirmMember } from "../../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
 import { LedgerEntryKind } from "../../gen/stigmer/law/ledgerentry/v1/ledgerentry_pb.js";
 import type { Task } from "../../gen/stigmer/law/task/v1/task_pb.js";
-
-/** Roles with full firm-wide content and money visibility. */
-const PARTNER_ROLES: readonly FirmRole[] = [
-  FirmRole.MANAGING_PARTNER,
-  FirmRole.PARTNER,
-];
-
-/** Roles that practice — see case list lines and work member cases. */
-const LAWYER_ROLES: readonly FirmRole[] = [
-  FirmRole.MANAGING_PARTNER,
-  FirmRole.PARTNER,
-  FirmRole.ASSOCIATE,
-  FirmRole.JUNIOR,
-];
-
-/** Roles that work case content when they are members (lawyers + clerk). */
-const CASE_WORKER_ROLES: readonly FirmRole[] = [...LAWYER_ROLES, FirmRole.CLERK];
+import { caseRef, FIRM_OBJECT, userRef } from "./tuples.js";
 
 /**
  * Where a loaded resource's case reference lives, per kind — the one
@@ -124,16 +116,27 @@ export interface PolicyGuards {
   assertLedgerCreate(caller: CallerPrincipal, entryKind: LedgerEntryKind): Promise<FirmMember>;
   /**
    * The case ids the caller may see content of, for query scoping —
-   * undefined means "unscoped" (partners see the whole firm). Non-
-   * partners get their ACTIVE membership case ids (possibly empty:
-   * an empty scope matches nothing, the honest answer).
+   * undefined means "unscoped" (partners see the whole firm, and NEVER
+   * enumerate: the short-circuit is also what keeps ListObjects clear
+   * of its result cap). Non-partners get their ACTIVE membership case
+   * ids (possibly empty: an empty scope matches nothing, the honest
+   * answer).
    */
   visibleCaseIds(member: FirmMember): Promise<readonly string[] | undefined>;
-  /** True when the member's role is partner-level. */
-  isPartner(member: FirmMember): boolean;
+  /**
+   * FR-AUTHZ-003 list-LINE scoping (existence without content): lawyer
+   * roles see every list line firm-wide (undefined = unscoped); clerks
+   * see only the cases they work. Distinct from visibleCaseIds, which
+   * scopes CONTENT — a non-member associate has lines but no content.
+   */
+  caseListScope(member: FirmMember): Promise<readonly string[] | undefined>;
 }
 
-export function createFirmPolicy(store: ResourceStore): FirmPolicy {
+export function createFirmPolicy(
+  store: ResourceStore,
+  engine: AuthorizationEngine,
+): FirmPolicy {
+  /** The liveness gate (D1a): a direct row read, never the engine. */
   async function memberOf(caller: CallerPrincipal): Promise<FirmMember | undefined> {
     const member = (await store.getByNaturalKey("FirmMember", caller.id)) as
       | FirmMember
@@ -144,40 +147,38 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
     return member.spec?.active === true ? member : undefined;
   }
 
-  function hasRole(member: FirmMember, roles: readonly FirmRole[]): boolean {
-    return member.spec !== undefined && roles.includes(member.spec.role);
+  /** A role-group or permission verb on the firm object. */
+  function onFirm(member: FirmMember, relation: string): Promise<boolean> {
+    return engine.check({
+      user: userRef(member.spec?.userId ?? ""),
+      relation,
+      object: FIRM_OBJECT,
+    });
   }
 
-  const isPartner = (member: FirmMember) => hasRole(member, PARTNER_ROLES);
-
-  async function isActiveMemberOfCase(caseId: string, member: FirmMember): Promise<boolean> {
-    const membership = await store.getByNaturalKey(
-      "CaseMember",
-      `${caseId}:${member.metadata?.id}`,
-    );
-    return (
-      (membership as { status?: { active?: boolean } } | undefined)?.status?.active === true
-    );
+  /** A permission verb on one case object. */
+  function onCase(member: FirmMember, relation: string, caseId: string): Promise<boolean> {
+    return engine.check({
+      user: userRef(member.spec?.userId ?? ""),
+      relation,
+      object: caseRef(caseId),
+    });
   }
 
-  /** Partner, or active member of the case (optionally lawyers-only). */
+  /** Partner, or active member of the case (optionally lawyers-only) —
+   * the model's can_work_content / can_enter_deadline verbs. A missing
+   * case reference leaves only the partner arm (nothing to be member of). */
   async function canTouchCaseContent(
     member: FirmMember,
     caseId: string | undefined,
     opts?: { clerkAllowed?: boolean },
   ): Promise<boolean> {
-    const roles = opts?.clerkAllowed === false ? LAWYER_ROLES : CASE_WORKER_ROLES;
-    if (!hasRole(member, roles)) return false;
-    if (isPartner(member)) return true;
-    if (!caseId) return false; // no case reference ⇒ nothing to be member of
-    return isActiveMemberOfCase(caseId, member);
-  }
-
-  /** Partner, or the case's lead lawyer — the case-management rule. */
-  function isLead(member: FirmMember, resource: unknown): boolean {
-    const lead = (resource as { spec?: { leadLawyerId?: string } } | undefined)?.spec
-      ?.leadLawyerId;
-    return lead !== undefined && lead === member.metadata?.id;
+    if (!caseId) return onFirm(member, "partners");
+    return onCase(
+      member,
+      opts?.clerkAllowed === false ? "can_enter_deadline" : "can_work_content",
+      caseId,
+    );
   }
 
   async function caseIdOfTaskComment(resource: unknown): Promise<string | undefined> {
@@ -195,32 +196,51 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
     operation: string,
     resource: unknown,
   ): Promise<AuthorizationDecision> {
-    const caseRef = CASE_REF[kind];
+    const caseRefOf = CASE_REF[kind];
     const caseId =
       kind === "TaskComment" && resource !== undefined
         ? await caseIdOfTaskComment(resource)
         : resource !== undefined
-          ? caseRef?.(resource as never)
+          ? caseRefOf?.(resource as never)
           : undefined;
 
     switch (kind) {
       case "User": {
-        // Account administration stays operator-only (FR-AUTH-002); a
-        // signed-in person may read their own identity record.
-        if (operation === "get") {
-          const id = (resource as { metadata?: { id?: string } } | undefined)?.metadata?.id;
-          return id === member.spec?.userId
-            ? ALLOW
-            : deny("Only an operator may view other user accounts");
+        // Account administration is the managing partner's surface
+        // (FR-AUTH-002 as amended by DD-003 D4): create accounts, keep
+        // profiles current (email/name/phone — the WhatsApp binding),
+        // and issue activation codes. Everyone may read their OWN
+        // record. SetPassword stays operator-only break-glass: setting
+        // a password FOR someone is a silent-takeover lever; the code
+        // path is visible to the account holder.
+        switch (operation) {
+          case "get": {
+            const id = (resource as { metadata?: { id?: string } } | undefined)?.metadata?.id;
+            if (id === member.spec?.userId) return ALLOW;
+            return (await onFirm(member, "can_manage_firm_members"))
+              ? ALLOW
+              : deny("Only an operator or the managing partner may view other user accounts");
+          }
+          case "create":
+          case "update":
+          case "issueActivationCode":
+            return (await onFirm(member, "can_manage_firm_members"))
+              ? ALLOW
+              : deny("Only an operator or the managing partner may manage user accounts");
+          case "setPassword":
+            return deny(
+              "Only an operator may set a password directly — issue an activation code instead",
+            );
+          default:
+            return deny(`User ${operation} is not permitted`);
         }
-        return deny("Only an operator may manage user accounts");
       }
 
       case "FirmMember": {
         if (operation === "create" || operation === "update") {
           // The one in-product account-administration surface (matrix:
           // operator + managing partner). update includes deactivation.
-          return hasRole(member, [FirmRole.MANAGING_PARTNER])
+          return (await onFirm(member, "can_manage_firm_members"))
             ? ALLOW
             : deny("Only the managing partner may manage firm members");
         }
@@ -230,13 +250,13 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
 
       case "Client": {
         if (operation === "create" || operation === "update") {
-          return hasRole(member, [FirmRole.MANAGING_PARTNER, FirmRole.PARTNER, FirmRole.ASSOCIATE])
+          return (await onFirm(member, "can_manage_clients"))
             ? ALLOW
             : deny("Only partners and associates may manage clients");
         }
         // get/list/search: the client register is lawyer-visible; clerks
         // and office staff work through their cases, not the register.
-        return hasRole(member, LAWYER_ROLES)
+        return (await onFirm(member, "can_view_clients"))
           ? ALLOW
           : deny("The client register is visible to lawyers only");
       }
@@ -244,14 +264,22 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
       case "Case": {
         switch (operation) {
           case "create":
-            return hasRole(member, [FirmRole.MANAGING_PARTNER, FirmRole.PARTNER, FirmRole.ASSOCIATE])
+            return (await onFirm(member, "can_create_case"))
               ? ALLOW
               : deny("Only partners and associates may open new matters");
           case "update":
-          case "updateStatus":
-            return isPartner(member) || isLead(member, resource)
+          case "updateStatus": {
+            // can_edit = lead or partner. An id-less resource (never a
+            // loaded one) leaves only the partner arm — the same
+            // degradation canTouchCaseContent applies.
+            const mayEdit =
+              caseId !== undefined
+                ? await onCase(member, "can_edit", caseId)
+                : await onFirm(member, "partners");
+            return mayEdit
               ? ALLOW
               : deny("Only partners or the matter's lead lawyer may edit a case");
+          }
           case "get":
             return (await canTouchCaseContent(member, caseId))
               ? ALLOW
@@ -260,7 +288,7 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
             // Summaries are the list line (FR-AUTHZ-003): all lawyer
             // roles see them firm-wide; clerks see their member cases
             // (query-scoped); office staff see no cases at all.
-            return hasRole(member, CASE_WORKER_ROLES)
+            return (await onFirm(member, "can_list_cases"))
               ? ALLOW
               : deny("Case lists are not visible to office staff");
           default:
@@ -271,13 +299,17 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
       case "CaseMember": {
         if (operation === "create") {
           // Role gate here; partner-or-lead is the guard's create-input
-          // check (assertCaseMemberManage in the resource's step).
-          return hasRole(member, LAWYER_ROLES)
+          // check (assertManageMembers in the resource's step).
+          return (await onFirm(member, "lawyers"))
             ? ALLOW
             : deny("Only lawyers may manage case members");
         }
         if (operation === "remove") {
-          return isPartner(member) || (caseId !== undefined && (await isLeadOfCase(caseId, member)))
+          const mayRemove =
+            caseId !== undefined
+              ? await onCase(member, "can_manage_members", caseId)
+              : await onFirm(member, "partners");
+          return mayRemove
             ? ALLOW
             : deny("Only partners or the matter's lead lawyer may remove case members");
         }
@@ -285,7 +317,7 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
           // Scope-level role gate; the member set is case content, so
           // the list handler's guard carries the membership check the
           // request-blind authorize cannot (module header, rule shapes).
-          return hasRole(member, CASE_WORKER_ROLES)
+          return (await onFirm(member, "case_workers"))
             ? ALLOW
             : deny("Only case members and partners may view a case's member set");
         }
@@ -302,12 +334,12 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
         // DD-001's division of labour). Creates carry their membership
         // check in the guard; loaded-resource operations check here.
         if (operation === "create") {
-          return hasRole(member, CASE_WORKER_ROLES)
+          return (await onFirm(member, "case_workers"))
             ? ALLOW
             : deny("Office staff do not work case content");
         }
         if (operation === "list") {
-          return hasRole(member, CASE_WORKER_ROLES)
+          return (await onFirm(member, "case_workers"))
             ? ALLOW
             : deny("Office staff do not view case content");
         }
@@ -318,7 +350,7 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
 
       case "TaskComment": {
         if (operation === "create" || operation === "list") {
-          return hasRole(member, CASE_WORKER_ROLES)
+          return (await onFirm(member, "case_workers"))
             ? ALLOW
             : deny("Office staff do not view case content");
         }
@@ -332,14 +364,16 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
         // enter or resolve them (matrix: enter deadline — lawyers only).
         switch (operation) {
           case "create":
-            return hasRole(member, LAWYER_ROLES)
+            return (await onFirm(member, "lawyers"))
               ? ALLOW
               : deny("Only lawyers may enter deadlines");
           case "update":
           case "updateStatus": {
+            // Owner is an attribute rule (DD-003 D3): a tuple per
+            // deadline would project ephemeral rows into the engine.
             const owner = (resource as { spec?: { ownerId?: string } } | undefined)?.spec
               ?.ownerId;
-            return isPartner(member) || owner === member.metadata?.id
+            return (await onFirm(member, "partners")) || owner === member.metadata?.id
               ? ALLOW
               : deny("Only the deadline's owner or a partner may change it");
           }
@@ -348,7 +382,7 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
               ? ALLOW
               : deny("Only case members and partners may view case content");
           case "list":
-            return hasRole(member, CASE_WORKER_ROLES)
+            return (await onFirm(member, "case_workers"))
               ? ALLOW
               : deny("Office staff do not view case content");
           default:
@@ -359,7 +393,7 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
       case "FeeArrangement": {
         // Money is the sharpest boundary (FR-AUTHZ-004): partners only,
         // every operation — including reads.
-        return isPartner(member)
+        return (await onFirm(member, "can_view_money"))
           ? ALLOW
           : deny("Fee arrangements are visible to partners only");
       }
@@ -369,11 +403,11 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
           // Role gate: partners and office staff reach the pipeline; the
           // receipts-only rule needs the entry kind and lives in the
           // guard (assertLedgerCreate).
-          return hasRole(member, [...PARTNER_ROLES, FirmRole.OFFICE_STAFF])
+          return (await onFirm(member, "can_record_ledger"))
             ? ALLOW
             : deny("Only partners and office staff may record ledger entries");
         }
-        return isPartner(member)
+        return (await onFirm(member, "can_view_money"))
           ? ALLOW
           : deny("The ledger is visible to partners only");
       }
@@ -386,7 +420,8 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
           // A notification belongs to its recipient — fail-closed when
           // the recipient cannot be read off the loaded resource. The
           // recipient is a USER id (the inbox belongs to the login
-          // identity — the proto's documented exception).
+          // identity — the proto's documented exception). An attribute
+          // rule (DD-003 D3), deliberately not a tuple per notification.
           const recipient = (resource as { spec?: { recipientId?: string } } | undefined)
             ?.spec?.recipientId;
           return recipient !== undefined && recipient === member.spec?.userId
@@ -399,7 +434,7 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
 
       case "AuditEntry": {
         if (operation === "list") {
-          return isPartner(member)
+          return (await onFirm(member, "can_view_audit"))
             ? ALLOW
             : deny("Change history is visible to partners only");
         }
@@ -411,16 +446,12 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
     }
   }
 
-  async function isLeadOfCase(caseId: string, member: FirmMember): Promise<boolean> {
-    const theCase = await store.getById("Case", caseId);
-    return isLead(member, theCase);
-  }
-
   /* ------------------- non-person principal branches ---------------- */
 
   function authorizeOperator(kind: string, operation: string): AuthorizationDecision {
     // The operator key administers ACCOUNTS (FR-AUTH-002), never case
     // work: User fully, FirmMember fully (provisioning binds profiles).
+    // Not an identity account — no tuples exist for it (DD-003 D3).
     if (kind === "User" || kind === "FirmMember") {
       return ALLOW;
     }
@@ -486,13 +517,13 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
 
     async assertPartner(caller) {
       const member = await guards.requireMember(caller);
-      if (isPartner(member)) return member;
+      if (await onFirm(member, "partners")) return member;
       throw permissionDenied("This is visible to partners only");
     },
 
     async assertManageMembers(caller, caseId) {
       const member = await guards.requireMember(caller);
-      if (isPartner(member) || (await isLeadOfCase(caseId, member))) {
+      if (await onCase(member, "can_manage_members", caseId)) {
         return member;
       }
       throw permissionDenied(
@@ -502,41 +533,30 @@ export function createFirmPolicy(store: ResourceStore): FirmPolicy {
 
     async assertLedgerCreate(caller, entryKind) {
       const member = await guards.requireMember(caller);
-      if (isPartner(member)) return member;
-      if (
-        hasRole(member, [FirmRole.OFFICE_STAFF]) &&
-        entryKind === LedgerEntryKind.RECEIPT
-      ) {
-        return member;
+      if (await onFirm(member, "partners")) return member;
+      if (await onFirm(member, "office_staff")) {
+        if (entryKind === LedgerEntryKind.RECEIPT) {
+          return member;
+        }
+        throw permissionDenied("Office staff may record receipts only");
       }
-      throw permissionDenied(
-        hasRole(member, [FirmRole.OFFICE_STAFF])
-          ? "Office staff may record receipts only"
-          : "Only partners and office staff may record ledger entries",
-      );
+      throw permissionDenied("Only partners and office staff may record ledger entries");
     },
 
     async visibleCaseIds(member) {
-      if (isPartner(member)) return undefined;
-      const memberships = await store.list("CaseMember", {
-        // A working set, not a page: bounded by how many matters one
-        // person can actually be on. The cap is the port's max and a
-        // deliberate ceiling — beyond it, scoping questions belong to a
-        // different product tier.
-        limit: 100,
-        offset: 0,
-        orderBy: { field: "createdAt", direction: "asc", nulls: "last" },
-        filter: {
-          memberId: member.metadata?.id ?? "",
-          active: "true",
-        },
-      });
-      return memberships.items.map(
-        (m) => (m as { spec?: { caseId?: string } }).spec?.caseId ?? "",
+      if (await onFirm(member, "partners")) return undefined;
+      const objects = await engine.listObjects(
+        userRef(member.spec?.userId ?? ""),
+        "can_work_content",
+        "case",
       );
+      return objects.map(idOf);
     },
 
-    isPartner,
+    async caseListScope(member) {
+      if (await onFirm(member, "lawyers")) return undefined;
+      return guards.visibleCaseIds(member);
+    },
   };
 
   return { policy, guards };

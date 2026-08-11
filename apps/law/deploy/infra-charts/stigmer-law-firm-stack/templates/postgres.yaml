@@ -62,6 +62,14 @@ spec:
     disk_size: {{ values.postgres_disk_size }}
   users:
     - name: law_app
+    - name: openfga
   databases:
     - name: law
       ownerRole: law_app
+    # The FGA engine's own database on the firm's cluster (DD-003 D1):
+    # same blast radius, same offboarding lever, zero shared state with
+    # the app schema. The openfga role's generated password follows the
+    # same manual post-provision copy as law_app's, into
+    # stigmer-law-<firm>-openfga-postgres-credentials.
+    - name: openfga
+      ownerRole: openfga

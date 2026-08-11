@@ -27,9 +27,14 @@ import {
   FirmMemberService,
   FirmRole,
 } from "../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
-import { createPgCredentialStore, createPgRefreshTokenStore } from "@stigmer/identity/postgres";
+import {
+  createPgActivationCodeStore,
+  createPgCredentialStore,
+  createPgRefreshTokenStore,
+} from "@stigmer/identity/postgres";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { createTestAuth } from "../__tests__/test-auth.js";
+import { startTestAuthz } from "../__tests__/test-authz.js";
 import { testMigrationSources } from "../__tests__/test-migrations.js";
 import { createTestPool } from "../__tests__/test-pool.js";
 import { memoryObjectStore } from "../__tests__/memory-object-store.js";
@@ -65,6 +70,10 @@ const container = await new PostgreSqlContainer("postgres:17-alpine").start();
 const pool = createTestPool(container.getConnectionUri());
 await runMigrations(pool, testMigrationSources());
 const auth = await createTestAuth();
+// The FGA engine, containered like Postgres — the exact production
+// policy path; seeding below flows through pipelines, so tuple sync
+// populates the store without an explicit reconcile.
+const authz = await startTestAuthz();
 
 // Both listeners, exactly like production (T05): the web app for
 // Playwright, the MCP entrance for scripts/mcp-smoke.ts.
@@ -72,8 +81,10 @@ const { web: server, mcp } = createFirmServers(
   {
     store: createResourceStore(pool),
     auth: auth.kit,
+    authz: await authz.newEngine(),
     credentials: createPgCredentialStore(pool),
     refreshTokens: createPgRefreshTokenStore(pool),
+    activationCodes: createPgActivationCodeStore(pool),
     objectStore: memoryObjectStore(),
     dispatcher: new InProcessEventDispatcher(),
     webRoot: fileURLToPath(new URL("../../../web/dist", import.meta.url)),

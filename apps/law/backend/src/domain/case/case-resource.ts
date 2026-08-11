@@ -49,11 +49,12 @@ import {
   ListCasesResponseSchema,
   type UpdateCaseStatusRequest,
 } from "../../gen/stigmer/law/case/v1/case_pb.js";
+import type { AuthorizationEngine } from "@stigmer/authorization";
 import type { Client } from "../../gen/stigmer/law/client/v1/client_pb.js";
-import { FirmRole } from "../../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
 import type { Hearing } from "../../gen/stigmer/law/hearing/v1/hearing_pb.js";
 import { addDaysToIsoDate, todayInFirmTimezone } from "../firm-clock.js";
 import type { PolicyGuards } from "../authz/policy.js";
+import { applyTupleDeltaSafely, caseTupleDelta } from "../authz/tuples.js";
 
 /** Lifecycle enum names as the store's text rendering (proto3 JSON). */
 const ACTIVE_TEXT = "CASE_LIFECYCLE_ACTIVE";
@@ -61,6 +62,7 @@ const ACTIVE_TEXT = "CASE_LIFECYCLE_ACTIVE";
 export interface CaseResourceDeps {
   store: ResourceStore;
   policy: AuthorizationPolicy;
+  authz: AuthorizationEngine;
   guards: PolicyGuards;
   publisher?: ResourceEventPublisher;
   caller: CallerExtractor;
@@ -134,6 +136,20 @@ export function caseResource(deps: CaseResourceDeps) {
   ]);
   const recompute = recomputeNextHearingStep(deps.store);
   const courtNumberUnique = courtNumberUniqueStep(deps.store);
+
+  /** Firm link + lead transition → engine tuples, in the SAME request
+   * (DD-003 D1a). The system's next-hearing refresh rides update too —
+   * its lead is unchanged, so the delta is a no-op there. */
+  const syncTuples: PipelineStep<WriteContext<Case>> = {
+    name: "sync-authz-tuples",
+    async execute(ctx) {
+      await applyTupleDeltaSafely(
+        deps.authz,
+        caseTupleDelta(deps.store, ctx.existing, ctx.newState as Case),
+        `Case ${(ctx.newState as Case).metadata?.id ?? "(new)"}`,
+      );
+    },
+  };
 
   /** The membership case-id set for the `mine` predicate (lead included
    * by construction: leads are materialized as members). */
@@ -212,9 +228,11 @@ export function caseResource(deps: CaseResourceDeps) {
     operations: {
       create: createOperation<Case>({
         beforePersist: [recompute, courtNumberUnique, referenceChecks],
+        afterPersist: [syncTuples],
       }),
       update: updateOperation<Case>({
         beforePersist: [recompute, courtNumberUnique, referenceChecks],
+        afterPersist: [syncTuples],
       }),
       updateStatus: customOperation<Case, UpdateCaseStatusRequest, Case>({
         async handler(ctx) {
@@ -254,12 +272,15 @@ export function caseResource(deps: CaseResourceDeps) {
           // The summary list is the LIST LINE (FR-AUTHZ-003): lawyer
           // roles see it firm-wide — existence without content — while
           // clerks see only the cases they work (their non-member
-          // visibility is none, not a list line). Intersected with the
-          // `mine` predicate when asked; an empty intersection matches
-          // nothing — never a silent widening.
+          // visibility is none, not a list line). The scope rule lives
+          // in the policy guard (engine-backed); `mine` is a preference
+          // predicate over the same membership rows. Intersected when
+          // both apply; an empty intersection matches nothing — never a
+          // silent widening.
           const idSets: string[][] = [];
-          if (member.spec?.role === FirmRole.CLERK) {
-            idSets.push(await membershipCaseIds(member.metadata?.id ?? ""));
+          const listScope = await deps.guards.caseListScope(member);
+          if (listScope !== undefined) {
+            idSets.push([...listScope]);
           }
           if (ctx.input.mine) idSets.push(await membershipCaseIds(member.metadata?.id ?? ""));
           const scoped =

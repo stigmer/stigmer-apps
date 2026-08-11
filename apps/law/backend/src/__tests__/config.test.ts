@@ -13,6 +13,9 @@ const OPERATOR_KEY_HASH = "a".repeat(64);
 /** Long enough for the loader's 32-char floor; obviously not real. */
 const MCP_SECRET = "test-mcp-shared-secret-0123456789abcdef";
 
+/** Same floor as the MCP secret; obviously not real. */
+const FGA_TOKEN = "test-fga-preshared-key-0123456789abcdef";
+
 /** A complete, valid environment — tests remove or override entries. */
 function fullEnv(): Record<string, string> {
   return {
@@ -26,6 +29,8 @@ function fullEnv(): Record<string, string> {
     AUTH_JWT_PRIVATE_KEY: "bm90LWEtcmVhbC1rZXk=",
     AUTH_OPERATOR_KEY_SHA256: OPERATOR_KEY_HASH,
     MCP_SHARED_SECRET: MCP_SECRET,
+    FGA_API_URL: "http://localhost:8082",
+    FGA_API_TOKEN: FGA_TOKEN,
   };
 }
 
@@ -55,6 +60,13 @@ describe("loadConfigFromEnv", () => {
       mcp: {
         port: 8081,
         sharedSecret: MCP_SECRET,
+      },
+      authz: {
+        apiUrl: "http://localhost:8082",
+        apiToken: FGA_TOKEN,
+        // The reconcile default: 5 minutes — the drift backstop behind
+        // same-request tuple sync (DD-003 D1a).
+        reconcileIntervalMs: 300_000,
       },
     });
   });
@@ -99,6 +111,31 @@ describe("loadConfigFromEnv", () => {
       env.MCP_PORT = "0";
 
       expect(() => loadConfigFromEnv(env)).toThrowError(/MCP_PORT/);
+    });
+  });
+
+  describe("the FGA engine (DD-003)", () => {
+    it("requires the endpoint", () => {
+      const env = fullEnv();
+      delete env.FGA_API_URL;
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(/FGA_API_URL is required/);
+    });
+
+    it("refuses a short preshared key — there is no insecure mode", () => {
+      const env = fullEnv();
+      env.FGA_API_TOKEN = "too-short";
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(/FGA_API_TOKEN .* min 32/);
+    });
+
+    it("validates the reconcile interval and lets 0 disable the loop", () => {
+      const env = fullEnv();
+      env.FGA_RECONCILE_INTERVAL_SECONDS = "0";
+      expect(loadConfigFromEnv(env).authz.reconcileIntervalMs).toBe(0);
+
+      env.FGA_RECONCILE_INTERVAL_SECONDS = "-5";
+      expect(() => loadConfigFromEnv(env)).toThrowError(/FGA_RECONCILE_INTERVAL_SECONDS/);
     });
   });
 

@@ -4,10 +4,20 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { InProcessEventDispatcher } from "@stigmer/resource-api";
 import { runMigrations, type MigrationSource } from "@stigmer/resource-api/postgres";
-import { createPgCredentialStore, createPgRefreshTokenStore } from "@stigmer/identity/postgres";
+import { bootstrapAuthorization } from "@stigmer/authorization";
+import {
+  createPgActivationCodeStore,
+  createPgCredentialStore,
+  createPgRefreshTokenStore,
+} from "@stigmer/identity/postgres";
 import pg from "pg";
 import { createAuthKit } from "./auth/auth.js";
 import { loadConfigFromEnv } from "./config.js";
+import { LAW_AUTHZ_MODEL_DSL } from "./domain/authz/model.js";
+import {
+  reconcileAuthzOnce,
+  startAuthzReconcileLoop,
+} from "./domain/authz/reconcile-loop.js";
 import { createS3ObjectStore } from "./objectstore/object-store.js";
 import { createFirmServers } from "./server.js";
 import { createResourceStore } from "./storage.js";
@@ -43,6 +53,24 @@ function migrationSources(): MigrationSource[] {
   ];
 }
 
+async function retryForStartup<T>(
+  action: () => Promise<T>,
+  opts: { attempts: number; delayMs: number; subject: string },
+): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await action();
+    } catch (err) {
+      if (attempt >= opts.attempts) throw err;
+      console.warn(
+        `${opts.subject} not ready (attempt ${attempt}/${opts.attempts}), retrying:`,
+        err instanceof Error ? err.message : err,
+      );
+      await new Promise((resolve) => setTimeout(resolve, opts.delayMs));
+    }
+  }
+}
+
 async function main(): Promise<void> {
   const config = loadConfigFromEnv();
   // Either DatabaseConfig shape is a valid PoolConfig subset — the URL
@@ -57,6 +85,28 @@ async function main(): Promise<void> {
   }
 
   const auth = await createAuthKit(config.auth);
+  const store = createResourceStore(pool);
+
+  // The FGA engine (DD-003): idempotent store/model bootstrap, then the
+  // full tuple reconcile — after migrations, before any listener, so no
+  // request is ever answered against a stale or empty tuple set. The
+  // reconcile loop is the drift backstop behind same-request sync.
+  // Bounded retry: the engine is a sidecar that starts CONCURRENTLY
+  // with this container, so its first seconds are a normal race, not a
+  // failure — but a minute of refusal is real and must crash the boot.
+  const { engine: authz } = await retryForStartup(
+    () =>
+      bootstrapAuthorization({
+        connection: { apiUrl: config.authz.apiUrl, apiToken: config.authz.apiToken },
+        storeName: "law",
+        modelDsl: LAW_AUTHZ_MODEL_DSL,
+      }),
+    { attempts: 30, delayMs: 2000, subject: "FGA engine bootstrap" },
+  );
+  await reconcileAuthzOnce(store, authz);
+  if (config.authz.reconcileIntervalMs > 0) {
+    startAuthzReconcileLoop(store, authz, config.authz.reconcileIntervalMs);
+  }
 
   // The event bus: pipelines publish on it, notification handlers
   // subscribe on it (inside createBackendServer) — never inside resource
@@ -72,10 +122,12 @@ async function main(): Promise<void> {
   // MCP channel entrance on its own cluster-internal port.
   const { web, mcp } = createFirmServers(
     {
-      store: createResourceStore(pool),
+      store,
       auth,
+      authz,
       credentials: createPgCredentialStore(pool),
       refreshTokens: createPgRefreshTokenStore(pool),
+      activationCodes: createPgActivationCodeStore(pool),
       objectStore: createS3ObjectStore(config.objectStore),
       dispatcher,
       webRoot,

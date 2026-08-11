@@ -76,7 +76,7 @@ test("profile shows the read-only identity and signs out", async ({ page }) => {
   await page.getByRole("banner").getByRole("link", { name: RAVI.name }).click();
   await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
   await expect(page.getByRole("definition").filter({ hasText: RAVI.email })).toBeVisible();
-  await expect(page.getByText(/ask your administrator/i)).toBeVisible();
+  await expect(page.getByText(/ask your managing partner/i)).toBeVisible();
 
   await page.getByRole("region", { name: "Profile" }).getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login$/);

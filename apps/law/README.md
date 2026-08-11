@@ -63,6 +63,21 @@ manifest). `PGSSLMODE=require` encrypts without certificate
 verification (the deployed operator rejects unencrypted clients and
 self-signs its certs); the default is `disable` for local plaintext.
 
+The backend also needs its FGA engine (`FGA_API_URL` + `FGA_API_TOKEN`,
+min 32 chars — there is no insecure mode). For local dev, run OpenFGA
+in Docker with an in-memory store:
+
+```bash
+docker run --rm -p 8082:8080 \
+  -e OPENFGA_AUTHN_METHOD=preshared \
+  -e OPENFGA_AUTHN_PRESHARED_KEYS=local-dev-fga-key-0123456789abcdef \
+  openfga/openfga:v1.18.3 run
+# then: FGA_API_URL=http://localhost:8082 FGA_API_TOKEN=local-dev-fga-key-0123456789abcdef
+```
+
+The backend bootstraps the store and model itself on boot and rebuilds
+the tuples from its own rows, so a wiped engine is never a problem.
+
 ## Authentication and the first user (DD-005)
 
 Identity is email/password: bcrypt-verified `Login` mints a ~1h RS256
@@ -105,11 +120,18 @@ buf curl --schema . -H "Authorization: Bearer $OPERATOR_KEY" \
   https://<backend>/stigmer.law.firmmember.v1.FirmMemberService/Create
 ```
 
-4. That user signs into the web app and works normally; further accounts
-   are created the same way (no self-registration; password reset is an
-   operator action — T01 owner decision 1). Offboarding is
+4. That user signs into the web app and works normally. From here the
+   operator key is BREAK-GLASS ONLY (DD-003 D4): the managing partner
+   administers accounts in-product — creates members, assigns roles,
+   deactivates, and issues one-time **activation codes** that people
+   redeem to set their own passwords (`/activate`; no email
+   infrastructure involved — the code is handed over in person or on
+   WhatsApp). Members change their own passwords from their profile.
+   There is still no self-registration. Offboarding is
    `FirmMember.Update` with `active: false` (locks the member out on
-   their next request and revokes their sessions) plus `SetPassword`.
+   their next request and revokes their sessions); two lockout guards
+   hold at the pipeline: nobody deactivates their own account, and the
+   last active managing partner can be neither demoted nor deactivated.
 
 Profile corrections (name, email, phone — the WhatsApp binding) are
 operator actions too, via `Update`. It is a **full spec replacement**
@@ -125,6 +147,26 @@ buf curl --schema . -H "Authorization: Bearer $OPERATOR_KEY" \
 Update is deliberately operator-only, same tier as Create/SetPassword:
 `spec.phone` decides which verified WhatsApp sender resolves to the user
 (DD-008), so profile self-service would be an impersonation lever.
+
+## Authorization (project DD-003)
+
+One policy module (`backend/src/domain/authz/policy.ts`) answers "what
+may this person do" at every entrance — Connect handlers, file routes,
+and the MCP gate — deny by default. Since DD-003 its relationship
+questions (role groups, case membership, the matter's lead, list
+scoping) are answered by a per-firm **OpenFGA** engine against the model
+in `backend/src/domain/authz/model.ts`; attribute-shaped rules
+(receipts-only, notification recipient, deadline owner) stay in the
+module as code.
+
+The engine is a projection, never a second source of truth: tuples are
+computed from the firm's own rows (`tuples.ts`), written in the same
+request that changes a row, and reconciled on boot and on a schedule —
+a wiped or drifted engine self-heals. Deactivating a member is
+deliberately NOT tuple-dependent (the policy checks the row directly),
+so revocation is instant no matter what the engine says. The engine
+runs as a sidecar in the firm's one deployment, guarded by a preshared
+key (`fga-preshared-key` in the firm's auth-keys secret).
 
 ## The WhatsApp assistant (T05, DD-008)
 

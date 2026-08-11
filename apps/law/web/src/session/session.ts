@@ -63,6 +63,18 @@ export interface SessionKit {
   getAccessToken(): Promise<string>;
   /** The server rejected the token (e.g. key rotation): drop it so the next getAccessToken refreshes. */
   invalidateAccessToken(): void;
+  /**
+   * Redeem a one-time activation code and set the account's password
+   * (DD-003 D4) — anonymous, like signIn; the person signs in normally
+   * afterwards. Errors bubble verbatim to the form.
+   */
+  redeemActivationCode(code: string, newPassword: string): Promise<void>;
+  /**
+   * Change the signed-in person's password. The server revokes every
+   * session on success, so the kit immediately signs back in with the
+   * new password — the user never notices the reset underneath.
+   */
+  changePassword(currentPassword: string, newPassword: string): Promise<void>;
 }
 
 interface HeldToken {
@@ -202,6 +214,31 @@ export function createSessionKit(deps: SessionKitDeps): SessionKit {
 
     invalidateAccessToken(): void {
       token = undefined;
+    },
+
+    async redeemActivationCode(code: string, newPassword: string): Promise<void> {
+      await client.redeemActivationCode({ code, newPassword });
+    },
+
+    async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+      if (state.status !== "signed-in") {
+        throw new ConnectError("Sign in first", Code.Unauthenticated);
+      }
+      const email = state.user.spec?.email ?? "";
+      await client.changePassword(
+        { currentPassword, newPassword },
+        { headers: { authorization: `Bearer ${await getAccessToken()}` } },
+      );
+      // The server revoked every session (including this one's refresh
+      // cookie); re-establish seamlessly with the credential we were
+      // just handed. The held access token would still verify for ≤1h,
+      // but a fresh full session is the honest state.
+      token = undefined;
+      const res = await client.login({ email, password: newPassword });
+      adoptToken(res.accessToken, now() + Number(res.expiresInSeconds) * 1000, true);
+      if (res.user) {
+        setState({ status: "signed-in", user: res.user });
+      }
     },
   };
 }

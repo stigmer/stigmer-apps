@@ -20,6 +20,12 @@ export function isPartnerRole(role: FirmRole | undefined): boolean {
   return role === FirmRole.MANAGING_PARTNER || role === FirmRole.PARTNER;
 }
 
+/** The account-administration line (DD-003 D4): the managing partner
+ * manages members and accounts; the server refuses everyone else. */
+export function isManagingPartnerRole(role: FirmRole | undefined): boolean {
+  return role === FirmRole.MANAGING_PARTNER;
+}
+
 export function useFirmMember() {
   const user = useCurrentUser();
   const userId = user.metadata?.id ?? "";

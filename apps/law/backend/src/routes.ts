@@ -4,7 +4,12 @@ import type {
   ResourceEventPublisher,
   ResourceStore,
 } from "@stigmer/resource-api";
-import type { CredentialStore, RefreshTokenStore } from "@stigmer/identity";
+import type { AuthorizationEngine } from "@stigmer/authorization";
+import type {
+  ActivationCodeStore,
+  CredentialStore,
+  RefreshTokenStore,
+} from "@stigmer/identity";
 import { userResource } from "@stigmer/identity";
 import { auditEntryResource } from "./domain/audit/auditentry-resource.js";
 import { caseResource } from "./domain/case/case-resource.js";
@@ -26,8 +31,12 @@ export interface AppDeps {
   readonly store: ResourceStore;
   /** The one caller seam (T04a): the identity chain's Connect binding. */
   readonly caller: CallerExtractor;
+  /** The FGA engine the policy consults and the tuple-sync steps write
+   * (DD-003): bootstrapped + reconciled BEFORE assembly (main.ts). */
+  readonly authz: AuthorizationEngine;
   readonly credentials: CredentialStore;
   readonly refreshTokens: RefreshTokenStore;
+  readonly activationCodes: ActivationCodeStore;
   readonly publisher?: ResourceEventPublisher;
 }
 
@@ -36,15 +45,16 @@ export interface AppDeps {
  * shared by every surface: the Connect routes, the in-process invokers
  * the event handlers and the reminder sweep use, and the plain-HTTP
  * file routes — one definition of "what may this person do" (DD-A5).
- * The policy loads its facts (FirmMember, case membership) from the
- * same store the pipelines persist to; the guards carry the rules the
- * authorize slot cannot see (create input, list scoping).
+ * The policy answers relationship questions through the FGA engine
+ * (whose tuples project from this same store — DD-003) and keeps the
+ * liveness gate and attribute rules on the store; the guards carry the
+ * rules the authorize slot cannot see (create input, list scoping).
  *
  * User is the identity commons' resource (DD-005 D2) composed here with
  * THIS app's policy — operator-only writes, self-only reads.
  */
 export function createApp(deps: AppDeps) {
-  const firm = createFirmPolicy(deps.store);
+  const firm = createFirmPolicy(deps.store, deps.authz);
   const shared = {
     store: deps.store,
     policy: firm.policy,
@@ -52,6 +62,9 @@ export function createApp(deps: AppDeps) {
     caller: deps.caller,
   };
   const guarded = { ...shared, guards: firm.guards };
+  // The three kinds whose rows project into tuples carry the engine for
+  // their same-request sync steps (DD-003 D1a).
+  const projected = { authz: deps.authz };
   return {
     policy: firm.policy,
     guards: firm.guards,
@@ -60,11 +73,12 @@ export function createApp(deps: AppDeps) {
         ...shared,
         credentials: deps.credentials,
         refreshTokens: deps.refreshTokens,
+        activationCodes: deps.activationCodes,
       }),
-      firmMembers: firmMemberResource(shared),
+      firmMembers: firmMemberResource({ ...shared, ...projected }),
       clients: clientResource(shared),
-      cases: caseResource(guarded),
-      caseMembers: caseMemberResource(guarded),
+      cases: caseResource({ ...guarded, ...projected }),
+      caseMembers: caseMemberResource({ ...guarded, ...projected }),
       hearings: hearingResource(guarded),
       deadlines: deadlineResource(guarded),
       feeArrangements: feeArrangementResource(shared),

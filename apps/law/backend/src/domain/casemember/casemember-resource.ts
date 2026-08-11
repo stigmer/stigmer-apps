@@ -39,8 +39,10 @@ import {
   ListCaseMembersResponseSchema,
   type RemoveCaseMemberRequest,
 } from "../../gen/stigmer/law/casemember/v1/casemember_pb.js";
+import type { AuthorizationEngine } from "@stigmer/authorization";
 import type { Case } from "../../gen/stigmer/law/case/v1/case_pb.js";
 import type { PolicyGuards } from "../authz/policy.js";
+import { applyTupleDeltaSafely, caseMemberTupleDelta } from "../authz/tuples.js";
 
 export function membershipKey(caseId: string, memberId: string): string {
   return `${caseId}:${memberId}`;
@@ -58,6 +60,7 @@ const activeOnCreateStep: PipelineStep<WriteContext<CaseMember>> = {
 export function caseMemberResource(deps: {
   store: ResourceStore;
   policy: AuthorizationPolicy;
+  authz: AuthorizationEngine;
   guards: PolicyGuards;
   publisher?: ResourceEventPublisher;
   caller: CallerExtractor;
@@ -66,6 +69,18 @@ export function caseMemberResource(deps: {
     { kind: "Case", label: "case", get: (m) => m.spec?.caseId || undefined },
     { kind: "FirmMember", label: "member", get: (m) => m.spec?.memberId || undefined },
   ]);
+
+  /** Membership → engine tuple, in the SAME request (DD-003 D1a). */
+  const syncTuplesOnCreate: PipelineStep<WriteContext<CaseMember>> = {
+    name: "sync-authz-tuples",
+    async execute(ctx) {
+      await applyTupleDeltaSafely(
+        deps.authz,
+        caseMemberTupleDelta(deps.store, undefined, ctx.newState as CaseMember),
+        `CaseMember ${(ctx.newState as CaseMember).metadata?.id ?? "(new)"}`,
+      );
+    },
+  };
 
   /** Partner-or-lead (FR-CASE-003) — the create-input twin of the
    * remove rule the authorize slot applies to loaded resources. Skipped
@@ -105,6 +120,7 @@ export function caseMemberResource(deps: {
         // Status initializes FIRST so the duplicate backstop keys on the
         // active form the row will actually persist with.
         beforePersist: [activeOnCreateStep, manageMembersOnCreate, referenceChecks],
+        afterPersist: [syncTuplesOnCreate],
       }),
       remove: customOperation<CaseMember, RemoveCaseMemberRequest, CaseMember>({
         async handler(ctx) {
@@ -127,6 +143,13 @@ export function caseMemberResource(deps: {
           const previous = clone(CaseMemberSchema, membership);
           membership.status = create(CaseMemberStatusSchema, { active: false });
           const saved = await ctx.save(membership);
+          // Same-request tuple revocation (DD-003 D1a) — before publish,
+          // mirroring the pipeline operations' afterPersist slot.
+          await applyTupleDeltaSafely(
+            deps.authz,
+            caseMemberTupleDelta(deps.store, previous, saved),
+            `CaseMember ${saved.metadata?.id ?? ""} remove`,
+          );
           await ctx.publish("updated", saved, previous);
           return saved;
         },

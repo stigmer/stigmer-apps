@@ -5,9 +5,11 @@
  * api/files.ts). Handed to React through one context so tests swap the
  * whole surface with in-memory fakes.
  *
- * UserService is deliberately absent: the rebuilt policy denies User
- * list to firm staff, and every person the screens name — assignees,
- * lead lawyers, note authors — resolves through the FirmMember roster.
+ * UserService is present for ACCOUNT ADMINISTRATION only (DD-003 D4:
+ * the managing partner creates accounts, keeps profiles current, and
+ * issues activation codes — the server refuses everyone else). Person
+ * NAMES still resolve through the FirmMember roster everywhere; User
+ * list stays denied to firm staff.
  */
 
 import { createClient, type Client, type Transport } from "@connectrpc/connect";
@@ -27,6 +29,7 @@ import { LedgerEntryService } from "../gen/stigmer/law/ledgerentry/v1/ledgerentr
 import { NotificationService } from "../gen/stigmer/law/notification/v1/notification_pb.js";
 import { TaskService } from "../gen/stigmer/law/task/v1/task_pb.js";
 import { TaskCommentService } from "../gen/stigmer/law/taskcomment/v1/taskcomment_pb.js";
+import { UserService } from "../gen/stigmer/identity/user/v1/user_pb.js";
 
 export interface ApiClients {
   readonly cases: Client<typeof CaseService>;
@@ -43,6 +46,8 @@ export interface ApiClients {
   readonly caseNotes: Client<typeof CaseNoteService>;
   readonly taskComments: Client<typeof TaskCommentService>;
   readonly documents: Client<typeof DocumentService>;
+  /** Account administration (DD-003 D4) — managing partner + operator only. */
+  readonly users: Client<typeof UserService>;
   /** The byte routes (D7) — the one non-Connect member of the surface. */
   readonly files: FilesClient;
 }
@@ -63,6 +68,7 @@ export function createApiClients(transport: Transport, files: FilesClient): ApiC
     caseNotes: createClient(CaseNoteService, transport),
     taskComments: createClient(TaskCommentService, transport),
     documents: createClient(DocumentService, transport),
+    users: createClient(UserService, transport),
     files,
   };
 }

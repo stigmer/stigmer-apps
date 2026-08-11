@@ -20,7 +20,11 @@ import { createConnectTransport } from "@connectrpc/connect-node";
 import { InProcessEventDispatcher } from "@stigmer/resource-api";
 import { runMigrations } from "@stigmer/resource-api/postgres";
 import { UserSchema, UserService } from "@stigmer/identity";
-import { createPgCredentialStore, createPgRefreshTokenStore } from "@stigmer/identity/postgres";
+import {
+  createPgActivationCodeStore,
+  createPgCredentialStore,
+  createPgRefreshTokenStore,
+} from "@stigmer/identity/postgres";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -64,11 +68,13 @@ import {
 import { NotificationService } from "../gen/stigmer/law/notification/v1/notification_pb.js";
 import { addDaysToIsoDate, todayInFirmTimezone } from "../domain/firm-clock.js";
 import { runSweepOnce } from "../domain/reminders/sweep.js";
+import type { AuthorizationEngine } from "@stigmer/authorization";
 import { createApp } from "../routes.js";
 import { createBackendServer } from "../server.js";
 import { createResourceStore } from "../storage.js";
 import { memoryObjectStore } from "./memory-object-store.js";
 import { createTestAuth, type TestAuth } from "./test-auth.js";
+import { startTestAuthz, type TestAuthz } from "./test-authz.js";
 import { testMigrationSources } from "./test-migrations.js";
 import { createTestPool } from "./test-pool.js";
 
@@ -90,6 +96,8 @@ describe("the rebuilt firm, end to end", () => {
   let pool: pg.Pool;
   let server: http.Server;
   let auth: TestAuth;
+  let authz: TestAuthz;
+  let engine: AuthorizationEngine;
   let store: ReturnType<typeof createResourceStore>;
 
   // Service clients (created once the port is known).
@@ -123,13 +131,17 @@ describe("the rebuilt firm, end to end", () => {
     pool = createTestPool(container.getConnectionUri());
     await runMigrations(pool, testMigrationSources());
     auth = await createTestAuth();
+    authz = await startTestAuthz();
+    engine = await authz.newEngine();
     store = createResourceStore(pool);
 
     server = createBackendServer({
       store,
       auth: auth.kit,
+      authz: engine,
       credentials: createPgCredentialStore(pool),
       refreshTokens: createPgRefreshTokenStore(pool),
+      activationCodes: createPgActivationCodeStore(pool),
       objectStore: memoryObjectStore(),
       dispatcher: new InProcessEventDispatcher(),
     });
@@ -172,6 +184,7 @@ describe("the rebuilt firm, end to end", () => {
     );
     await pool.end();
     await container.stop();
+    await authz.stop();
   });
 
   /* ------------------------- intake (J4) ---------------------------- */
@@ -491,8 +504,10 @@ describe("the rebuilt firm, end to end", () => {
     const sweepApp = createApp({
       store,
       caller: auth.kit.resolver.fromConnect,
+      authz: engine,
       credentials: createPgCredentialStore(pool),
       refreshTokens: createPgRefreshTokenStore(pool),
+      activationCodes: createPgActivationCodeStore(pool),
     });
     const deps = {
       store,

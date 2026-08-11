@@ -6,12 +6,19 @@
  * vote.
  *
  * Runs on the memory store (same port contract as Postgres, enforced by
- * the shared contract suite); the FR-cited acceptance tests re-prove the
- * hot boundaries over real HTTP + Postgres per resource slice.
+ * the shared contract suite) against a REAL OpenFGA engine — since
+ * DD-003 the policy's relationship answers come from the engine, so a
+ * mocked one would make this suite prove nothing (the parity oracle
+ * must exercise the real model). Each test gets its own store on one
+ * shared container; tuples are reconciled from the seeded rows through
+ * the SAME projection production boots with.
+ *
+ * The FR-cited acceptance tests re-prove the hot boundaries over real
+ * HTTP + Postgres per resource slice.
  */
 
 import { create } from "@bufbuild/protobuf";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   ActorSchema,
   MemoryResourceStore,
@@ -36,7 +43,10 @@ import {
   NotificationType,
 } from "../../../gen/stigmer/law/notification/v1/notification_pb.js";
 import { TaskSchema } from "../../../gen/stigmer/law/task/v1/task_pb.js";
+import { reconcileTuples } from "@stigmer/authorization";
+import { startTestAuthz, type TestAuthz } from "../../../__tests__/test-authz.js";
 import { createFirmPolicy, type FirmPolicy } from "../policy.js";
+import { projectAuthorizationTuples } from "../tuples.js";
 
 /* ------------------------------ fixtures ---------------------------- */
 
@@ -92,10 +102,25 @@ const callers = {
 
 let firm: FirmPolicy;
 let store: MemoryResourceStore;
+let authz: TestAuthz;
+
+beforeAll(async () => {
+  authz = await startTestAuthz();
+}, 120_000);
+
+afterAll(async () => {
+  await authz.stop();
+});
 
 beforeEach(async () => {
   store = new MemoryResourceStore({
-    FirmMember: { schema: FirmMemberSchema, naturalKeyField: "userId" },
+    // createdAt is registered where the tuple projection pages
+    // (projectAuthorizationTuples orders every listing by it).
+    FirmMember: {
+      schema: FirmMemberSchema,
+      naturalKeyField: "userId",
+      fields: { createdAt: "metadata.createdAt" },
+    },
     CaseMember: {
       schema: CaseMemberSchema,
       // The composed key, exactly as the Postgres generated column
@@ -112,7 +137,11 @@ beforeEach(async () => {
         createdAt: "metadata.createdAt",
       },
     },
-    Case: { schema: CaseSchema, naturalKeyField: "fileNumber" },
+    Case: {
+      schema: CaseSchema,
+      naturalKeyField: "fileNumber",
+      fields: { createdAt: "metadata.createdAt" },
+    },
     Task: { schema: TaskSchema },
   });
 
@@ -135,7 +164,12 @@ beforeEach(async () => {
   await store.save("CaseMember", caseMember("case_a", "fmem_clerk", true));
   await store.save("CaseMember", caseMember("case_b", "fmem_junior", false));
 
-  firm = createFirmPolicy(store);
+  // Rows → tuples through the SAME projection production reconciles
+  // with; a fresh store per test keeps tuple state isolated.
+  const engine = await authz.newEngine();
+  await reconcileTuples(engine, await projectAuthorizationTuples(store));
+
+  firm = createFirmPolicy(store, engine);
 });
 
 async function decide(
@@ -333,20 +367,40 @@ describe("accounts and roster (FR-AUTH-002, matrix: manage users/members)", () =
     expect((await decide(callers.clerk, "FirmMember", "list")).allow).toBe(true);
   });
 
-  it("no signed-in role manages User accounts — operator territory", async () => {
-    expectDeny(await decide(callers.mp, "User", "create"), /operator/);
-    expectDeny(await decide(callers.mp, "User", "setPassword"), /operator/);
-    expectDeny(await decide(callers.mp, "User", "update"), /operator/);
+  it("the managing partner administers accounts in-product (FR-AUTH-002 as amended by DD-003 D4)", async () => {
+    expect((await decide(callers.mp, "User", "create")).allow).toBe(true);
+    expect((await decide(callers.mp, "User", "update")).allow).toBe(true);
+    expect((await decide(callers.mp, "User", "issueActivationCode")).allow).toBe(true);
   });
 
-  it("a user reads their OWN identity record only", async () => {
+  it("nobody below managing partner touches accounts — every role denied", async () => {
+    for (const caller of [callers.partner, callers.associate, callers.junior, callers.clerk, callers.staff]) {
+      expectDeny(await decide(caller, "User", "create"), /operator or the managing partner/);
+      expectDeny(await decide(caller, "User", "update"), /operator or the managing partner/);
+      expectDeny(
+        await decide(caller, "User", "issueActivationCode"),
+        /operator or the managing partner/,
+      );
+    }
+  });
+
+  it("SetPassword stays operator-only break-glass — even the managing partner is refused", async () => {
+    // Setting a password FOR someone is a silent-takeover lever; the
+    // activation code path is visible to the account holder.
+    expectDeny(await decide(callers.mp, "User", "setPassword"), /operator/);
+  });
+
+  it("a user reads their OWN identity record; the managing partner reads anyone's", async () => {
     expect(
       (await decide(callers.associate, "User", "get", { metadata: { id: "usr_assoc" } })).allow,
     ).toBe(true);
     expectDeny(
       await decide(callers.associate, "User", "get", { metadata: { id: "usr_partner" } }),
-      /operator/,
+      /operator or the managing partner/,
     );
+    expect(
+      (await decide(callers.mp, "User", "get", { metadata: { id: "usr_partner" } })).allow,
+    ).toBe(true);
   });
 });
 

@@ -39,10 +39,11 @@ function buildRoster(members: readonly FirmMember[]): FirmRoster {
   };
 }
 
-export function useFirmRoster() {
+export function useFirmRoster(options?: { includeInactive?: boolean }) {
   const { firmMembers } = useApiClients();
+  const includeInactive = options?.includeInactive === true;
   return useQuery({
-    queryKey: ["members", "roster"],
+    queryKey: ["members", "roster", { includeInactive }],
     // People change rarely; pickers should not refetch on every mount.
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<FirmRoster> => {
@@ -51,6 +52,9 @@ export function useFirmRoster() {
         const page = await firmMembers.list({
           pageSize: ROSTER_PAGE_SIZE,
           pageOffset: offset,
+          // The historical register — the management surface needs
+          // deactivated members visible so reactivation exists at all.
+          includeInactive,
         });
         all.push(...page.items);
         if (all.length >= Number(page.totalCount) || page.items.length === 0) {

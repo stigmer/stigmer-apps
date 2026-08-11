@@ -18,11 +18,16 @@ import {
   verifyPassword,
   type CredentialStore,
 } from "@stigmer/identity";
-import { createPgCredentialStore, createPgRefreshTokenStore } from "@stigmer/identity/postgres";
+import {
+  createPgActivationCodeStore,
+  createPgCredentialStore,
+  createPgRefreshTokenStore,
+} from "@stigmer/identity/postgres";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import pg from "pg";
 import { createTestPool } from "./test-pool.js";
 import { createTestAuth, type TestAuth } from "./test-auth.js";
+import { startTestAuthz, type TestAuthz } from "./test-authz.js";
 import { testMigrationSources } from "./test-migrations.js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { memoryObjectStore } from "./memory-object-store.js";
@@ -37,6 +42,7 @@ import { createResourceStore } from "../storage.js";
 // Accounts are operator-provisioned (FR-ADMIN-001); the operator identity
 // is the per-deployment opk_ key (DD-005 D7), a real credential here too.
 let auth: TestAuth;
+let authz: TestAuthz;
 const asOperator = () => auth.asOperator();
 // A REAL firm member (user + FirmMember profile, seeded in beforeAll):
 // since the rebuild's fail-closed policy, a bare token with no firm
@@ -80,13 +86,16 @@ describe("User resource", () => {
     await runMigrations(pool, testMigrationSources());
     auth = await createTestAuth();
     await auth.mint("lawyer-one");
+    authz = await startTestAuthz();
 
     credentials = createPgCredentialStore(pool);
     server = createBackendServer({
       store: createResourceStore(pool),
       auth: auth.kit,
+      authz: await authz.newEngine(),
       credentials,
       refreshTokens: createPgRefreshTokenStore(pool),
+      activationCodes: createPgActivationCodeStore(pool),
       objectStore: memoryObjectStore(),
     });
     await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -129,6 +138,7 @@ describe("User resource", () => {
     );
     await pool.end();
     await container.stop();
+    await authz.stop();
   });
 
   describe("create (FR-ADMIN-001)", () => {
@@ -161,11 +171,11 @@ describe("User resource", () => {
       expect(created.spec?.name).toBe("Asha Verma");
     });
 
-    it("is operator-only: a firm user is denied with the policy reason", async () => {
+    it("is administration-only: a firm user below managing partner is denied with the policy reason", async () => {
       await expectCode(
         client.create(userInput(), asLawyer()),
         Code.PermissionDenied,
-        /Only an operator may manage user accounts/,
+        /Only an operator or the managing partner may manage user accounts/,
       );
     });
 
@@ -275,7 +285,7 @@ describe("User resource", () => {
     });
 
     it("a firm member does not read the account register — the roster is FirmMember.List", async () => {
-      await expectCode(client.list({}, asLawyer()), Code.PermissionDenied, /operator/);
+      await expectCode(client.list({}, asLawyer()), Code.PermissionDenied, /not permitted/);
     });
 
     it("requires authentication", async () => {
@@ -319,7 +329,7 @@ describe("User resource", () => {
       await expectCode(
         client.setPassword({ id: created.metadata?.id ?? "", password: "long enough" }, asLawyer()),
         Code.PermissionDenied,
-        /Only an operator may manage user accounts/,
+        /Only an operator may set a password directly — issue an activation code instead/,
       );
     });
 
@@ -370,7 +380,7 @@ describe("User resource", () => {
           asLawyer(),
         ),
         Code.PermissionDenied,
-        /Only an operator may manage user accounts/,
+        /Only an operator or the managing partner may manage user accounts/,
       );
     });
 
@@ -393,16 +403,17 @@ describe("User resource", () => {
           asLawyer(),
         ),
         Code.PermissionDenied,
-        /Only an operator may manage user accounts/,
+        /Only an operator or the managing partner may manage user accounts/,
       );
     });
   });
 
   describe("the operation matrix is the contract", () => {
-    it("declares exactly create/update/get/list/setPassword — no delete (FR-USER-001 notes, amended T05)", () => {
+    it("declares exactly create/update/get/list/setPassword/issueActivationCode — no delete (FR-USER-001 notes, amended T05 and DD-003 D4)", () => {
       expect(UserService.methods.map((m) => m.localName).sort()).toEqual([
         "create",
         "get",
+        "issueActivationCode",
         "list",
         "setPassword",
         "update",

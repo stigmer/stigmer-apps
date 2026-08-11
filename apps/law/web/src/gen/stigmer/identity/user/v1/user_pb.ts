@@ -34,7 +34,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file stigmer/identity/user/v1/user.proto.
  */
 export const file_stigmer_identity_user_v1_user: GenFile = /*@__PURE__*/
-  fileDesc("CiNzdGlnbWVyL2lkZW50aXR5L3VzZXIvdjEvdXNlci5wcm90bxIYc3RpZ21lci5pZGVudGl0eS51c2VyLnYxIp8BCgRVc2VyEhMKC2FwaV92ZXJzaW9uGAEgASgJEgwKBGtpbmQYAiABKAkSOgoIbWV0YWRhdGEYAyABKAsyKC5zdGlnbWVyLnJlc291cmNlYXBpLnYxLlJlc291cmNlTWV0YWRhdGESOAoEc3BlYxgEIAEoCzIiLnN0aWdtZXIuaWRlbnRpdHkudXNlci52MS5Vc2VyU3BlY0IGukgDyAEBImsKCFVzZXJTcGVjEhYKBWVtYWlsGAEgASgJQge6SARyAmABEgwKBG5hbWUYAiABKAkSLwoFcGhvbmUYAyABKAlCG7pIGHIWMhReXCtbMS05XVswLTldezYsMTR9JEgAiAEBQggKBl9waG9uZSIrCg5HZXRVc2VyUmVxdWVzdBIKCgJpZBgBIAEoCRINCgVlbWFpbBgCIAEoCSJOChBMaXN0VXNlcnNSZXF1ZXN0EhwKCXBhZ2Vfc2l6ZRgBIAEoBUIJukgGGgQYZCgAEhwKC3BhZ2Vfb2Zmc2V0GAIgASgFQge6SAQaAigAIlcKEUxpc3RVc2Vyc1Jlc3BvbnNlEi0KBWl0ZW1zGAEgAygLMh4uc3RpZ21lci5pZGVudGl0eS51c2VyLnYxLlVzZXISEwoLdG90YWxfY291bnQYAiABKAMiSgoSU2V0UGFzc3dvcmRSZXF1ZXN0EgoKAmlkGAEgASgJEg0KBWVtYWlsGAIgASgJEhkKCHBhc3N3b3JkGAMgASgJQge6SARyAhAIIhUKE1NldFBhc3N3b3JkUmVzcG9uc2UyvwMKC1VzZXJTZXJ2aWNlEkgKBkNyZWF0ZRIeLnN0aWdtZXIuaWRlbnRpdHkudXNlci52MS5Vc2VyGh4uc3RpZ21lci5pZGVudGl0eS51c2VyLnYxLlVzZXISSAoGVXBkYXRlEh4uc3RpZ21lci5pZGVudGl0eS51c2VyLnYxLlVzZXIaHi5zdGlnbWVyLmlkZW50aXR5LnVzZXIudjEuVXNlchJPCgNHZXQSKC5zdGlnbWVyLmlkZW50aXR5LnVzZXIudjEuR2V0VXNlclJlcXVlc3QaHi5zdGlnbWVyLmlkZW50aXR5LnVzZXIudjEuVXNlchJfCgRMaXN0Eiouc3RpZ21lci5pZGVudGl0eS51c2VyLnYxLkxpc3RVc2Vyc1JlcXVlc3QaKy5zdGlnbWVyLmlkZW50aXR5LnVzZXIudjEuTGlzdFVzZXJzUmVzcG9uc2USagoLU2V0UGFzc3dvcmQSLC5zdGlnbWVyLmlkZW50aXR5LnVzZXIudjEuU2V0UGFzc3dvcmRSZXF1ZXN0Gi0uc3RpZ21lci5pZGVudGl0eS51c2VyLnYxLlNldFBhc3N3b3JkUmVzcG9uc2ViBnByb3RvMw", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
+  fileDesc("CiNzdGlnbWVyL2lkZW50aXR5L3VzZXIvdjEvdXNlci5wcm90bxIYc3RpZ21lci5pZGVudGl0eS51c2VyLnYxIp8BCgRVc2VyEhMKC2FwaV92ZXJzaW9uGAEgASgJEgwKBGtpbmQYAiABKAkSOgoIbWV0YWRhdGEYAyABKAsyKC5zdGlnbWVyLnJlc291cmNlYXBpLnYxLlJlc291cmNlTWV0YWRhdGESOAoEc3BlYxgEIAEoCzIiLnN0aWdtZXIuaWRlbnRpdHkudXNlci52MS5Vc2VyU3BlY0IGukgDyAEBImsKCFVzZXJTcGVjEhYKBWVtYWlsGAEgASgJQge6SARyAmABEgwKBG5hbWUYAiABKAkSLwoFcGhvbmUYAyABKAlCG7pIGHIWMhReXCtbMS05XVswLTldezYsMTR9JEgAiAEBQggKBl9waG9uZSIrCg5HZXRVc2VyUmVxdWVzdBIKCgJpZBgBIAEoCRINCgVlbWFpbBgCIAEoCSJOChBMaXN0VXNlcnNSZXF1ZXN0EhwKCXBhZ2Vfc2l6ZRgBIAEoBUIJukgGGgQYZCgAEhwKC3BhZ2Vfb2Zmc2V0GAIgASgFQge6SAQaAigAIlcKEUxpc3RVc2Vyc1Jlc3BvbnNlEi0KBWl0ZW1zGAEgAygLMh4uc3RpZ21lci5pZGVudGl0eS51c2VyLnYxLlVzZXISEwoLdG90YWxfY291bnQYAiABKAMiSgoSU2V0UGFzc3dvcmRSZXF1ZXN0EgoKAmlkGAEgASgJEg0KBWVtYWlsGAIgASgJEhkKCHBhc3N3b3JkGAMgASgJQge6SARyAhAIIhUKE1NldFBhc3N3b3JkUmVzcG9uc2UiNwoaSXNzdWVBY3RpdmF0aW9uQ29kZVJlcXVlc3QSCgoCaWQYASABKAkSDQoFZW1haWwYAiABKAkiRwobSXNzdWVBY3RpdmF0aW9uQ29kZVJlc3BvbnNlEgwKBGNvZGUYASABKAkSGgoSZXhwaXJlc19pbl9zZWNvbmRzGAIgASgFMsQECgtVc2VyU2VydmljZRJICgZDcmVhdGUSHi5zdGlnbWVyLmlkZW50aXR5LnVzZXIudjEuVXNlchoeLnN0aWdtZXIuaWRlbnRpdHkudXNlci52MS5Vc2VyEkgKBlVwZGF0ZRIeLnN0aWdtZXIuaWRlbnRpdHkudXNlci52MS5Vc2VyGh4uc3RpZ21lci5pZGVudGl0eS51c2VyLnYxLlVzZXISTwoDR2V0Eiguc3RpZ21lci5pZGVudGl0eS51c2VyLnYxLkdldFVzZXJSZXF1ZXN0Gh4uc3RpZ21lci5pZGVudGl0eS51c2VyLnYxLlVzZXISXwoETGlzdBIqLnN0aWdtZXIuaWRlbnRpdHkudXNlci52MS5MaXN0VXNlcnNSZXF1ZXN0Gisuc3RpZ21lci5pZGVudGl0eS51c2VyLnYxLkxpc3RVc2Vyc1Jlc3BvbnNlEmoKC1NldFBhc3N3b3JkEiwuc3RpZ21lci5pZGVudGl0eS51c2VyLnYxLlNldFBhc3N3b3JkUmVxdWVzdBotLnN0aWdtZXIuaWRlbnRpdHkudXNlci52MS5TZXRQYXNzd29yZFJlc3BvbnNlEoIBChNJc3N1ZUFjdGl2YXRpb25Db2RlEjQuc3RpZ21lci5pZGVudGl0eS51c2VyLnYxLklzc3VlQWN0aXZhdGlvbkNvZGVSZXF1ZXN0GjUuc3RpZ21lci5pZGVudGl0eS51c2VyLnYxLklzc3VlQWN0aXZhdGlvbkNvZGVSZXNwb25zZWIGcHJvdG8z", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
 
 /**
  * @generated from message stigmer.identity.user.v1.User
@@ -230,6 +230,59 @@ export const SetPasswordResponseSchema: GenMessage<SetPasswordResponse> = /*@__P
   messageDesc(file_stigmer_identity_user_v1_user, 6);
 
 /**
+ * @generated from message stigmer.identity.user.v1.IssueActivationCodeRequest
+ */
+export type IssueActivationCodeRequest = Message<"stigmer.identity.user.v1.IssueActivationCodeRequest"> & {
+  /**
+   * Target user by internal id or email (case-insensitive).
+   *
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string email = 2;
+   */
+  email: string;
+};
+
+/**
+ * Describes the message stigmer.identity.user.v1.IssueActivationCodeRequest.
+ * Use `create(IssueActivationCodeRequestSchema)` to create a new message.
+ */
+export const IssueActivationCodeRequestSchema: GenMessage<IssueActivationCodeRequest> = /*@__PURE__*/
+  messageDesc(file_stigmer_identity_user_v1_user, 7);
+
+/**
+ * @generated from message stigmer.identity.user.v1.IssueActivationCodeResponse
+ */
+export type IssueActivationCodeResponse = Message<"stigmer.identity.user.v1.IssueActivationCodeResponse"> & {
+  /**
+   * The one-time code, shown exactly once — the server stores only its
+   * hash. The administrator hands it to the person out-of-band; the
+   * person redeems it (AuthService.RedeemActivationCode) to set their
+   * own password.
+   *
+   * @generated from field: string code = 1;
+   */
+  code: string;
+
+  /**
+   * Validity window, for the administrator to relay ("valid for 3 days").
+   *
+   * @generated from field: int32 expires_in_seconds = 2;
+   */
+  expiresInSeconds: number;
+};
+
+/**
+ * Describes the message stigmer.identity.user.v1.IssueActivationCodeResponse.
+ * Use `create(IssueActivationCodeResponseSchema)` to create a new message.
+ */
+export const IssueActivationCodeResponseSchema: GenMessage<IssueActivationCodeResponse> = /*@__PURE__*/
+  messageDesc(file_stigmer_identity_user_v1_user, 8);
+
+/**
  * @generated from service stigmer.identity.user.v1.UserService
  */
 export const UserService: GenService<{
@@ -286,10 +339,12 @@ export const UserService: GenService<{
     output: typeof ListUsersResponseSchema;
   },
   /**
-   * Set (or reset) a user's password. Operator-only: password reset is an
-   * operator action. The hash lands in user_credentials, never in the
-   * User resource. Resetting also revokes the user's refresh sessions
-   * (DD-005 D9) — this is the offboarding lever.
+   * Set (or reset) a user's password. Operator-only: setting a password
+   * FOR someone is a silent-takeover lever, so it stays a break-glass
+   * action (delegated administration issues activation codes instead).
+   * The hash lands in user_credentials, never in the User resource.
+   * Resetting also revokes the user's refresh sessions (DD-005 D9) —
+   * this is the offboarding lever.
    *
    * @generated from rpc stigmer.identity.user.v1.UserService.SetPassword
    */
@@ -297,6 +352,22 @@ export const UserService: GenService<{
     methodKind: "unary";
     input: typeof SetPasswordRequestSchema;
     output: typeof SetPasswordResponseSchema;
+  },
+  /**
+   * Issue a one-time activation code for a user — the no-email
+   * onboarding/reset path: whoever the consumer policy allows (an
+   * operator, or a delegated administrator role) receives the code once
+   * and hands it over out-of-band; the person sets their OWN password by
+   * redeeming it. Issuing replaces any earlier unredeemed code for the
+   * user; it does NOT touch the current password or sessions (the reset
+   * takes effect when redeemed, visibly — unlike SetPassword).
+   *
+   * @generated from rpc stigmer.identity.user.v1.UserService.IssueActivationCode
+   */
+  issueActivationCode: {
+    methodKind: "unary";
+    input: typeof IssueActivationCodeRequestSchema;
+    output: typeof IssueActivationCodeResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_stigmer_identity_user_v1_user, 0);

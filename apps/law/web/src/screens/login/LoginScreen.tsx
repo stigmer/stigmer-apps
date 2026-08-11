@@ -104,7 +104,11 @@ export function LoginScreen() {
         </form>
 
         <p className="mt-4 text-center text-sm text-ink-muted">
-          Forgot your password? Ask your administrator to reset it.
+          Forgot your password? Ask your managing partner for an activation code, then{" "}
+          <a href="/activate" className="text-brand underline">
+            set a new one
+          </a>
+          .
         </p>
       </div>
     </main>

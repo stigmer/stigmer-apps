@@ -95,6 +95,21 @@ export interface BackendConfig {
     /** Bearer secret the agent platform presents. Min 32 chars. */
     readonly sharedSecret: string;
   };
+  /**
+   * The FGA engine (DD-003): the firm's own OpenFGA, cluster-internal.
+   * The preshared key is mandatory — agent sandboxes share the cluster,
+   * so an open authorization API is forbidden (no insecure mode, the
+   * MCP secret's reasoning applied to the engine).
+   */
+  readonly authz: {
+    readonly apiUrl: string;
+    readonly apiToken: string;
+    /**
+     * Periodic tuple-reconcile interval (DD-003 D1a's drift backstop).
+     * 0 disables the loop (tests reconcile explicitly).
+     */
+    readonly reconcileIntervalMs: number;
+  };
 }
 
 export function loadConfigFromEnv(
@@ -171,6 +186,29 @@ export function loadConfigFromEnv(
     );
   }
 
+  const fgaApiUrl = env.FGA_API_URL ?? "";
+  if (!fgaApiUrl) {
+    problems.push("FGA_API_URL is required (the firm's OpenFGA endpoint — DD-003)");
+  }
+  const fgaApiToken = env.FGA_API_TOKEN ?? "";
+  if (fgaApiToken.length < 32) {
+    problems.push(
+      "FGA_API_TOKEN is required, min 32 chars (the engine's preshared key; sandboxes " +
+        "share the cluster — DD-003; there is no insecure mode)",
+    );
+  }
+  // Reconcile is the drift BACKSTOP behind same-request tuple sync, so
+  // minutes of period cost nothing; 5 minutes bounds any crash-window
+  // drift tightly without meaningfully loading the engine.
+  const fgaReconcileRaw = env.FGA_RECONCILE_INTERVAL_SECONDS ?? "300";
+  const fgaReconcileSeconds = Number(fgaReconcileRaw);
+  if (!Number.isInteger(fgaReconcileSeconds) || fgaReconcileSeconds < 0) {
+    problems.push(
+      `FGA_RECONCILE_INTERVAL_SECONDS must be a non-negative integer (0 disables), ` +
+        `got '${fgaReconcileRaw}'`,
+    );
+  }
+
   if (problems.length > 0) {
     throw new Error(`Invalid backend configuration:\n- ${problems.join("\n- ")}`);
   }
@@ -195,6 +233,11 @@ export function loadConfigFromEnv(
     mcp: {
       port: mcpPort,
       sharedSecret: mcpSharedSecret,
+    },
+    authz: {
+      apiUrl: fgaApiUrl,
+      apiToken: fgaApiToken,
+      reconcileIntervalMs: fgaReconcileSeconds * 1000,
     },
   };
 }

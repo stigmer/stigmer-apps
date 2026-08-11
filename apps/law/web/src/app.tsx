@@ -5,6 +5,7 @@
  */
 
 import { createBrowserRouter, Navigate, Outlet } from "react-router-dom";
+import { ActivateScreen } from "./screens/activate/ActivateScreen.js";
 import { LoginScreen } from "./screens/login/LoginScreen.js";
 import { HomeScreen } from "./screens/home/HomeScreen.js";
 import { NotFoundScreen } from "./screens/NotFoundScreen.js";
@@ -48,6 +49,9 @@ function RequireSession() {
 export function createAppRouter() {
   return createBrowserRouter([
     { path: "/login", element: <LoginScreen /> },
+    // Anonymous by design (DD-003 D4): a new member has no session yet —
+    // the activation code is their credential.
+    { path: "/activate", element: <ActivateScreen /> },
     {
       element: <RequireSession />,
       children: [

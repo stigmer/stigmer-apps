@@ -2,9 +2,11 @@ import http from "node:http";
 import { connectNodeAdapter } from "@connectrpc/connect-node";
 import type { ConnectRouter } from "@connectrpc/connect";
 import type { InProcessEventDispatcher, ResourceStore } from "@stigmer/resource-api";
+import type { AuthorizationEngine } from "@stigmer/authorization";
 import {
   authService,
   createChannelIdentityResolver,
+  type ActivationCodeStore,
   type CredentialStore,
   type RefreshTokenStore,
 } from "@stigmer/identity";
@@ -25,8 +27,15 @@ export interface BackendDeps {
   readonly store: ResourceStore;
   /** The composed authentication (auth/auth.ts): issuer + caller resolver. */
   readonly auth: AuthKit;
+  /**
+   * The FGA engine (DD-003), already bootstrapped and reconciled by the
+   * caller (main.ts in production; each suite's harness in tests) —
+   * server assembly stays synchronous and engine-shape-agnostic.
+   */
+  readonly authz: AuthorizationEngine;
   readonly credentials: CredentialStore;
   readonly refreshTokens: RefreshTokenStore;
+  readonly activationCodes: ActivationCodeStore;
   readonly objectStore: ObjectStore;
   /**
    * The resource event dispatcher. Optional so narrow tests can boot
@@ -93,8 +102,10 @@ function assembleApp(deps: BackendDeps): App {
   const app = createApp({
     store: deps.store,
     caller: deps.auth.resolver.fromConnect,
+    authz: deps.authz,
     credentials: deps.credentials,
     refreshTokens: deps.refreshTokens,
+    activationCodes: deps.activationCodes,
     publisher: deps.dispatcher,
   });
 
@@ -173,6 +184,7 @@ function buildWebServer(app: App, deps: BackendDeps): http.Server {
     store: deps.store,
     credentials: deps.credentials,
     refreshTokens: deps.refreshTokens,
+    activationCodes: deps.activationCodes,
     issuer: deps.auth.issuer,
     caller: deps.auth.resolver.fromConnect,
   });
