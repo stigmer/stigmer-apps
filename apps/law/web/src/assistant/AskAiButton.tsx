@@ -1,20 +1,15 @@
 /**
- * The shell's Ask AI affordance + the panel's lazy host. Both are
- * SDK-free (main-bundle safe): the button renders only when the
- * deployment HAS an assistant (config read — enabled:false or a failed
- * read means no affordance, the honest open-source posture), and the
- * host fetches the heavy assistant chunk only on the FIRST open — never
- * at shell mount. After that it stays mounted so a closed-and-reopened
- * panel resumes the conversation it was on.
+ * The Ask AI entry affordances — SDK-free (main-bundle safe), rendered
+ * only when the deployment HAS an assistant (config read — enabled:false
+ * or a failed read means no affordance, the honest open-source posture).
+ * Both simply drive the controller; the dock (AssistantDock) owns the
+ * panel chrome and the lazy loading of everything platform-flavored.
  */
 
-import { lazy, Suspense, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Button } from "../components/Button.js";
 import { useAssistant } from "./assistant-context.js";
 import { useAssistantConfig } from "./queries.js";
-
-const AssistantPanel = lazy(() => import("./AssistantPanel.js"));
 
 export function AskAiButton() {
   const config = useAssistantConfig();
@@ -53,17 +48,5 @@ export function AskAiAboutCaseButton(props: { fileNumber: string }) {
       <Sparkles className="size-4" aria-hidden="true" />
       Ask AI about this matter
     </Button>
-  );
-}
-
-export function AssistantHost() {
-  const { open } = useAssistant();
-  const [everOpened, setEverOpened] = useState(false);
-  if (open && !everOpened) setEverOpened(true);
-  if (!everOpened) return null;
-  return (
-    <Suspense fallback={null}>
-      <AssistantPanel />
-    </Suspense>
   );
 }

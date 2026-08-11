@@ -39,6 +39,34 @@ test("performance envelope: 2s list loads, 3s mutations (FR-PERF-001)", async ({
   await expect(page.getByText(/Perf envelope check/).first()).toBeVisible({ timeout: 3_000 });
 });
 
+test("the facts rail answers to the content's width, not the window's (container query)", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/cases");
+  await page.getByRole("link", { name: new RegExp(SEED_CASE.fileNumber.replaceAll("/", "\\/")) }).click();
+  await expect(page.getByRole("heading", { name: SEED_CASE.fileNumber })).toBeVisible();
+
+  const rail = page.getByRole("complementary", { name: "Matter facts" });
+  const tabs = page.getByRole("navigation", { name: "Matter sections" });
+
+  // Wide content area (default 1280 viewport): the rail sits BESIDE the
+  // reading column.
+  const wideRail = await rail.boundingBox();
+  const wideTabs = await tabs.boundingBox();
+  expect(wideRail && wideTabs && wideRail.x > wideTabs.x + wideTabs.width).toBe(true);
+
+  // Narrow the window until the content area drops under the threshold:
+  // the rail wraps BELOW the column — the same mechanism that makes room
+  // for the assistant dock, driven by content width rather than viewport.
+  // (700px, not 900: below lg the sidebar overlays instead of pushing,
+  // so a 900px window still gives the content ~868px — deliberately MORE
+  // side-by-side room than the old viewport breakpoint allowed.)
+  await page.setViewportSize({ width: 700, height: 720 });
+  const narrowRail = await rail.boundingBox();
+  const narrowTabs = await tabs.boundingBox();
+  expect(narrowRail && narrowTabs && narrowRail.y > narrowTabs.y).toBe(true);
+  expect(narrowRail && narrowTabs && Math.abs(narrowRail.x - narrowTabs.x) < 2).toBe(true);
+});
+
 test("accessibility: no serious or critical axe violations on any screen", async ({ page }) => {
   const scan = async (label: string) => {
     const results = await new AxeBuilder({ page }).analyze();

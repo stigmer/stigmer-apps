@@ -1,24 +1,41 @@
 /**
  * The panel's home: start a conversation, or pick up a recent one.
  *
- * The composer is the app's own (kit-styled, lawyer-plain) rather than
- * the SDK's launcher organism, for two deliberate reasons:
+ * The composer is the SDK's SessionComposer — the same organism the
+ * follow-up turns use — configured to the firm's presentation: the
+ * model picker, Agent/Plan mode, and attachments face the lawyer
+ * (owner decision, 2026-08-11); the engine and agent do NOT. Two pins
+ * happen at submit, in the bootstrap this view owns:
  *
- * 1. The bootstrap must pin what the SDK's launcher would let a person
- *    change: `harness: "cursor"` (WhatsApp's engine — same tools, same
- *    model tier, same billing; the platform default is a DIFFERENT
- *    engine) and the org-visible AgentInstance whose environment refs
- *    deliver the MCP secret. Neither is a lawyer decision.
- * 2. The contextual entries ("Ask about this matter") seed prefill text
- *    and standing session context — knobs the launcher does not expose.
+ * 1. `harness: "cursor"` (WhatsApp's engine — same tools, same model
+ *    tier, same billing; the platform default is a DIFFERENT engine,
+ *    currently broken in production — stigmer/stigmer#437). A session's
+ *    engine is immutable after its first turn, so HERE is the only
+ *    chance; `showHarnessSelector` stays false because engines are not
+ *    a lawyer decision.
+ * 2. The org-visible AgentInstance whose environment refs deliver the
+ *    MCP secret (`sessionSpec.agentInstanceId`) — the agent is bound at
+ *    creation, so the composer needs no agent picker at all.
+ *
+ * The contextual entries ("Ask about this matter") seed prefill text
+ * (through the composer's imperative handle — the view is remounted per
+ * seed) and standing session context — knobs the SDK's launcher
+ * organism does not expose, which is why this view exists instead of
+ * NewSessionViewer.
  *
  * Everything AFTER the first message rides the SDK's SessionViewer.
  */
 
-import { useState, type FormEvent } from "react";
-import { ArrowUp, MessageSquareText } from "lucide-react";
-import { useCreateAgentExecution, useSessionList } from "@stigmer/react";
-import { Button } from "../components/Button.js";
+import { useEffect, useRef, useState } from "react";
+import { MessageSquareText } from "lucide-react";
+import {
+  SessionComposer,
+  useCreateAgentExecution,
+  useSessionList,
+  type InteractionModeOption,
+  type SessionComposerHandle,
+  type SessionComposerSubmitContext,
+} from "@stigmer/react";
 import type { GetAssistantConfigResponse } from "../gen/stigmer/law/assistant/v1/assistant_pb.js";
 import type { AssistantSeed } from "./assistant-context.js";
 import { CreditNotice } from "./CreditNotice.js";
@@ -31,16 +48,32 @@ export function NewConversationView(props: {
   onConversationStarted(sessionId: string): void;
 }) {
   const { create, isCreating, error } = useCreateAgentExecution();
-  const [draft, setDraft] = useState(props.seed?.prefill ?? "");
+  const composerRef = useRef<SessionComposerHandle>(null);
+  const [interactionMode, setInteractionMode] = useState<InteractionModeOption>("agent");
+  const [attachmentProblem, setAttachmentProblem] = useState<string | undefined>();
   const recent = useSessionList({ pageSize: 10 });
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    const message = draft.trim();
-    if (!message || isCreating) return;
+  // The seed's prefill, applied once: this view is keyed on the seed
+  // (seedKey), so mount IS the seeded moment.
+  const prefill = props.seed?.prefill;
+  useEffect(() => {
+    if (prefill) composerRef.current?.setMessage(prefill);
+  }, [prefill]);
+
+  async function onSubmit(
+    message: string,
+    modelName?: string,
+    context?: SessionComposerSubmitContext,
+  ) {
+    if (isCreating) return;
     const result = await create({
       org: props.config.org,
       message,
+      // What the lawyer chose in the composer, verbatim: an untouched
+      // model stays undefined (platform default for the pinned engine).
+      modelName,
+      attachments: context?.attachments,
+      interactionMode: context?.interactionMode,
       sessionSpec: {
         agentInstanceId: props.config.agentInstanceId,
         // The engine pin (see the module doc). A session's engine is
@@ -67,40 +100,39 @@ export function NewConversationView(props: {
         consoleUrl={props.config.consoleUrl}
       />
 
-      <form onSubmit={(e) => void onSubmit(e)} aria-label="Ask the assistant">
-        <label htmlFor="assistant-draft" className="mb-1.5 block text-sm font-medium">
-          What do you need?
-        </label>
-        <div className="rounded-card border border-line bg-surface focus-within:border-brand">
-          <textarea
-            id="assistant-draft"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                e.currentTarget.form?.requestSubmit();
-              }
-            }}
-            rows={3}
-            autoFocus
-            placeholder="e.g. What's on my board today? or What happened last on CS/2026/041?"
-            className="block w-full resize-none bg-transparent p-3 text-sm outline-none placeholder:text-ink-faint"
-          />
-          <div className="flex justify-end p-2 pt-0">
-            <Button type="submit" variant="primary" disabled={!draft.trim() || isCreating}>
-              {isCreating ? "Starting…" : "Ask"}
-              <ArrowUp className="size-4" aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
+      <section aria-label="Start a conversation">
+        <p className="mb-1.5 text-sm font-medium">What do you need?</p>
+        <SessionComposer
+          ref={composerRef}
+          onSubmit={(message, modelName, context) => void onSubmit(message, modelName, context)}
+          isSubmitting={isCreating}
+          org={props.config.org}
+          harness="cursor"
+          showHarnessSelector={false}
+          showModelSelector
+          interactionMode={interactionMode}
+          onInteractionModeChange={setInteractionMode}
+          showInteractionModePicker
+          enableAttachments
+          enableFileReferences={false}
+          onAttachmentValidationError={setAttachmentProblem}
+          autoFocus
+          initialRows={3}
+          placeholder="e.g. What's on my board today? or What happened last on CS/2026/041?"
+          ariaLabel="Ask the assistant"
+        />
+        {attachmentProblem && (
+          <p role="alert" className="mt-2 text-sm text-danger">
+            That file can't be attached. {attachmentProblem}
+          </p>
+        )}
         {error && (
           <p role="alert" className="mt-2 text-sm text-danger">
             The assistant couldn't start this conversation. Try again — if it keeps
             failing, tell your administrator. ({error.message})
           </p>
         )}
-      </form>
+      </section>
 
       {recent.sessions.length > 0 && (
         <section aria-label="Recent conversations">

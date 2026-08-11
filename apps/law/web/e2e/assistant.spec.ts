@@ -17,9 +17,11 @@ test("an unconfigured deployment offers no Ask AI anywhere", async ({ page }) =>
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("link", { name: ASHA.name })).toBeVisible();
 
-  // The sidebar renders its whole nav; the assistant entry is not in it.
+  // The sidebar renders its whole nav; the assistant entry is not in it —
+  // and neither is the dock's right-edge strip.
   await expect(page.getByRole("link", { name: "Cases" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Ask AI" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open Ask AI" })).toHaveCount(0);
 
   // A matter's page renders its actions; the contextual entry is not
   // among them. (WP/2026/1234 is the e2e server's seeded matter.)

@@ -1,15 +1,23 @@
 /*
  * The assistant panel's theme bridge: the platform SDK reads --stgm-*
  * tokens; the app's palette lives in --law-* (styles/app.css). Mapping
- * the core tokens here — scoped to the panel container, never :root —
- * makes the embedded conversation wear the app's paper, ink, and counsel
- * blue while everything unmapped keeps the SDK's accessible defaults.
- * (This file rides the lazily-loaded assistant chunk, so none of it —
- * including the SDK stylesheet imported by AssistantPanel — weighs the
- * app's core screens.)
+ * the core tokens here makes the embedded conversation wear the app's
+ * paper, ink, and counsel blue while everything unmapped keeps the
+ * SDK's accessible defaults. (This file rides the lazily-loaded
+ * assistant chunk, so none of it — including the SDK stylesheet
+ * imported by AssistantConversation — weighs the app's core screens.)
+ *
+ * TWO scopes, both required. `.law-assistant` covers the panel itself,
+ * but the SDK renders popovers and menus (the model picker, the
+ * Agent/Plan picker) into its managed `[data-stgm-portal]` container on
+ * document.body — OUTSIDE the panel's subtree, where a panel-scoped
+ * bridge never reaches. Only SDK UI ever renders in that container, so
+ * scoping the bridge to it leaks nothing into the app. Never put these
+ * on :root — the app's own screens must not inherit SDK tokens.
  */
 
-.law-assistant {
+.law-assistant,
+[data-stgm-portal] {
   --stgm-font-sans: var(--font-sans);
   --stgm-radius: var(--law-radius);
 
@@ -19,6 +27,15 @@
   --stgm-card-foreground: var(--law-ink);
   --stgm-border: var(--law-line);
   --stgm-muted-foreground: var(--law-ink-muted);
+
+  /* Portaled surfaces (menus, pickers) and the controls that open them. */
+  --stgm-popover: var(--law-surface);
+  --stgm-popover-foreground: var(--law-ink);
+  --stgm-muted: var(--law-paper);
+  --stgm-secondary: var(--law-paper);
+  --stgm-secondary-foreground: var(--law-ink);
+  --stgm-input: var(--law-line);
+  --stgm-ring: var(--law-brand);
 
   --stgm-primary: var(--law-brand);
   --stgm-primary-foreground: var(--law-on-brand);

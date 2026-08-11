@@ -1,7 +1,9 @@
 /**
  * The signed-in frame, on the Stigmer console's pattern: no top bar — a
  * full-window flex row of one collapsible left sidebar (brand, primary
- * navigation, the caller in a footer band) and the content column.
+ * navigation, the caller in a footer band), the content column, and the
+ * Ask AI dock on the right edge (AssistantDock — content reflows around
+ * it, which is why the content wrapper is a CSS @container).
  * Screens render into a centered, width-capped container (the console's
  * own convention — DD-005): one width for every screen means zero layout
  * shift between list and detail, and no screen can forget to cap itself.
@@ -27,7 +29,8 @@ import {
   PanelLeft,
   Users,
 } from "lucide-react";
-import { AskAiButton, AssistantHost } from "../assistant/AskAiButton.js";
+import { AskAiButton } from "../assistant/AskAiButton.js";
+import { AssistantDock } from "../assistant/AssistantDock.js";
 import { AssistantProvider } from "../assistant/assistant-context.js";
 import { useUnreadCount } from "../screens/inbox/queries.js";
 import { isPartnerRole, useMyRole } from "../session/use-firm-member.js";
@@ -185,14 +188,19 @@ export function AppShell() {
       </div>
 
       <main className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-6xl p-4">
+        {/* @container: screens size themselves by the width the content
+            ACTUALLY has (the assistant dock takes its share from this
+            column), never by the window — see DetailLayout. */}
+        <div className="mx-auto w-full max-w-6xl p-4 @container">
           <Outlet />
         </div>
       </main>
 
-      {/* Mounted at the shell so the panel survives navigation; the
-          heavy chunk loads only on the first open (AssistantHost). */}
-      <AssistantHost />
+      {/* A flex sibling of the content column: the docked assistant
+          pushes, never overlays. Mounted at the shell so the panel
+          survives navigation; the heavy chunk loads only on the first
+          expand (AssistantDock). */}
+      <AssistantDock />
     </div>
     </AssistantProvider>
   );
