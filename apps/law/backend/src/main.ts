@@ -11,6 +11,7 @@ import {
   createPgRefreshTokenStore,
 } from "@stigmer/identity/postgres";
 import pg from "pg";
+import { createPlatformTokenMinter } from "./assistant/minter.js";
 import { createAuthKit } from "./auth/auth.js";
 import { loadConfigFromEnv } from "./config.js";
 import { LAW_AUTHZ_MODEL_DSL } from "./domain/authz/model.js";
@@ -132,6 +133,14 @@ async function main(): Promise<void> {
       dispatcher,
       webRoot,
       reminderIntervalMs: config.reminderIntervalMs,
+      ...(config.assistant
+        ? {
+            assistant: {
+              config: config.assistant,
+              minter: createPlatformTokenMinter(config.assistant),
+            },
+          }
+        : {}),
     },
     { sharedSecret: config.mcp.sharedSecret },
   );

@@ -279,6 +279,67 @@ describe("loadConfigFromEnv", () => {
     });
   });
 
+  describe("the assistant integration (T05 web leg) — optional as a group", () => {
+    /** The five core variables, complete. Values obviously not real. */
+    function assistantEnv(): Record<string, string> {
+      return {
+        ...fullEnv(),
+        STIGMER_API_BASE_URL: "https://api.stigmer.example",
+        STIGMER_PLATFORM_CLIENT_ID: "stgm_cid_test",
+        STIGMER_PLATFORM_CLIENT_SECRET: "stgm_cs_test",
+        STIGMER_ORG: "test-org",
+        STIGMER_AGENT_INSTANCE_ID: "agi_test",
+      };
+    }
+
+    it("is absent when none of the group is set — the feature does not exist", () => {
+      expect(loadConfigFromEnv(fullEnv())).not.toHaveProperty("assistant");
+    });
+
+    it("maps the complete group, with the hosted console as the default deep-link base", () => {
+      expect(loadConfigFromEnv(assistantEnv()).assistant).toEqual({
+        apiBaseUrl: "https://api.stigmer.example",
+        clientId: "stgm_cid_test",
+        clientSecret: "stgm_cs_test",
+        org: "test-org",
+        agentInstanceId: "agi_test",
+        consoleUrl: "https://app.stigmer.ai",
+      });
+    });
+
+    it("lets a self-hoster override the console URL", () => {
+      const env = assistantEnv();
+      env.STIGMER_CONSOLE_URL = "https://console.firm.example";
+
+      expect(loadConfigFromEnv(env).assistant?.consoleUrl).toBe("https://console.firm.example");
+    });
+
+    it("names every missing variable once any of the group is set (all-or-nothing)", () => {
+      // A half-configured assistant must fail at deploy, not at first use.
+      const env = assistantEnv();
+      delete env.STIGMER_PLATFORM_CLIENT_SECRET;
+      delete env.STIGMER_AGENT_INSTANCE_ID;
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(
+        /STIGMER_PLATFORM_CLIENT_SECRET, STIGMER_AGENT_INSTANCE_ID are required \(the assistant group must be complete/,
+      );
+    });
+
+    it("treats an empty string as unset — an unresolved reference must fail loudly", () => {
+      const env = assistantEnv();
+      env.STIGMER_ORG = "";
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(/STIGMER_ORG is required/);
+    });
+
+    it("a lone console URL does not summon the group — it only shapes links", () => {
+      const env = fullEnv();
+      env.STIGMER_CONSOLE_URL = "https://console.firm.example";
+
+      expect(loadConfigFromEnv(env)).not.toHaveProperty("assistant");
+    });
+  });
+
   it.each([
     ["not-a-number", "non-numeric"],
     ["8080.5", "non-integer"],

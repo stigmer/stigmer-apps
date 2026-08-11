@@ -10,6 +10,7 @@ import {
   type CredentialStore,
   type RefreshTokenStore,
 } from "@stigmer/identity";
+import { assistantService, type AssistantRuntime } from "./assistant/assistant-service.js";
 import type { AuthKit } from "./auth/auth.js";
 import { registerAuditSubscriber } from "./domain/audit/audit-subscriber.js";
 import { registerLeadMembershipHandler } from "./domain/case/lead-membership-handler.js";
@@ -55,6 +56,13 @@ export interface BackendDeps {
    * dedup key absorbs concurrent sweeps.
    */
   readonly reminderIntervalMs?: number;
+  /**
+   * The assistant integration (T05 web leg): config + platform token
+   * minter, present together. Absent means the deployment has no
+   * assistant — the service still mounts and says so, which is what
+   * lets the web decide whether an "Ask AI" affordance exists.
+   */
+  readonly assistant?: AssistantRuntime;
 }
 
 /**
@@ -189,10 +197,21 @@ function buildWebServer(app: App, deps: BackendDeps): http.Server {
     caller: deps.auth.resolver.fromConnect,
   });
 
+  // GetConfig/MintToken — identity-level like the auth surface, but its
+  // mint runs through the policy's liveness gate: deactivation closes
+  // the assistant with everything else (assistant-service.ts).
+  const assistant = assistantService({
+    assistant: deps.assistant,
+    store: deps.store,
+    caller: deps.auth.resolver.fromConnect,
+    requireMember: app.guards.requireMember,
+  });
+
   const connectHandler = connectNodeAdapter({
     routes: (router: ConnectRouter) => {
       buildRoutes(app.resources)(router);
       auth.routes(router);
+      assistant.routes(router);
     },
   });
 

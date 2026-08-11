@@ -1,0 +1,78 @@
+// The assistant access surface (T05, the web leg): how the signed-in web
+// app reaches the firm's platform-hosted assistant. Two RPCs, deliberately
+// split by side effect:
+//
+// - GetConfig is a side-effect-free read the shell calls to decide
+//   whether an "Ask AI" affordance exists at all. It never touches the
+//   agent platform — merely loading a page must not provision anything.
+// - MintToken exchanges the caller's own law session for a short-lived
+//   platform token, and is called only when the assistant is actually
+//   used. The first mint JIT-provisions the person on the platform (an
+//   org-scoped identity account), which is why intent, not page load,
+//   triggers it.
+//
+// The mint is self-scoped by construction (like WhoAmI): the backend
+// mints strictly for the authenticated caller's own user id and email —
+// the platform's mint RPC takes asserted identity on trust, so the law
+// session here is the ENTIRE authorization for whose token is minted.
+// The platform delivers that email back to this app's MCP entrance as
+// the stigmer_user caller identity, closing the loop through the same
+// resolver the WhatsApp channel uses.
+//
+// Not a resource: nothing is persisted, so this surface lives beside
+// AuthService (identity-level), not on the commons pipeline. The policy
+// module still owns every tool call the assistant makes — a token only
+// proves who is asking.
+syntax = "proto3";
+
+// Package convention: `stigmer.<domain>.<resource>.v1` pairs with
+// apiVersion `<domain>.stigmer.ai/v1`; the domain is "law" (DD-002
+// addendum) — never the customer segment, never the brand.
+package stigmer.law.assistant.v1;
+
+message GetAssistantConfigRequest {}
+
+message GetAssistantConfigResponse {
+  // False when the deployment has no assistant configuration (the
+  // open-source posture: the feature is absent, not broken). Every
+  // other field is empty in that case.
+  bool enabled = 1;
+  // The agent platform's API endpoint the BROWSER should dial directly
+  // (cross-origin embedding is a supported platform posture; security
+  // rides the minted token, never the origin).
+  string api_base_url = 2;
+  // The platform organization hosting the firm's assistant.
+  string org = 3;
+  // The org-visible AgentInstance the web session bootstrap must pass:
+  // it carries the environment_refs that deliver the MCP shared secret
+  // to embed-path executions — without it, execution create fails a
+  // precondition (the platform's "fifth session origin" gap).
+  string agent_instance_id = 4;
+  // The platform console's base URL, for user-facing deep links (e.g.
+  // the billing/recharge page when the org runs out of credits).
+  string console_url = 5;
+}
+
+message MintAssistantTokenRequest {}
+
+message MintAssistantTokenResponse {
+  // A platform JWT scoped to the caller's own platform identity. Held
+  // in the web app's memory (the access-token discipline of the login
+  // session applies) and attached by the platform SDK per request.
+  string access_token = 1;
+  // Short-lived by platform policy (~15 minutes); the web refreshes by
+  // calling MintToken again before expiry.
+  int32 expires_in_seconds = 2;
+}
+
+service AssistantService {
+  // Whether (and where) the assistant exists for this deployment.
+  // Authenticated: the config is not secret, but it is nobody else's
+  // business. No platform call, no provisioning.
+  rpc GetConfig(GetAssistantConfigRequest) returns (GetAssistantConfigResponse);
+  // Mint a platform token for the caller — an ACTIVE firm member only
+  // (the policy's liveness gate: deactivation must close this door the
+  // same instant it closes every other). FAILED_PRECONDITION when the
+  // deployment has no assistant configuration.
+  rpc MintToken(MintAssistantTokenRequest) returns (MintAssistantTokenResponse);
+}

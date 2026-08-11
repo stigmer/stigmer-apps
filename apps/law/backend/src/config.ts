@@ -55,6 +55,33 @@ export type DatabaseConfig =
       readonly ssl?: DatabaseSsl;
     };
 
+/**
+ * The assistant integration (T05, the web leg): the agent platform's
+ * PlatformClient credentials this backend exchanges law sessions for
+ * platform tokens with. OPTIONAL AS A GROUP — an open-source deployment
+ * without a platform org simply has no assistant (the web renders no
+ * affordance); a PARTIAL group is a boot error, because a half-wired
+ * assistant would fail at first use instead of at deploy time.
+ */
+export interface AssistantConfig {
+  /** The platform API endpoint (backend mint AND browser SDK calls). */
+  readonly apiBaseUrl: string;
+  /** PlatformClient client_id (stgm_cid_…). */
+  readonly clientId: string;
+  /** PlatformClient client_secret (stgm_cs_…). Server-only, never the browser. */
+  readonly clientSecret: string;
+  /** The platform organization hosting the firm's assistant. */
+  readonly org: string;
+  /**
+   * The org-visible AgentInstance the web session bootstrap passes — it
+   * carries the environment_refs that deliver the MCP shared secret to
+   * embed-path executions (the platform's "fifth session origin" gap).
+   */
+  readonly agentInstanceId: string;
+  /** The platform console base URL for user-facing deep links (billing). */
+  readonly consoleUrl: string;
+}
+
 export interface BackendConfig {
   /** Postgres connection (either shape — see DatabaseConfig). */
   readonly database: DatabaseConfig;
@@ -110,6 +137,8 @@ export interface BackendConfig {
      */
     readonly reconcileIntervalMs: number;
   };
+  /** The assistant integration; absent means the feature does not exist. */
+  readonly assistant?: AssistantConfig;
 }
 
 export function loadConfigFromEnv(
@@ -209,6 +238,8 @@ export function loadConfigFromEnv(
     );
   }
 
+  const assistant = loadAssistantFromEnv(env, problems);
+
   if (problems.length > 0) {
     throw new Error(`Invalid backend configuration:\n- ${problems.join("\n- ")}`);
   }
@@ -239,6 +270,50 @@ export function loadConfigFromEnv(
       apiToken: fgaApiToken,
       reconcileIntervalMs: fgaReconcileSeconds * 1000,
     },
+    ...(assistant ? { assistant } : {}),
+  };
+}
+
+/**
+ * All-or-nothing (the PG* set's rule applied to the assistant group):
+ * zero of the five variables means the feature does not exist; any of
+ * them means all five are required, named together in one boot failure.
+ * STIGMER_CONSOLE_URL is the one true optional — it only shapes deep
+ * links, so the hosted console is a safe default; self-hosters override.
+ * Empty strings count as unset throughout (an unresolved Kubernetes
+ * reference renders as "", which must fail loudly, not half-enable).
+ */
+function loadAssistantFromEnv(
+  env: Record<string, string | undefined>,
+  problems: string[],
+): AssistantConfig | undefined {
+  const names = [
+    "STIGMER_API_BASE_URL",
+    "STIGMER_PLATFORM_CLIENT_ID",
+    "STIGMER_PLATFORM_CLIENT_SECRET",
+    "STIGMER_ORG",
+    "STIGMER_AGENT_INSTANCE_ID",
+  ] as const;
+  const present = names.filter((name) => env[name]);
+  if (present.length === 0) {
+    return undefined;
+  }
+  const missing = names.filter((name) => !env[name]);
+  if (missing.length > 0) {
+    problems.push(
+      `${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} required ` +
+        "(the assistant group must be complete once any of it is set — " +
+        "a half-configured assistant fails at first use instead of at deploy)",
+    );
+    return undefined;
+  }
+  return {
+    apiBaseUrl: env.STIGMER_API_BASE_URL as string,
+    clientId: env.STIGMER_PLATFORM_CLIENT_ID as string,
+    clientSecret: env.STIGMER_PLATFORM_CLIENT_SECRET as string,
+    org: env.STIGMER_ORG as string,
+    agentInstanceId: env.STIGMER_AGENT_INSTANCE_ID as string,
+    consoleUrl: env.STIGMER_CONSOLE_URL || "https://app.stigmer.ai",
   };
 }
 
