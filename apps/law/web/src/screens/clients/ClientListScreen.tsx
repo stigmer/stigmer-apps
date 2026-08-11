@@ -6,8 +6,11 @@
  */
 
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { ButtonLink } from "../../components/Button.js";
+import { InlineInput } from "../../components/Field.js";
+import { ListCard, ListRow, RowMeta, RowTitle } from "../../components/ListCard.js";
+import { PageHeader } from "../../components/PageHeader.js";
 import { Pagination } from "../../components/Pagination.js";
 import { clientKindLabel } from "../../lib/format.js";
 import { ClientKind } from "../../gen/stigmer/law/client/v1/client_pb.js";
@@ -30,18 +33,13 @@ export function ConflictSearchResults(props: { query: string }) {
         {clients.length === 0 ? (
           <p className="text-sm text-ink-muted">No client with this name in the register.</p>
         ) : (
-          <ul className="rounded-card border border-line bg-surface">
+          <ListCard>
             {clients.map((client) => (
-              <li key={client.metadata?.id} className="border-b border-line last:border-b-0">
-                <Link
-                  to={`/clients/${client.metadata?.id}`}
-                  className="flex min-h-11 items-center px-3 py-2 font-medium hover:bg-brand-surface"
-                >
-                  {client.spec?.displayName}
-                </Link>
-              </li>
+              <ListRow key={client.metadata?.id} to={`/clients/${client.metadata?.id}`}>
+                <RowTitle>{client.spec?.displayName}</RowTitle>
+              </ListRow>
             ))}
-          </ul>
+          </ListCard>
         )}
       </section>
       <section aria-label="Matters where this name is on the other side">
@@ -57,7 +55,7 @@ export function ConflictSearchResults(props: { query: string }) {
             {opposingPartyHits.map((hit) => (
               <li
                 key={`${hit.caseId}-${hit.matchedPartyName}`}
-                className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-b border-warn px-3 py-2 last:border-b-0"
+                className="flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 border-b border-warn px-3 py-1.5 last:border-b-0"
               >
                 <span className="font-medium">{hit.matchedPartyName}</span>
                 <span className="text-sm">
@@ -80,15 +78,11 @@ export function ClientListScreen() {
 
   return (
     <section aria-label="Clients">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">Clients</h1>
-        <Link
-          to="/clients/new"
-          className="flex h-11 items-center rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong"
-        >
+      <PageHeader title="Clients">
+        <ButtonLink to="/clients/new" variant="primary">
           New client
-        </Link>
-      </div>
+        </ButtonLink>
+      </PageHeader>
 
       <label htmlFor="client-search" className="mb-1 block text-sm font-medium">
         Search the register{" "}
@@ -96,13 +90,13 @@ export function ClientListScreen() {
           — also checks whether the name is on the other side of any matter
         </span>
       </label>
-      <input
+      <InlineInput
         id="client-search"
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="A name — person or company"
-        className="mb-4 block h-11 w-full rounded-card border border-line bg-surface px-3"
+        className="mb-4 block w-full max-w-xl"
       />
 
       {searching ? (
@@ -118,24 +112,19 @@ export function ClientListScreen() {
           )}
           {list.isSuccess && list.data.items.length > 0 && (
             <>
-              <ul className="rounded-card border border-line bg-surface">
+              <ListCard>
                 {list.data.items.map((client) => (
-                  <li key={client.metadata?.id} className="border-b border-line last:border-b-0">
-                    <Link
-                      to={`/clients/${client.metadata?.id}`}
-                      className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 hover:bg-brand-surface"
-                    >
-                      <span className="font-medium">{client.spec?.displayName}</span>
-                      <span className="text-sm text-ink-muted">
-                        {clientKindLabel(client.spec?.clientKind ?? ClientKind.UNSPECIFIED)}
-                      </span>
-                      {(client.spec?.phones.length ?? 0) > 0 && (
-                        <span className="text-sm text-ink-faint">{client.spec?.phones[0]}</span>
-                      )}
-                    </Link>
-                  </li>
+                  <ListRow key={client.metadata?.id} to={`/clients/${client.metadata?.id}`}>
+                    <RowTitle>{client.spec?.displayName}</RowTitle>
+                    <RowMeta>
+                      {clientKindLabel(client.spec?.clientKind ?? ClientKind.UNSPECIFIED)}
+                    </RowMeta>
+                    {(client.spec?.phones.length ?? 0) > 0 && (
+                      <RowMeta faint>{client.spec?.phones[0]}</RowMeta>
+                    )}
+                  </ListRow>
                 ))}
-              </ul>
+              </ListCard>
               <Pagination
                 page={page}
                 totalCount={Number(list.data.totalCount)}

@@ -6,8 +6,10 @@
  */
 
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { Button, ButtonLink } from "../../components/Button.js";
+import { ListCard } from "../../components/ListCard.js";
 import { Pagination } from "../../components/Pagination.js";
 import { ClientKind } from "../../gen/stigmer/law/client/v1/client_pb.js";
 import { clientKindLabel } from "../../lib/format.js";
@@ -34,7 +36,7 @@ export function ClientDetailScreen() {
   if (editing) {
     return (
       <section aria-label={`Edit ${spec.displayName}`}>
-        <h1 className="mb-4 text-xl font-semibold">Edit {spec.displayName}</h1>
+        <h1 className="mb-4 text-lg font-semibold">Edit {spec.displayName}</h1>
         <ClientForm
           initial={spec}
           submitLabel="Save changes"
@@ -52,14 +54,8 @@ export function ClientDetailScreen() {
   return (
     <section aria-label={spec.displayName}>
       <div className="mb-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold">{spec.displayName}</h1>
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="h-11 rounded-card px-3 text-sm text-brand hover:bg-brand-surface"
-        >
-          Edit
-        </button>
+        <h1 className="text-lg font-semibold">{spec.displayName}</h1>
+        <Button onClick={() => setEditing(true)}>Edit</Button>
       </div>
 
       <div className="mb-4 rounded-card border border-line bg-surface p-4 text-sm">
@@ -73,13 +69,10 @@ export function ClientDetailScreen() {
       </div>
 
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-medium">Matters</h2>
-        <Link
-          to="/cases/new"
-          className="flex h-11 items-center rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong"
-        >
+        <h2 className="text-sm font-semibold">Matters</h2>
+        <ButtonLink to="/cases/new" variant="primary">
           New case
-        </Link>
+        </ButtonLink>
       </div>
       {matters.isPending && <Loading label="Loading matters…" />}
       {matters.isError && (
@@ -90,11 +83,11 @@ export function ClientDetailScreen() {
       )}
       {matters.isSuccess && matters.data.items.length > 0 && (
         <>
-          <ul className="rounded-card border border-line bg-surface">
+          <ListCard>
             {matters.data.items.map((summary) => (
               <CaseSummaryRow key={summary.id} summary={summary} />
             ))}
-          </ul>
+          </ListCard>
           <Pagination
             page={page}
             totalCount={Number(matters.data.totalCount)}

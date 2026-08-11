@@ -13,6 +13,8 @@
 import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { ConnectError } from "@connectrpc/connect";
+import { buttonClass } from "../../components/Button.js";
+import { FormError, Input, Label } from "../../components/Field.js";
 import { useSessionKit, useSessionState } from "../../session/use-session.js";
 
 export function LoginScreen() {
@@ -62,43 +64,29 @@ export function LoginScreen() {
           className="rounded-card border border-line bg-surface p-6 shadow-sm"
           aria-label="Sign in"
         >
-          <label htmlFor="email" className="mb-1 block text-sm font-medium">
-            Email
-          </label>
-          <input
+          <Label htmlFor="email">Email</Label>
+          <Input
             id="email"
             type="email"
             autoComplete="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mb-4 block h-11 w-full rounded-card border border-line bg-surface px-3"
           />
 
-          <label htmlFor="password" className="mb-1 block text-sm font-medium">
-            Password
-          </label>
-          <input
+          <Label htmlFor="password">Password</Label>
+          <Input
             id="password"
             type="password"
             autoComplete="current-password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mb-4 block h-11 w-full rounded-card border border-line bg-surface px-3"
           />
 
-          {error && (
-            <p role="alert" className="mb-4 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-              {error}
-            </p>
-          )}
+          <FormError message={error} />
 
-          <button
-            type="submit"
-            disabled={pending}
-            className="h-11 w-full rounded-card bg-brand font-medium text-on-brand hover:bg-brand-strong disabled:opacity-60"
-          >
+          <button type="submit" disabled={pending} className={`${buttonClass("primary")} w-full`}>
             {pending ? "Signing in…" : "Sign in"}
           </button>
         </form>

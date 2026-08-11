@@ -11,6 +11,15 @@ import { create } from "@bufbuild/protobuf";
 import { ConnectError } from "@connectrpc/connect";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { Button } from "../../components/Button.js";
+import {
+  FormError,
+  InlineInput,
+  InlineSelect,
+  Input,
+  Label,
+  Select,
+} from "../../components/Field.js";
 import { Pagination } from "../../components/Pagination.js";
 import { FeeKind } from "../../gen/stigmer/law/feearrangement/v1/feearrangement_pb.js";
 import {
@@ -33,11 +42,6 @@ import {
   useRecordLedgerEntry,
   useSaveFeeArrangement,
 } from "../money/queries.js";
-
-const field = "mb-3 block h-11 w-full rounded-card border border-line bg-surface px-3";
-const label = "mb-1 block text-sm font-medium";
-const primaryButton =
-  "h-11 rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong disabled:opacity-60";
 
 const FEE_KINDS: readonly FeeKind[] = [
   FeeKind.LUMP_SUM,
@@ -110,15 +114,12 @@ function FeeArrangementForm(props: { caseId: string }) {
       aria-label="Fee arrangement"
       className="rounded-card border border-line bg-surface p-4"
     >
-      <h3 className="mb-2 font-medium">Fee arrangement</h3>
-      <label htmlFor="fee-kind" className={label}>
-        Agreed as
-      </label>
-      <select
+      <h3 className="mb-2 text-sm font-semibold">Fee arrangement</h3>
+      <Label htmlFor="fee-kind">Agreed as</Label>
+      <Select
         id="fee-kind"
         value={effectiveKind}
         onChange={(e) => setKind(Number(e.target.value) as FeeKind)}
-        className={field}
       >
         <option value={FeeKind.UNSPECIFIED} disabled>
           Pick the structure
@@ -128,51 +129,45 @@ function FeeArrangementForm(props: { caseId: string }) {
             {feeKindLabel(k)}
           </option>
         ))}
-      </select>
+      </Select>
       {effectiveKind !== FeeKind.NOT_SET && effectiveKind !== FeeKind.UNSPECIFIED && (
         <>
-          <label htmlFor="fee-amount" className={label}>
+          <Label htmlFor="fee-amount">
             {effectiveKind === FeeKind.PER_APPEARANCE
               ? "Per appearance (₹)"
               : effectiveKind === FeeKind.RETAINER
                 ? "Per month (₹)"
                 : "Total (₹)"}
-          </label>
-          <input
+          </Label>
+          <Input
             id="fee-amount"
             required
             inputMode="decimal"
             value={effectiveAmount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="1,50,000"
-            className={field}
           />
         </>
       )}
-      <label htmlFor="fee-terms" className={label}>
+      <Label htmlFor="fee-terms">
         Terms <span className="font-normal text-ink-muted">(optional)</span>
-      </label>
-      <input
+      </Label>
+      <Input
         id="fee-terms"
         maxLength={1000}
         value={effectiveTerms}
         onChange={(e) => setTerms(e.target.value)}
         placeholder="expenses billed at actuals…"
-        className={field}
       />
-      {error && (
-        <p role="alert" className="mb-3 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
-      )}
+      <FormError message={error} />
       {saved && (
         <p role="status" className="mb-3 rounded-card bg-ok/10 px-3 py-2 text-sm text-ok">
           Arrangement saved.
         </p>
       )}
-      <button type="submit" disabled={save.isPending} className={primaryButton}>
+      <Button type="submit" variant="primary" disabled={save.isPending}>
         {save.isPending ? "Saving…" : existing ? "Update arrangement" : "Record arrangement"}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -223,70 +218,62 @@ function RecordEntryForm(props: { caseId: string }) {
       className="mb-3 flex flex-wrap items-end gap-2 rounded-card border border-line bg-surface p-3"
     >
       <div>
-        <label htmlFor="entry-kind" className={label}>
-          Entry
-        </label>
-        <select
+        <Label htmlFor="entry-kind">Entry</Label>
+        <InlineSelect
           id="entry-kind"
           value={kind}
           onChange={(e) => setKind(Number(e.target.value) as LedgerEntryKind)}
-          className="block h-11 rounded-card border border-line bg-surface px-3"
+          className="block"
         >
           {ENTRY_KINDS.map((k) => (
             <option key={k} value={k}>
               {ledgerEntryKindLabel(k)}
             </option>
           ))}
-        </select>
+        </InlineSelect>
       </div>
       <div>
-        <label htmlFor="entry-amount" className={label}>
-          Amount (₹)
-        </label>
-        <input
+        <Label htmlFor="entry-amount">Amount (₹)</Label>
+        <InlineInput
           id="entry-amount"
           required
           inputMode="decimal"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          className="block h-11 w-36 rounded-card border border-line bg-surface px-3"
+          className="block w-36"
         />
       </div>
       <div>
-        <label htmlFor="entry-date" className={label}>
-          Date
-        </label>
-        <input
+        <Label htmlFor="entry-date">Date</Label>
+        <InlineInput
           id="entry-date"
           type="date"
           required
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className="block h-11 rounded-card border border-line bg-surface px-3"
+          className="block"
         />
       </div>
       <div className="min-w-40 flex-1">
-        <label htmlFor="entry-note" className={label}>
-          Note
-        </label>
-        <input
+        <Label htmlFor="entry-note">Note</Label>
+        <InlineInput
           id="entry-note"
           maxLength={500}
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="advance by transfer…"
-          className="block h-11 w-full rounded-card border border-line bg-surface px-3"
+          className="block w-full"
         />
       </div>
-      <button type="submit" disabled={record.isPending} className={primaryButton}>
+      <Button type="submit" variant="primary" disabled={record.isPending}>
         {record.isPending ? "Recording…" : "Record"}
-      </button>
+      </Button>
       {error && (
-        <p role="alert" className="w-full rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
+        <div className="w-full">
+          <FormError message={error} />
+        </div>
       )}
-      <p className="w-full text-sm text-ink-muted">
+      <p className="w-full text-xs text-ink-muted">
         The ledger is permanent — a mistake is corrected by an offsetting entry with a note.
       </p>
     </form>
@@ -302,7 +289,7 @@ export function CaseMoney(props: { caseId: string }) {
       <FeeArrangementForm caseId={props.caseId} />
 
       <section aria-label="Ledger">
-        <h3 className="mb-2 font-medium">Ledger</h3>
+        <h3 className="mb-2 text-sm font-semibold">Ledger</h3>
         <RecordEntryForm caseId={props.caseId} />
         {ledger.isPending && <Loading label="Loading the ledger…" />}
         {ledger.isError && (
@@ -319,9 +306,9 @@ export function CaseMoney(props: { caseId: string }) {
                 return (
                   <li
                     key={entry.metadata?.id}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-3 py-2 last:border-b-0"
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-3 py-1.5 last:border-b-0"
                   >
-                    <span className="w-20 text-sm text-ink-muted">
+                    <span className="w-20 text-xs text-ink-muted">
                       {formatCalendarDate(entry.spec?.date ?? "")}
                     </span>
                     <span
@@ -334,7 +321,7 @@ export function CaseMoney(props: { caseId: string }) {
                       {ledgerEntryKindLabel(entry.spec?.entryKind ?? LedgerEntryKind.UNSPECIFIED)}
                     </span>
                     <span className="font-medium">{formatPaise(entry.spec?.amountPaise ?? 0n)}</span>
-                    <span className="flex-1 text-sm text-ink-muted">{entry.spec?.note}</span>
+                    <span className="flex-1 text-xs text-ink-muted">{entry.spec?.note}</span>
                     {createdAt && (
                       <span className="text-xs text-ink-faint">
                         entered {formatInstant(timestampDate(createdAt))}

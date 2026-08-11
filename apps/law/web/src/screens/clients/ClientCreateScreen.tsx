@@ -14,7 +14,7 @@ export function ClientCreateScreen() {
 
   return (
     <section aria-label="New client">
-      <h1 className="mb-4 text-xl font-semibold">New client</h1>
+      <h1 className="mb-4 text-lg font-semibold">New client</h1>
       <ClientForm
         submitLabel="Add client"
         pending={createClient.isPending}

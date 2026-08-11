@@ -8,13 +8,14 @@
 import { useState, type FormEvent } from "react";
 import { ConnectError } from "@connectrpc/connect";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { Badge } from "../../components/Badge.js";
+import { Button } from "../../components/Button.js";
+import { FormError, InlineSelect, Label } from "../../components/Field.js";
 import { RoleOnCase } from "../../gen/stigmer/law/casemember/v1/casemember_pb.js";
 import { firmRoleLabel } from "../../lib/format.js";
 import { FirmRole } from "../../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
 import { useFirmRoster } from "../members/queries.js";
 import { useAddCaseMember, useCaseMembers, useRemoveCaseMember } from "./queries.js";
-
-const quietButton = "h-11 rounded-card px-3 text-sm text-brand hover:bg-brand-surface";
 
 export function CaseMembersSection(props: { caseId: string; leadMemberId: string }) {
   const members = useCaseMembers(props.caseId);
@@ -60,10 +61,10 @@ export function CaseMembersSection(props: { caseId: string; leadMemberId: string
   return (
     <section aria-label="Working team" className="mt-6">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="font-medium">Working team</h2>
-        <button type="button" onClick={() => setAdding((v) => !v)} className={quietButton}>
+        <h2 className="text-sm font-semibold">Working team</h2>
+        <Button onClick={() => setAdding((v) => !v)}>
           {adding ? "Close" : "Add someone"}
-        </button>
+        </Button>
       </div>
 
       {adding && (
@@ -73,15 +74,13 @@ export function CaseMembersSection(props: { caseId: string; leadMemberId: string
           className="mb-3 flex flex-wrap items-end gap-2 rounded-card border border-line bg-surface p-3"
         >
           <div className="min-w-48 flex-1">
-            <label htmlFor="member-pick" className="mb-1 block text-sm font-medium">
-              Who
-            </label>
-            <select
+            <Label htmlFor="member-pick">Who</Label>
+            <InlineSelect
               id="member-pick"
               required
               value={pickedId}
               onChange={(e) => setPickedId(e.target.value)}
-              className="block h-11 w-full rounded-card border border-line bg-surface px-3"
+              className="block w-full"
             >
               <option value="" disabled>
                 Pick a colleague
@@ -92,23 +91,15 @@ export function CaseMembersSection(props: { caseId: string; leadMemberId: string
                   {firmRoleLabel(member.spec?.role ?? FirmRole.UNSPECIFIED)}
                 </option>
               ))}
-            </select>
+            </InlineSelect>
           </div>
-          <button
-            type="submit"
-            disabled={addMember.isPending}
-            className="h-11 rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong disabled:opacity-60"
-          >
+          <Button type="submit" variant="primary" disabled={addMember.isPending}>
             {addMember.isPending ? "Adding…" : "Add"}
-          </button>
+          </Button>
         </form>
       )}
 
-      {error && (
-        <p role="alert" className="mb-2 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
-      )}
+      <FormError message={error} />
 
       {members.isPending && <Loading label="Loading the team…" />}
       {members.isError && (
@@ -125,26 +116,23 @@ export function CaseMembersSection(props: { caseId: string; leadMemberId: string
             return (
               <li
                 key={membership.metadata?.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-3 py-2 last:border-b-0"
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-3 py-1.5 last:border-b-0"
               >
                 <span className="font-medium">{roster.data?.nameOf(memberId) ?? memberId}</span>
-                <span className="text-sm text-ink-muted">
+                <span className="text-xs text-ink-muted">
                   {membership.spec?.roleOnCase === RoleOnCase.CLERK ? "Clerk" : "Lawyer"}
                 </span>
-                {isLead && (
-                  <span className="rounded-card bg-brand-surface px-2 py-0.5 text-xs font-medium text-brand">
-                    Lead
-                  </span>
-                )}
+                {isLead && <Badge>Lead</Badge>}
                 {!isLead && (
-                  <button
-                    type="button"
-                    onClick={() => void onRemove(membership.metadata?.id ?? "")}
-                    disabled={removeMember.isPending}
-                    className="ml-auto h-11 rounded-card px-3 text-sm text-danger hover:bg-danger-surface"
-                  >
-                    Remove
-                  </button>
+                  <span className="ml-auto">
+                    <Button
+                      variant="danger"
+                      onClick={() => void onRemove(membership.metadata?.id ?? "")}
+                      disabled={removeMember.isPending}
+                    >
+                      Remove
+                    </Button>
+                  </span>
                 )}
               </li>
             );

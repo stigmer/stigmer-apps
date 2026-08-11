@@ -11,7 +11,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { ASHA, THEFT_NOTICE } from "./fixtures.js";
 
 async function expectSignedIn(page: Page) {
-  await expect(page.getByRole("banner").getByRole("link", { name: ASHA.name })).toBeVisible();
+  // The identity link lives in the sidebar footer (no top bar).
+  await expect(page.getByRole("link", { name: ASHA.name })).toBeVisible();
   await expect(page.getByText(THEFT_NOTICE)).toHaveCount(0);
 }
 

@@ -6,8 +6,12 @@
  */
 
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { Badge } from "../../components/Badge.js";
+import { ButtonLink } from "../../components/Button.js";
+import { InlineSelect } from "../../components/Field.js";
+import { ListCard, ListRow, RowMeta, RowTitle } from "../../components/ListCard.js";
+import { PageHeader } from "../../components/PageHeader.js";
 import { Pagination } from "../../components/Pagination.js";
 import { CaseLifecycle, type CaseSummary } from "../../gen/stigmer/law/case/v1/case_pb.js";
 import {
@@ -27,35 +31,23 @@ const WINDOWS = [
 
 export function CaseSummaryRow(props: { summary: CaseSummary }) {
   const { summary } = props;
+  const settled =
+    summary.lifecycle === CaseLifecycle.DISPOSED || summary.lifecycle === CaseLifecycle.CLOSED;
   return (
-    <li className="border-b border-line last:border-b-0">
-      <Link
-        to={`/cases/${summary.id}`}
-        className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 hover:bg-brand-surface"
-      >
-        <span className="font-medium">{summary.fileNumber}</span>
-        <span className="flex-1 basis-48 text-sm text-ink-muted">{summary.caption}</span>
-        <span className="text-sm text-ink-faint">
-          {forumKindLabel(summary.forumKind)}
-          {summary.forumName && ` — ${summary.forumName}`}
-        </span>
-        <span className="text-sm text-ink-muted">
-          {summary.nextHearingDate
-            ? `Hearing ${formatCalendarDate(summary.nextHearingDate)}`
-            : "No next date"}
-        </span>
-        <span
-          className={
-            summary.lifecycle === CaseLifecycle.DISPOSED ||
-            summary.lifecycle === CaseLifecycle.CLOSED
-              ? "rounded-card bg-warn-surface px-2 py-0.5 text-xs font-medium text-warn"
-              : "rounded-card bg-brand-surface px-2 py-0.5 text-xs font-medium text-brand"
-          }
-        >
-          {caseLifecycleLabel(summary.lifecycle)}
-        </span>
-      </Link>
-    </li>
+    <ListRow to={`/cases/${summary.id}`}>
+      <RowTitle>{summary.fileNumber}</RowTitle>
+      <RowMeta grow>{summary.caption}</RowMeta>
+      <RowMeta faint>
+        {forumKindLabel(summary.forumKind)}
+        {summary.forumName && ` — ${summary.forumName}`}
+      </RowMeta>
+      <RowMeta>
+        {summary.nextHearingDate
+          ? `Hearing ${formatCalendarDate(summary.nextHearingDate)}`
+          : "No next date"}
+      </RowMeta>
+      <Badge tone={settled ? "warn" : "brand"}>{caseLifecycleLabel(summary.lifecycle)}</Badge>
+    </ListRow>
   );
 }
 
@@ -79,56 +71,50 @@ export function CaseListScreen() {
 
   return (
     <section aria-label="Cases">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">Cases</h1>
-        <Link
-          to="/cases/new"
-          className="flex h-11 items-center rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong"
-        >
+      <PageHeader title="Cases">
+        <ButtonLink to="/cases/new" variant="primary">
           New case
-        </Link>
-      </div>
+        </ButtonLink>
+      </PageHeader>
 
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
         <div>
           <label htmlFor="case-window" className="mr-2 text-ink-muted">
             Show
           </label>
-          <select
+          <InlineSelect
             id="case-window"
             value={window}
             onChange={(e) => {
               setWindow(e.target.value as (typeof WINDOWS)[number]["value"]);
               resetPage();
             }}
-            className="h-11 rounded-card border border-line bg-surface px-2"
           >
             {WINDOWS.map((w) => (
               <option key={w.value} value={w.value}>
                 {w.label}
               </option>
             ))}
-          </select>
+          </InlineSelect>
         </div>
         <div>
           <label htmlFor="case-lifecycle" className="mr-2 text-ink-muted">
             Status
           </label>
-          <select
+          <InlineSelect
             id="case-lifecycle"
             value={lifecycle}
             onChange={(e) => {
               setLifecycle(Number(e.target.value) as CaseLifecycle);
               resetPage();
             }}
-            className="h-11 rounded-card border border-line bg-surface px-2"
           >
             <option value={CaseLifecycle.UNSPECIFIED}>Active</option>
             <option value={CaseLifecycle.DISPOSED}>Disposed</option>
             <option value={CaseLifecycle.CLOSED}>Closed</option>
-          </select>
+          </InlineSelect>
         </div>
-        <label className="flex h-11 items-center gap-2">
+        <label className="flex h-8 items-center gap-2">
           <input
             type="checkbox"
             checked={mine}
@@ -152,11 +138,11 @@ export function CaseListScreen() {
       )}
       {list.isSuccess && list.data.items.length > 0 && (
         <>
-          <ul className="rounded-card border border-line bg-surface">
+          <ListCard>
             {list.data.items.map((summary) => (
               <CaseSummaryRow key={summary.id} summary={summary} />
             ))}
-          </ul>
+          </ListCard>
           <Pagination page={page} totalCount={Number(list.data.totalCount)} onPage={setPage} />
         </>
       )}

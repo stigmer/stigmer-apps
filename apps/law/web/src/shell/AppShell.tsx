@@ -1,19 +1,41 @@
 /**
- * The signed-in frame: one header carrying navigation (grows through
- * T04b.2–4: Home / Cases / Tasks / Inbox / Profile — the FR-APP-002
- * transfer) and the session exit. Screens render into the outlet.
+ * The signed-in frame, on the Stigmer console's pattern: no top bar — a
+ * full-window flex row of one collapsible left sidebar (brand, primary
+ * navigation, the caller in a footer band) and the content column.
+ * Screens render into the outlet and own their internal width; the shell
+ * gives them the whole window.
+ *
+ * The sidebar collapses on every viewport (a floating reopen button
+ * appears when closed); below lg it overlays the content instead of
+ * pushing it, and choosing a destination closes it — the corridor-phone
+ * case. State is deliberately session-local: no persistence until a real
+ * user asks for it.
  */
 
+import { useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import {
+  Briefcase,
+  Building2,
+  House,
+  Inbox,
+  IndianRupee,
+  ListChecks,
+  LogOut,
+  PanelLeft,
+  Users,
+} from "lucide-react";
 import { useUnreadCount } from "../screens/inbox/queries.js";
 import { isPartnerRole, useMyRole } from "../session/use-firm-member.js";
 import { useCurrentUser, useSessionKit } from "../session/use-session.js";
 
+const DESKTOP = "(min-width: 1024px)";
+
 /** aria-current styling comes free with NavLink; words, not color alone. */
 function navClass(props: { isActive: boolean }): string {
   return props.isActive
-    ? "flex h-11 items-center rounded-card px-2 font-medium text-brand"
-    : "flex h-11 items-center rounded-card px-2 text-ink-muted hover:text-ink";
+    ? "flex h-8 items-center gap-2 rounded-card px-2 text-sm font-medium bg-brand-surface text-brand"
+    : "flex h-8 items-center gap-2 rounded-card px-2 text-sm text-sidebar-ink hover:bg-brand-surface";
 }
 
 export function AppShell() {
@@ -29,69 +51,134 @@ export function AppShell() {
   const unread = useUnreadCount();
   const unreadCount = unread.data ?? 0;
 
+  // Open on a desk, closed in the corridor — sized once at mount; the
+  // toggle owns it from there.
+  const [open, setOpen] = useState(() => window.matchMedia(DESKTOP).matches);
+
+  /** Below lg the sidebar overlays content, so navigation closes it. */
+  function onNavigate() {
+    if (!window.matchMedia(DESKTOP).matches) setOpen(false);
+  }
+
   async function onSignOut() {
     await kit.signOut();
     navigate("/login", { replace: true });
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-line bg-surface">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-4">
-          <Link to="/" className="font-semibold">
-            Stigmer Law
-          </Link>
-          <nav aria-label="Primary" className="flex flex-1 items-center gap-2 text-sm">
-            <NavLink to="/" end className={navClass}>
+    <div className="flex h-screen">
+      {!open && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Open navigation"
+          className="fixed top-2 left-2 z-40 flex size-8 items-center justify-center rounded-card border border-line bg-surface text-ink-muted hover:text-ink"
+        >
+          <PanelLeft className="size-4" aria-hidden="true" />
+        </button>
+      )}
+
+      {/* Below lg the open sidebar floats over the content; the backdrop
+          is the tap-anywhere way back out. */}
+      {open && (
+        <div
+          aria-hidden="true"
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-40 bg-ink/20 lg:hidden"
+        />
+      )}
+
+      <div
+        className={`shrink-0 overflow-hidden border-r border-sidebar-line bg-sidebar transition-[width] duration-200 ease-in-out motion-reduce:transition-none ${
+          open ? "w-64" : "w-0"
+        } max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-50 max-lg:shadow-lg`}
+      >
+        <div className="flex h-full w-64 flex-col">
+          <div className="flex h-12 items-center justify-between pr-2 pl-4">
+            <Link to="/" onClick={onNavigate} className="text-sm font-semibold">
+              Stigmer Law
+            </Link>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close navigation"
+              className="flex size-8 items-center justify-center rounded-card text-sidebar-muted hover:text-ink"
+            >
+              <PanelLeft className="size-4" aria-hidden="true" />
+            </button>
+          </div>
+
+          <nav aria-label="Primary" className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2">
+            <NavLink to="/" end className={navClass} onClick={onNavigate}>
+              <House className="size-4" aria-hidden="true" />
               Home
             </NavLink>
-            <NavLink to="/cases" className={navClass}>
+            <NavLink to="/cases" className={navClass} onClick={onNavigate}>
+              <Briefcase className="size-4" aria-hidden="true" />
               Cases
             </NavLink>
-            <NavLink to="/clients" className={navClass}>
+            <NavLink to="/clients" className={navClass} onClick={onNavigate}>
+              <Users className="size-4" aria-hidden="true" />
               Clients
             </NavLink>
-            <NavLink to="/tasks" className={navClass}>
+            <NavLink to="/tasks" className={navClass} onClick={onNavigate}>
+              <ListChecks className="size-4" aria-hidden="true" />
               Tasks
             </NavLink>
             {partner && (
-              <NavLink to="/money" className={navClass}>
+              <NavLink to="/money" className={navClass} onClick={onNavigate}>
+                <IndianRupee className="size-4" aria-hidden="true" />
                 Money
               </NavLink>
             )}
-            <NavLink to="/members" className={navClass}>
+            <NavLink to="/members" className={navClass} onClick={onNavigate}>
+              <Building2 className="size-4" aria-hidden="true" />
               The firm
             </NavLink>
             <NavLink
               to="/inbox"
               className={navClass}
+              onClick={onNavigate}
               aria-label={unreadCount > 0 ? `Inbox, ${unreadCount} unread` : "Inbox"}
             >
+              <Inbox className="size-4" aria-hidden="true" />
               Inbox
               {unreadCount > 0 && (
                 <span
                   aria-hidden="true"
-                  className="ml-1 rounded-card bg-brand px-1.5 py-0.5 text-xs font-medium text-on-brand"
+                  className="ml-auto rounded-card bg-brand px-1.5 py-0.5 text-xs font-medium text-on-brand"
                 >
                   {unreadCount}
                 </span>
               )}
             </NavLink>
           </nav>
-          <Link to="/profile" className="text-sm text-ink-muted hover:text-ink">
-            {user.spec?.name || user.spec?.email}
-          </Link>
-          <button
-            type="button"
-            onClick={() => void onSignOut()}
-            className="h-11 rounded-card px-3 text-sm text-brand hover:bg-brand-surface"
-          >
-            Sign out
-          </button>
+
+          <div className="flex items-center gap-1 border-t border-sidebar-line p-2">
+            <Link
+              to="/profile"
+              onClick={onNavigate}
+              className="min-w-0 flex-1 truncate rounded-card px-2 py-1.5 text-sm text-sidebar-ink hover:bg-brand-surface"
+            >
+              {user.spec?.name || user.spec?.email}
+            </Link>
+            <button
+              type="button"
+              onClick={() => void onSignOut()}
+              aria-label="Sign out"
+              title="Sign out"
+              className="flex size-8 shrink-0 items-center justify-center rounded-card text-sidebar-muted hover:bg-brand-surface hover:text-brand"
+            >
+              <LogOut className="size-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
-      </header>
-      <main className="mx-auto max-w-5xl p-4">
-        <Outlet />
+      </div>
+
+      <main className="min-w-0 flex-1 overflow-y-auto">
+        <div className="p-4">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

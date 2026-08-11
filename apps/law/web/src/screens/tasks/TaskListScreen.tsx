@@ -7,8 +7,11 @@
  */
 
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { ButtonLink } from "../../components/Button.js";
+import { InlineSelect } from "../../components/Field.js";
+import { ListCard } from "../../components/ListCard.js";
+import { PageHeader } from "../../components/PageHeader.js";
 import { Pagination } from "../../components/Pagination.js";
 import { useFirmMember } from "../../session/use-firm-member.js";
 import { useFirmRoster } from "../members/queries.js";
@@ -29,28 +32,23 @@ export function TaskListScreen() {
 
   return (
     <section aria-label="Tasks">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">Tasks</h1>
-        <Link
-          to="/tasks/new"
-          className="flex h-11 items-center rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong"
-        >
+      <PageHeader title="Tasks">
+        <ButtonLink to="/tasks/new" variant="primary">
           New task
-        </Link>
-      </div>
+        </ButtonLink>
+      </PageHeader>
 
       <div className="mb-3">
         <label htmlFor="assignee-filter" className="mr-2 text-sm text-ink-muted">
           Assigned to
         </label>
-        <select
+        <InlineSelect
           id="assignee-filter"
           value={effective}
           onChange={(e) => {
             setAssigneeId(e.target.value);
             setPage(0);
           }}
-          className="h-11 rounded-card border border-line bg-surface px-2"
         >
           <option value={myId}>Me</option>
           {roster.data?.members
@@ -60,7 +58,7 @@ export function TaskListScreen() {
                 {member.status?.userName || member.status?.userEmail}
               </option>
             ))}
-        </select>
+        </InlineSelect>
       </div>
 
       {list.isPending && <Loading label="Loading tasks…" />}
@@ -74,11 +72,11 @@ export function TaskListScreen() {
       )}
       {list.isSuccess && list.data.items.length > 0 && (
         <>
-          <ul className="rounded-card border border-line bg-surface">
+          <ListCard>
             {list.data.items.map((task) => (
               <TaskRow key={task.metadata?.id} task={task} />
             ))}
-          </ul>
+          </ListCard>
           <Pagination page={page} totalCount={Number(list.data.totalCount)} onPage={setPage} />
         </>
       )}

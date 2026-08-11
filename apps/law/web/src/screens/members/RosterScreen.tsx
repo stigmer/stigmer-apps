@@ -14,6 +14,10 @@
 import { useState } from "react";
 import { ConnectError } from "@connectrpc/connect";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { Badge } from "../../components/Badge.js";
+import { Button } from "../../components/Button.js";
+import { FormError, InlineSelect } from "../../components/Field.js";
+import { PageHeader } from "../../components/PageHeader.js";
 import {
   FirmRole,
   type FirmMember,
@@ -47,7 +51,7 @@ function ReadOnlyRoster() {
   const roster = useFirmRoster();
   return (
     <section aria-label="The firm">
-      <h1 className="mb-4 text-xl font-semibold">The firm</h1>
+      <PageHeader title="The firm" />
       {roster.isPending && <Loading label="Loading the roster…" />}
       {roster.isError && (
         <ErrorState error={roster.error} onRetry={() => void roster.refetch()} />
@@ -66,19 +70,19 @@ function ReadOnlyRoster() {
                 aria-label={firmRoleLabel(role)}
                 className="rounded-card border border-line bg-surface p-4"
               >
-                <h2 className="mb-2 font-medium">{firmRoleLabel(role)}</h2>
+                <h2 className="mb-2 text-sm font-semibold">{firmRoleLabel(role)}</h2>
                 <ul>
                   {members.map((member) => (
                     <li
                       key={member.metadata?.id}
-                      className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-2 last:border-b-0"
+                      className="flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-1.5 last:border-b-0"
                     >
                       <span className="font-medium">
                         {member.status?.userName || member.status?.userEmail}
                       </span>
-                      <span className="text-sm text-ink-muted">{member.status?.userEmail}</span>
+                      <span className="text-xs text-ink-muted">{member.status?.userEmail}</span>
                       {member.spec?.barEnrollmentNumber && (
-                        <span className="text-sm text-ink-faint">
+                        <span className="text-xs text-ink-faint">
                           Bar no. {member.spec.barEnrollmentNumber}
                         </span>
                       )}
@@ -108,18 +112,13 @@ function ManagedRoster() {
 
   return (
     <section aria-label="The firm">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">The firm</h1>
+      <PageHeader title="The firm">
         {!adding && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="h-11 rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong"
-          >
+          <Button variant="primary" onClick={() => setAdding(true)}>
             Add member
-          </button>
+          </Button>
         )}
-      </div>
+      </PageHeader>
 
       {issued && <ActivationCodeCard issued={issued} onDismiss={() => setIssued(undefined)} />}
       {adding && (
@@ -150,7 +149,7 @@ function ManagedRoster() {
                 aria-label={firmRoleLabel(role)}
                 className="rounded-card border border-line bg-surface p-4"
               >
-                <h2 className="mb-2 font-medium">{firmRoleLabel(role)}</h2>
+                <h2 className="mb-2 text-sm font-semibold">{firmRoleLabel(role)}</h2>
                 <ul>
                   {members.map((member) => (
                     <ManagedMemberRow
@@ -198,24 +197,20 @@ function ManagedMemberRow(props: {
   }
 
   return (
-    <li className="border-b border-line py-2 last:border-b-0">
-      <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2">
+    <li className="border-b border-line py-1.5 last:border-b-0">
+      <div className="flex min-h-9 flex-wrap items-center gap-x-3 gap-y-2">
         <span className={active ? "font-medium" : "font-medium text-ink-faint"}>
           {displayName}
         </span>
-        <span className="text-sm text-ink-muted">{email}</span>
-        {!active && (
-          <span className="rounded-card bg-danger-surface px-2 py-0.5 text-xs font-medium text-danger">
-            Deactivated
-          </span>
-        )}
+        <span className="text-xs text-ink-muted">{email}</span>
+        {!active && <Badge tone="danger">Deactivated</Badge>}
         <span className="flex-1" />
         {active && (
           <>
             <label className="sr-only" htmlFor={`role-${member.metadata?.id}`}>
               Role of {displayName}
             </label>
-            <select
+            <InlineSelect
               id={`role-${member.metadata?.id}`}
               value={member.spec?.role}
               disabled={update.isPending}
@@ -227,55 +222,51 @@ function ManagedMemberRow(props: {
                   }),
                 )
               }
-              className="h-11 rounded-card border border-line bg-surface px-2 text-sm"
             >
               {ROLE_ORDER.map((r) => (
                 <option key={r} value={r}>
                   {firmRoleLabel(r)}
                 </option>
               ))}
-            </select>
-            <button
-              type="button"
+            </InlineSelect>
+            <Button
+              variant="outline"
               disabled={reset.isPending}
               onClick={() => void run(async () => props.onIssued(await reset.mutateAsync(email)))}
-              className="h-11 rounded-card border border-line px-3 text-sm hover:bg-brand-surface"
             >
               Reset access
-            </button>
+            </Button>
             {/* One's own deactivate button does not exist — the server
                 refuses it, and a control that always fails is a lie. */}
             {!isSelf && (
-              <button
-                type="button"
+              <Button
+                variant="danger"
                 disabled={update.isPending}
                 onClick={() =>
                   void run(() => update.mutateAsync({ member, changes: { active: false } }))
                 }
-                className="h-11 rounded-card px-3 text-sm text-danger hover:bg-danger-surface"
               >
                 Deactivate
-              </button>
+              </Button>
             )}
           </>
         )}
         {!active && (
-          <button
-            type="button"
+          <Button
+            variant="outline"
             disabled={update.isPending}
             onClick={() =>
               void run(() => update.mutateAsync({ member, changes: { active: true } }))
             }
-            className="h-11 rounded-card border border-line px-3 text-sm hover:bg-brand-surface"
           >
             Reactivate
-          </button>
+          </Button>
         )}
       </div>
       {error && (
-        <p role="alert" className="mt-1 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
+        <div className="mt-1">
+          <FormError message={error} />
+        </div>
       )}
     </li>
   );

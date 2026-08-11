@@ -11,6 +11,8 @@
 import { useState, type FormEvent } from "react";
 import { create } from "@bufbuild/protobuf";
 import { ConnectError } from "@connectrpc/connect";
+import { Button } from "../../components/Button.js";
+import { FormCard, FormError, Input, Label, Select, TextArea } from "../../components/Field.js";
 import {
   type Task,
   TaskPriority,
@@ -54,102 +56,57 @@ export function TaskEditForm(props: { task: Task; onDone: () => void }) {
     }
   }
 
-  const field = "mb-4 block h-11 w-full rounded-card border border-line bg-surface px-3";
-  const label = "mb-1 block text-sm font-medium";
-
   return (
-    <form
-      onSubmit={(e) => void onSubmit(e)}
-      aria-label="Edit task"
-      className="rounded-card border border-line bg-surface p-4"
-    >
-      <label htmlFor="edit-title" className={label}>
-        Title
-      </label>
-      <input
+    <FormCard onSubmit={(e) => void onSubmit(e)} aria-label="Edit task">
+      <Label htmlFor="edit-title">Title</Label>
+      <Input
         id="edit-title"
         required
         maxLength={200}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className={field}
       />
 
-      <label htmlFor="edit-description" className={label}>
-        Description
-      </label>
-      <textarea
+      <Label htmlFor="edit-description">Description</Label>
+      <TextArea
         id="edit-description"
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         rows={3}
-        className="mb-4 block w-full rounded-card border border-line bg-surface px-3 py-2"
       />
 
-      <label htmlFor="edit-assignee" className={label}>
-        Assign to
-      </label>
-      <select
-        id="edit-assignee"
-        value={assigneeId}
-        onChange={(e) => setAssigneeId(e.target.value)}
-        className={field}
-      >
+      <Label htmlFor="edit-assignee">Assign to</Label>
+      <Select id="edit-assignee" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
         <option value="">Unassigned</option>
         {roster.data?.members.map((member) => (
           <option key={member.metadata?.id} value={member.metadata?.id}>
             {member.status?.userName || member.status?.userEmail}
           </option>
         ))}
-      </select>
+      </Select>
 
-      <label htmlFor="edit-due" className={label}>
-        Due date
-      </label>
-      <input
-        id="edit-due"
-        type="date"
-        value={dueDate}
-        onChange={(e) => setDueDate(e.target.value)}
-        className={field}
-      />
+      <Label htmlFor="edit-due">Due date</Label>
+      <Input id="edit-due" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
 
-      <label htmlFor="edit-priority" className={label}>
-        Priority
-      </label>
-      <select
+      <Label htmlFor="edit-priority">Priority</Label>
+      <Select
         id="edit-priority"
         value={priority}
         onChange={(e) => setPriority(Number(e.target.value) as TaskPriority)}
-        className={field}
       >
         <option value={TaskPriority.LOW}>Low</option>
         <option value={TaskPriority.MEDIUM}>Medium</option>
         <option value={TaskPriority.HIGH}>High</option>
-      </select>
+      </Select>
 
-      {error && (
-        <p role="alert" className="mb-4 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
-      )}
+      <FormError message={error} />
 
       <div className="flex gap-3">
-        <button
-          type="submit"
-          disabled={updateTask.isPending}
-          className="h-11 rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong disabled:opacity-60"
-        >
+        <Button type="submit" variant="primary" disabled={updateTask.isPending}>
           {updateTask.isPending ? "Saving…" : "Save changes"}
-        </button>
-        <button
-          type="button"
-          onClick={props.onDone}
-          className="h-11 rounded-card px-4 text-brand hover:bg-brand-surface"
-        >
-          Cancel
-        </button>
+        </Button>
+        <Button onClick={props.onDone}>Cancel</Button>
       </div>
-    </form>
+    </FormCard>
   );
 }

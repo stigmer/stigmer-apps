@@ -7,6 +7,7 @@
 
 import { ConnectError } from "@connectrpc/connect";
 import type { ReactNode } from "react";
+import { Button } from "./Button.js";
 
 export function Loading(props: { label: string }) {
   return (
@@ -25,13 +26,9 @@ export function ErrorState(props: { error: unknown; onRetry?: () => void }) {
     <div role="alert" className="rounded-card bg-danger-surface px-4 py-3 text-sm">
       <p className="text-danger">{ConnectError.from(props.error).rawMessage}</p>
       {props.onRetry && (
-        <button
-          type="button"
-          onClick={props.onRetry}
-          className="mt-2 h-11 rounded-card px-3 font-medium text-brand hover:bg-brand-surface"
-        >
-          Try again
-        </button>
+        <div className="mt-2">
+          <Button onClick={props.onRetry}>Try again</Button>
+        </div>
       )}
     </div>
   );
@@ -41,7 +38,7 @@ export function EmptyState(props: { title: string; children?: ReactNode }) {
   return (
     <div className="rounded-card border border-dashed border-line px-4 py-8 text-center">
       <p className="font-medium">{props.title}</p>
-      {props.children && <div className="mt-1 text-sm text-ink-muted">{props.children}</div>}
+      {props.children && <div className="mt-1 text-xs text-ink-muted">{props.children}</div>}
     </div>
   );
 }

@@ -8,15 +8,14 @@
 import { useState, type FormEvent } from "react";
 import { create } from "@bufbuild/protobuf";
 import { ConnectError } from "@connectrpc/connect";
+import { Button } from "../../components/Button.js";
+import { FormCard, FormError, Input, Label, Select, TextArea } from "../../components/Field.js";
 import {
   ClientKind,
   type ClientSpec,
 } from "../../gen/stigmer/law/client/v1/client_pb.js";
 import { clientKindLabel } from "../../lib/format.js";
 import { ClientSpecSchema } from "./queries.js";
-
-const field = "mb-4 block h-11 w-full rounded-card border border-line bg-surface px-3";
-const label = "mb-1 block text-sm font-medium";
 
 export function ClientForm(props: {
   initial?: ClientSpec;
@@ -58,104 +57,71 @@ export function ClientForm(props: {
   }
 
   return (
-    <form
-      onSubmit={(e) => void onSubmit(e)}
-      aria-label="Client details"
-      className="rounded-card border border-line bg-surface p-6"
-    >
-      <label htmlFor="client-name" className={label}>
-        Name
-      </label>
-      <input
+    <FormCard onSubmit={(e) => void onSubmit(e)} aria-label="Client details">
+      <Label htmlFor="client-name">Name</Label>
+      <Input
         id="client-name"
         required
         maxLength={200}
         value={displayName}
         onChange={(e) => setDisplayName(e.target.value)}
         placeholder="Person or company, as the firm knows them"
-        className={field}
       />
 
-      <label htmlFor="client-kind" className={label}>
-        Kind
-      </label>
-      <select
+      <Label htmlFor="client-kind">Kind</Label>
+      <Select
         id="client-kind"
         value={kind}
         onChange={(e) => setKind(Number(e.target.value) as ClientKind)}
-        className={field}
       >
         <option value={ClientKind.INDIVIDUAL}>{clientKindLabel(ClientKind.INDIVIDUAL)}</option>
         <option value={ClientKind.ORGANIZATION}>
           {clientKindLabel(ClientKind.ORGANIZATION)}
         </option>
-      </select>
+      </Select>
 
-      <label htmlFor="client-phones" className={label}>
-        Phones <span className="font-normal text-ink-muted">(comma-separated — one client, many numbers)</span>
-      </label>
-      <input
-        id="client-phones"
-        value={phones}
-        onChange={(e) => setPhones(e.target.value)}
-        className={field}
-      />
+      <Label htmlFor="client-phones">
+        Phones{" "}
+        <span className="font-normal text-ink-muted">
+          (comma-separated — one client, many numbers)
+        </span>
+      </Label>
+      <Input id="client-phones" value={phones} onChange={(e) => setPhones(e.target.value)} />
 
-      <label htmlFor="client-email" className={label}>
+      <Label htmlFor="client-email">
         Email <span className="font-normal text-ink-muted">(optional)</span>
-      </label>
-      <input
+      </Label>
+      <Input
         id="client-email"
         type="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className={field}
       />
 
-      <label htmlFor="client-address" className={label}>
+      <Label htmlFor="client-address">
         Address <span className="font-normal text-ink-muted">(optional)</span>
-      </label>
-      <input
-        id="client-address"
-        value={address}
-        onChange={(e) => setAddress(e.target.value)}
-        className={field}
-      />
+      </Label>
+      <Input id="client-address" value={address} onChange={(e) => setAddress(e.target.value)} />
 
-      <label htmlFor="client-notes" className={label}>
+      <Label htmlFor="client-notes">
         Notes <span className="font-normal text-ink-muted">(optional)</span>
-      </label>
-      <textarea
+      </Label>
+      <TextArea
         id="client-notes"
         rows={2}
         maxLength={5000}
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
-        className="mb-4 block w-full rounded-card border border-line bg-surface px-3 py-2"
       />
 
-      {error && (
-        <p role="alert" className="mb-4 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
-      )}
+      <FormError message={error} />
 
       <div className="flex gap-3">
-        <button
-          type="submit"
-          disabled={props.pending}
-          className="h-11 rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong disabled:opacity-60"
-        >
+        <Button type="submit" variant="primary" disabled={props.pending}>
           {props.pending ? "Saving…" : props.submitLabel}
-        </button>
-        <button
-          type="button"
-          onClick={props.onCancel}
-          className="h-11 rounded-card px-4 text-brand hover:bg-brand-surface"
-        >
-          Cancel
-        </button>
+        </Button>
+        <Button onClick={props.onCancel}>Cancel</Button>
       </div>
-    </form>
+    </FormCard>
   );
 }

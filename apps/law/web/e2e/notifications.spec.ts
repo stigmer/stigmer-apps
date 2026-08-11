@@ -73,7 +73,8 @@ test("assignment → badge → tap marks read and deep-links → mark all read",
 test("profile shows the read-only identity and signs out", async ({ page }) => {
   await signIn(page, RAVI.email, RAVI.password);
 
-  await page.getByRole("banner").getByRole("link", { name: RAVI.name }).click();
+  // The identity link lives in the sidebar footer (no top bar).
+  await page.getByRole("link", { name: RAVI.name }).click();
   await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
   await expect(page.getByRole("definition").filter({ hasText: RAVI.email })).toBeVisible();
   await expect(page.getByText(/ask your managing partner/i)).toBeVisible();

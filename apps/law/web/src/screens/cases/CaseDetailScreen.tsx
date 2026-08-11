@@ -14,6 +14,9 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ConnectError } from "@connectrpc/connect";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { Badge } from "../../components/Badge.js";
+import { Button } from "../../components/Button.js";
+import { FormError, InlineSelect } from "../../components/Field.js";
 import {
   CaseLifecycle,
   type Case,
@@ -60,23 +63,22 @@ function LifecycleControl(props: { matter: Case }) {
       <label htmlFor="case-lifecycle-control" className="sr-only">
         Matter status
       </label>
-      <select
+      <InlineSelect
         id="case-lifecycle-control"
         value={current === CaseLifecycle.UNSPECIFIED ? CaseLifecycle.ACTIVE : current}
         onChange={(e) => void onChange(Number(e.target.value) as CaseLifecycle)}
         disabled={updateLifecycle.isPending}
-        className="h-11 rounded-card border border-line bg-surface px-2 text-sm"
       >
         <option value={CaseLifecycle.ACTIVE}>{caseLifecycleLabel(CaseLifecycle.ACTIVE)}</option>
         <option value={CaseLifecycle.DISPOSED}>
           {caseLifecycleLabel(CaseLifecycle.DISPOSED)}
         </option>
         <option value={CaseLifecycle.CLOSED}>{caseLifecycleLabel(CaseLifecycle.CLOSED)}</option>
-      </select>
+      </InlineSelect>
       {error && (
-        <p role="alert" className="mt-1 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
+        <div className="mt-1">
+          <FormError message={error} />
+        </div>
       )}
     </div>
   );
@@ -108,7 +110,7 @@ export function CaseDetailScreen() {
   if (editing) {
     return (
       <section aria-label={`Edit ${spec.fileNumber}`}>
-        <h1 className="mb-4 text-xl font-semibold">Edit {spec.fileNumber}</h1>
+        <h1 className="mb-4 text-lg font-semibold">Edit {spec.fileNumber}</h1>
         <CaseForm
           initial={spec}
           initialClientName={client.data?.spec?.displayName ?? ""}
@@ -127,15 +129,9 @@ export function CaseDetailScreen() {
   return (
     <section aria-label={spec.fileNumber}>
       <div className="mb-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold">{spec.fileNumber}</h1>
+        <h1 className="text-lg font-semibold">{spec.fileNumber}</h1>
         <LifecycleControl matter={matter.data} />
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="h-11 rounded-card px-3 text-sm text-brand hover:bg-brand-surface"
-        >
-          Edit details
-        </button>
+        <Button onClick={() => setEditing(true)}>Edit details</Button>
       </div>
 
       <div className="mb-4 rounded-card border border-line bg-surface p-4 text-sm">
@@ -146,14 +142,14 @@ export function CaseDetailScreen() {
           <span className="text-ink-muted">({clientRoleLabel(spec.clientRole)})</span>
           {parties.length > 0 && <span> vs {parties.join("; ")}</span>}
         </p>
-        <p className="mt-1 text-ink-muted">
+        <p className="mt-1 text-xs text-ink-muted">
           {forumKindLabel(spec.forum?.forumKind ?? 0)}
           {spec.forum?.name && ` — ${spec.forum.name}`}
           {spec.forum?.bench && `, ${spec.forum.bench}`}
           {spec.stage && ` · stage: ${spec.stage}`}
           {spec.caseType && ` · ${spec.caseType}`}
         </p>
-        <p className="mt-1 text-ink-muted">
+        <p className="mt-1 text-xs text-ink-muted">
           {spec.courtCaseNumber
             ? `Court no. ${spec.courtCaseNumber}`
             : "Court number not assigned yet"}
@@ -163,9 +159,7 @@ export function CaseDetailScreen() {
           {matter.data.status?.nextHearingDate ? (
             <>Next hearing {formatCalendarDate(matter.data.status.nextHearingDate)}</>
           ) : (
-            <span className="rounded-card bg-warn-surface px-2 py-0.5 text-xs font-medium text-warn">
-              No next date — nothing is scheduled on this matter
-            </span>
+            <Badge tone="warn">No next date — nothing is scheduled on this matter</Badge>
           )}
         </p>
       </div>
@@ -179,8 +173,8 @@ export function CaseDetailScreen() {
             aria-current={tab === name ? "page" : undefined}
             className={
               tab === name
-                ? "h-11 rounded-t-card border-b-2 border-brand px-3 font-medium text-brand"
-                : "h-11 rounded-t-card px-3 text-ink-muted hover:text-ink"
+                ? "h-9 rounded-t-card border-b-2 border-brand px-3 text-sm font-medium text-brand"
+                : "h-9 rounded-t-card px-3 text-sm text-ink-muted hover:text-ink"
             }
           >
             {name}

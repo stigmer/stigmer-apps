@@ -9,6 +9,8 @@ import { useState, type FormEvent } from "react";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { ConnectError } from "@connectrpc/connect";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { Button } from "../../components/Button.js";
+import { FormError, Label, TextArea } from "../../components/Field.js";
 import { formatInstant } from "../../lib/format.js";
 import { useFirmRoster } from "../members/queries.js";
 import { useAddTaskComment, useTaskComments } from "./queries.js";
@@ -32,8 +34,8 @@ export function TaskComments(props: { taskId: string }) {
   }
 
   return (
-    <section aria-label="Comments" className="mt-6">
-      <h2 className="mb-2 font-medium">Comments</h2>
+    <section aria-label="Comments" className="mt-6 max-w-3xl">
+      <h2 className="mb-2 text-sm font-semibold">Comments</h2>
 
       {comments.isPending && <Loading label="Loading comments…" />}
       {comments.isError && (
@@ -48,7 +50,7 @@ export function TaskComments(props: { taskId: string }) {
             const createdAt = comment.metadata?.createdAt;
             return (
               <li key={comment.metadata?.id} className="border-b border-line px-3 py-2 last:border-b-0">
-                <p className="text-sm text-ink-muted">
+                <p className="text-xs text-ink-muted">
                   <span className="font-medium text-ink">
                     {/* Audit fields carry USER ids; the roster maps them. */}
                     {roster.data?.nameOfUser(comment.metadata?.createdBy?.id ?? "") ?? "…"}
@@ -63,30 +65,19 @@ export function TaskComments(props: { taskId: string }) {
       )}
 
       <form onSubmit={(e) => void onSubmit(e)} className="mt-3">
-        <label htmlFor="new-comment" className="mb-1 block text-sm font-medium">
-          Add a comment
-        </label>
-        <textarea
+        <Label htmlFor="new-comment">Add a comment</Label>
+        <TextArea
           id="new-comment"
           required
           maxLength={2000}
           rows={2}
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          className="mb-2 block w-full rounded-card border border-line bg-surface px-3 py-2"
         />
-        {error && (
-          <p role="alert" className="mb-2 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-            {error}
-          </p>
-        )}
-        <button
-          type="submit"
-          disabled={addComment.isPending}
-          className="h-11 rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong disabled:opacity-60"
-        >
+        <FormError message={error} />
+        <Button type="submit" variant="primary" disabled={addComment.isPending}>
           {addComment.isPending ? "Posting…" : "Post comment"}
-        </button>
+        </Button>
       </form>
     </section>
   );

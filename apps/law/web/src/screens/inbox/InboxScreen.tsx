@@ -10,6 +10,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { Badge } from "../../components/Badge.js";
+import { Button } from "../../components/Button.js";
+import { PageHeader } from "../../components/PageHeader.js";
 import { Pagination } from "../../components/Pagination.js";
 import type { Notification } from "../../gen/stigmer/law/notification/v1/notification_pb.js";
 import { formatInstant } from "../../lib/format.js";
@@ -44,19 +47,13 @@ export function InboxScreen() {
 
   return (
     <section aria-label="Inbox">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">Inbox</h1>
+      <PageHeader title="Inbox">
         {(unread.data ?? 0) > 0 && (
-          <button
-            type="button"
-            disabled={markAllRead.isPending}
-            onClick={() => markAllRead.mutate()}
-            className="h-11 rounded-card px-4 text-brand hover:bg-brand-surface disabled:opacity-60"
-          >
+          <Button disabled={markAllRead.isPending} onClick={() => markAllRead.mutate()}>
             {markAllRead.isPending ? "Marking…" : "Mark all as read"}
-          </button>
+          </Button>
         )}
-      </div>
+      </PageHeader>
 
       {inbox.isPending && <Loading label="Loading notifications…" />}
       {inbox.isError && <ErrorState error={inbox.error} onRetry={() => void inbox.refetch()} />}
@@ -76,17 +73,13 @@ export function InboxScreen() {
                   <button
                     type="button"
                     onClick={() => void onOpen(notification)}
-                    className="flex w-full flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 text-left hover:bg-brand-surface"
+                    className="flex w-full flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-1.5 text-left hover:bg-brand-surface"
                   >
                     <span className={isUnread ? "font-semibold" : "text-ink-muted"}>
                       {notification.spec?.title}
                     </span>
-                    {isUnread && (
-                      <span className="rounded-card bg-brand-surface px-2 py-0.5 text-xs font-medium text-brand">
-                        New
-                      </span>
-                    )}
-                    <span className="flex-1 basis-48 text-sm text-ink-muted">
+                    {isUnread && <Badge>New</Badge>}
+                    <span className="flex-1 basis-48 text-xs text-ink-muted">
                       {notification.spec?.body}
                     </span>
                     {createdAt && (

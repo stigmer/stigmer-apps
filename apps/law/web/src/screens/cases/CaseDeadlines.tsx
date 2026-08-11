@@ -9,6 +9,9 @@ import { useState, type FormEvent } from "react";
 import { create } from "@bufbuild/protobuf";
 import { ConnectError } from "@connectrpc/connect";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { Badge } from "../../components/Badge.js";
+import { Button } from "../../components/Button.js";
+import { FormError, Input, Label, Select } from "../../components/Field.js";
 import { Pagination } from "../../components/Pagination.js";
 import {
   DeadlineState,
@@ -23,12 +26,6 @@ import {
   useUpdateDeadlineState,
 } from "../deadlines/queries.js";
 import { useFirmMember } from "../../session/use-firm-member.js";
-
-const field = "mb-3 block h-11 w-full rounded-card border border-line bg-surface px-3";
-const label = "mb-1 block text-sm font-medium";
-const primaryButton =
-  "h-11 rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong disabled:opacity-60";
-const quietButton = "h-11 rounded-card px-3 text-sm text-brand hover:bg-brand-surface";
 
 function AddDeadlineForm(props: { caseId: string; onDone: () => void }) {
   const createDeadline = useCreateDeadline();
@@ -68,65 +65,51 @@ function AddDeadlineForm(props: { caseId: string; onDone: () => void }) {
       aria-label="New deadline"
       className="mb-3 rounded-card border border-line bg-surface p-3"
     >
-      <label htmlFor="deadline-title" className={label}>
-        What must happen
-      </label>
-      <input
+      <Label htmlFor="deadline-title">What must happen</Label>
+      <Input
         id="deadline-title"
         required
         maxLength={200}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="File written statement"
-        className={field}
       />
-      <label htmlFor="deadline-due" className={label}>
-        Due date
-      </label>
-      <input
+      <Label htmlFor="deadline-due">Due date</Label>
+      <Input
         id="deadline-due"
         type="date"
         required
         value={dueDate}
         onChange={(e) => setDueDate(e.target.value)}
-        className={field}
       />
-      <label htmlFor="deadline-basis" className={label}>
+      <Label htmlFor="deadline-basis">
         Where the date comes from{" "}
         <span className="font-normal text-ink-muted">(in your words — nothing is computed)</span>
-      </label>
-      <input
+      </Label>
+      <Input
         id="deadline-basis"
         maxLength={500}
         value={basis}
         onChange={(e) => setBasis(e.target.value)}
         placeholder="O.VIII R.1 — 30 days from summons served 12/08"
-        className={field}
       />
-      <label htmlFor="deadline-owner" className={label}>
-        Owner
-      </label>
-      <select
+      <Label htmlFor="deadline-owner">Owner</Label>
+      <Select
         id="deadline-owner"
         required
         value={effectiveOwner}
         onChange={(e) => setOwnerId(e.target.value)}
-        className={field}
       >
         {roster.data?.members.map((member) => (
           <option key={member.metadata?.id} value={member.metadata?.id}>
             {member.status?.userName || member.status?.userEmail}
           </option>
         ))}
-      </select>
-      {error && (
-        <p role="alert" className="mb-3 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
-      )}
-      <button type="submit" disabled={createDeadline.isPending} className={primaryButton}>
+      </Select>
+      <FormError message={error} />
+      <Button type="submit" variant="primary" disabled={createDeadline.isPending}>
         {createDeadline.isPending ? "Adding…" : "Add deadline"}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -151,17 +134,16 @@ function DeadlineRow(props: { deadline: Deadline; ownerName: string }) {
     <li className="border-b border-line px-3 py-2 last:border-b-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="font-medium">{deadline.spec?.title}</span>
-        <span
-          className={
-            deadline.status?.overdue
-              ? "rounded-card bg-danger-surface px-2 py-0.5 text-xs font-medium text-danger"
-              : "text-sm text-ink-muted"
-          }
-        >
-          {deadline.status?.overdue ? "OVERDUE — was due" : "due"}{" "}
-          {formatCalendarDate(deadline.spec?.dueDate ?? "")}
-        </span>
-        <span className="text-sm text-ink-faint">{props.ownerName}</span>
+        {deadline.status?.overdue ? (
+          <Badge tone="danger">
+            OVERDUE — was due {formatCalendarDate(deadline.spec?.dueDate ?? "")}
+          </Badge>
+        ) : (
+          <span className="text-xs text-ink-muted">
+            due {formatCalendarDate(deadline.spec?.dueDate ?? "")}
+          </span>
+        )}
+        <span className="text-xs text-ink-faint">{props.ownerName}</span>
         {!open && (
           <span className="rounded-card bg-surface px-2 py-0.5 text-xs font-medium text-ink-muted ring-1 ring-line">
             {deadlineStateLabel(state)}
@@ -169,33 +151,21 @@ function DeadlineRow(props: { deadline: Deadline; ownerName: string }) {
         )}
         {open && (
           <span className="ml-auto flex gap-1">
-            <button type="button" onClick={() => void resolve(DeadlineState.MET)} className={quietButton}>
-              Met
-            </button>
-            <button
-              type="button"
-              onClick={() => void resolve(DeadlineState.MISSED)}
-              className="h-11 rounded-card px-3 text-sm text-danger hover:bg-danger-surface"
-            >
+            <Button onClick={() => void resolve(DeadlineState.MET)}>Met</Button>
+            <Button variant="danger" onClick={() => void resolve(DeadlineState.MISSED)}>
               Missed
-            </button>
-            <button
-              type="button"
-              onClick={() => void resolve(DeadlineState.WITHDRAWN)}
-              className={quietButton}
-            >
-              Withdrawn
-            </button>
+            </Button>
+            <Button onClick={() => void resolve(DeadlineState.WITHDRAWN)}>Withdrawn</Button>
           </span>
         )}
       </div>
       {deadline.spec?.statutoryBasis && (
-        <p className="mt-1 text-sm text-ink-muted">{deadline.spec.statutoryBasis}</p>
+        <p className="mt-1 text-xs text-ink-muted">{deadline.spec.statutoryBasis}</p>
       )}
       {error && (
-        <p role="alert" className="mt-1 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
+        <div className="mt-1">
+          <FormError message={error} />
+        </div>
       )}
     </li>
   );
@@ -210,10 +180,10 @@ export function CaseDeadlines(props: { caseId: string }) {
   return (
     <section aria-label="Deadlines" className="mt-6">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="font-medium">Deadlines</h2>
-        <button type="button" onClick={() => setAdding((v) => !v)} className={quietButton}>
+        <h2 className="text-sm font-semibold">Deadlines</h2>
+        <Button onClick={() => setAdding((v) => !v)}>
           {adding ? "Close" : "Add deadline"}
-        </button>
+        </Button>
       </div>
       {adding && <AddDeadlineForm caseId={props.caseId} onDone={() => setAdding(false)} />}
 

@@ -11,6 +11,8 @@ import { useRef, useState } from "react";
 import { ConnectError } from "@connectrpc/connect";
 import { useApiClients } from "../../api/clients.js";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { Button, buttonClass } from "../../components/Button.js";
+import { FormError } from "../../components/Field.js";
 import { Pagination } from "../../components/Pagination.js";
 import type { Document } from "../../gen/stigmer/law/document/v1/document_pb.js";
 import { useCaseDocuments, useUploadDocuments } from "./queries.js";
@@ -81,7 +83,7 @@ export function CaseDocuments(props: { caseId: string }) {
   return (
     <section aria-label="Documents" className="mt-6">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="font-medium">Documents</h2>
+        <h2 className="text-sm font-semibold">Documents</h2>
         <div>
           <input
             ref={fileInput}
@@ -92,21 +94,14 @@ export function CaseDocuments(props: { caseId: string }) {
             id="document-upload"
             onChange={(e) => void onPicked(e.target.files)}
           />
-          <label
-            htmlFor="document-upload"
-            className="flex h-11 cursor-pointer items-center rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong"
-          >
+          <label htmlFor="document-upload" className={`${buttonClass("primary")} cursor-pointer`}>
             {upload.isPending ? "Uploading…" : "Upload documents"}
           </label>
         </div>
       </div>
-      <p className="mb-2 text-sm text-ink-muted">PDF, PNG, or JPG — up to 25 MB each.</p>
+      <p className="mb-2 text-xs text-ink-muted">PDF, PNG, or JPG — up to 25 MB each.</p>
 
-      {actionError && (
-        <p role="alert" className="mb-2 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {actionError}
-        </p>
-      )}
+      <FormError message={actionError} />
 
       {documents.isPending && <Loading label="Loading documents…" />}
       {documents.isError && (
@@ -123,26 +118,14 @@ export function CaseDocuments(props: { caseId: string }) {
             {documents.data.items.map((doc) => (
               <li
                 key={doc.metadata?.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-3 py-2 last:border-b-0"
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-3 py-1.5 last:border-b-0"
               >
                 <span className="flex-1 basis-48 font-medium">{doc.spec?.fileName}</span>
-                <span className="text-sm text-ink-faint">
+                <span className="text-xs text-ink-faint">
                   {formatSize(doc.spec?.sizeBytes ?? 0n)}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => onView(doc)}
-                  className="h-11 rounded-card px-3 text-sm text-brand hover:bg-brand-surface"
-                >
-                  View
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onDownload(doc)}
-                  className="h-11 rounded-card px-3 text-sm text-brand hover:bg-brand-surface"
-                >
-                  Download
-                </button>
+                <Button onClick={() => onView(doc)}>View</Button>
+                <Button onClick={() => onDownload(doc)}>Download</Button>
               </li>
             ))}
           </ul>

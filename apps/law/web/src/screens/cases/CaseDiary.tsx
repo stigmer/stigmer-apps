@@ -14,6 +14,15 @@ import { useState, type FormEvent } from "react";
 import { create } from "@bufbuild/protobuf";
 import { ConnectError } from "@connectrpc/connect";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { Button } from "../../components/Button.js";
+import {
+  FormError,
+  InlineInput,
+  Input,
+  Label,
+  Select,
+  TextArea,
+} from "../../components/Field.js";
 import { Pagination } from "../../components/Pagination.js";
 import {
   OutcomeKind,
@@ -38,12 +47,6 @@ const OUTCOME_CHOICES: readonly OutcomeKind[] = [
   OutcomeKind.NOT_REACHED,
   OutcomeKind.OTHER,
 ];
-
-const field = "mb-3 block h-11 w-full rounded-card border border-line bg-surface px-3";
-const label = "mb-1 block text-sm font-medium";
-const primaryButton =
-  "h-11 rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong disabled:opacity-60";
-const quietButton = "h-11 rounded-card px-3 text-sm text-brand hover:bg-brand-surface";
 
 function isScheduled(hearing: Hearing): boolean {
   return (hearing.status?.outcomeKind ?? OutcomeKind.UNSPECIFIED) === OutcomeKind.UNSPECIFIED;
@@ -98,15 +101,12 @@ function RecordOutcomeForm(props: { hearing: Hearing; onDone: (message: string) 
       aria-label={`Record outcome for the hearing on ${formatCalendarDate(props.hearing.spec?.date ?? "")}`}
       className="mt-2 rounded-card border border-brand bg-brand-surface p-3"
     >
-      <label htmlFor="outcome-kind" className={label}>
-        What happened
-      </label>
-      <select
+      <Label htmlFor="outcome-kind">What happened</Label>
+      <Select
         id="outcome-kind"
         required
         value={outcome}
         onChange={(e) => setOutcome(Number(e.target.value) as OutcomeKind)}
-        className={field}
       >
         <option value={OutcomeKind.UNSPECIFIED} disabled>
           Pick the outcome
@@ -116,25 +116,24 @@ function RecordOutcomeForm(props: { hearing: Hearing; onDone: (message: string) 
             {outcomeKindLabel(kind)}
           </option>
         ))}
-      </select>
+      </Select>
 
-      <label htmlFor="outcome-notes" className={label}>
+      <Label htmlFor="outcome-notes">
         Notes <span className="font-normal text-ink-muted">(optional)</span>
-      </label>
-      <textarea
+      </Label>
+      <TextArea
         id="outcome-notes"
         rows={2}
         maxLength={5000}
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
-        className="mb-3 block w-full rounded-card border border-line bg-surface px-3 py-2"
       />
 
       <fieldset className="mb-3">
-        <legend className={label}>Who appeared</legend>
+        <legend className="mb-1 text-sm font-medium">Who appeared</legend>
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           {roster.data?.members.map((member) => (
-            <label key={member.metadata?.id} className="flex h-11 items-center gap-2 text-sm">
+            <label key={member.metadata?.id} className="flex h-8 items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={attendedBy.includes(member.metadata?.id ?? "")}
@@ -146,43 +145,38 @@ function RecordOutcomeForm(props: { hearing: Hearing; onDone: (message: string) 
         </div>
       </fieldset>
 
-      <label htmlFor="outcome-next-date" className={label}>
-        Next date <span className="font-normal text-ink-muted">(if the court gave one — scheduling happens automatically)</span>
-      </label>
-      <input
+      <Label htmlFor="outcome-next-date">
+        Next date{" "}
+        <span className="font-normal text-ink-muted">
+          (if the court gave one — scheduling happens automatically)
+        </span>
+      </Label>
+      <Input
         id="outcome-next-date"
         type="date"
         value={nextDate}
         onChange={(e) => setNextDate(e.target.value)}
-        className={field}
       />
 
       {nextDate && (
         <>
-          <label htmlFor="outcome-next-purpose" className={label}>
-            Listed for
-          </label>
-          <input
+          <Label htmlFor="outcome-next-purpose">Listed for</Label>
+          <Input
             id="outcome-next-purpose"
             value={nextPurpose}
             onChange={(e) => setNextPurpose(e.target.value)}
             placeholder="evidence, arguments…"
-            className={field}
           />
         </>
       )}
 
-      <p className="mb-3 text-sm text-ink-muted">
+      <p className="mb-3 text-xs text-ink-muted">
         A recorded outcome is permanent — check the details before saving.
       </p>
-      {error && (
-        <p role="alert" className="mb-3 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
-      )}
-      <button type="submit" disabled={recordOutcome.isPending} className={primaryButton}>
+      <FormError message={error} />
+      <Button type="submit" variant="primary" disabled={recordOutcome.isPending}>
         {recordOutcome.isPending ? "Recording…" : "Record outcome"}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -223,36 +217,32 @@ function ListingDetailsForm(props: { hearing: Hearing; onDone: () => void }) {
       className="mt-2 flex flex-wrap items-end gap-2 rounded-card border border-line p-3"
     >
       <div>
-        <label htmlFor="listing-serial" className={label}>
-          List item no.
-        </label>
-        <input
+        <Label htmlFor="listing-serial">List item no.</Label>
+        <InlineInput
           id="listing-serial"
           value={serial}
           onChange={(e) => setSerial(e.target.value)}
           placeholder="47"
-          className="block h-11 w-28 rounded-card border border-line bg-surface px-3"
+          className="block w-28"
         />
       </div>
       <div>
-        <label htmlFor="listing-hall" className={label}>
-          Court hall
-        </label>
-        <input
+        <Label htmlFor="listing-hall">Court hall</Label>
+        <InlineInput
           id="listing-hall"
           value={hall}
           onChange={(e) => setHall(e.target.value)}
           placeholder="3"
-          className="block h-11 w-28 rounded-card border border-line bg-surface px-3"
+          className="block w-28"
         />
       </div>
-      <button type="submit" disabled={updateHearing.isPending} className={primaryButton}>
+      <Button type="submit" variant="primary" disabled={updateHearing.isPending}>
         {updateHearing.isPending ? "Saving…" : "Save"}
-      </button>
+      </Button>
       {error && (
-        <p role="alert" className="w-full rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
+        <div className="w-full">
+          <FormError message={error} />
+        </div>
       )}
     </form>
   );
@@ -284,37 +274,33 @@ function ScheduleHearingForm(props: { caseId: string; onDone: () => void }) {
       className="mb-3 flex flex-wrap items-end gap-2 rounded-card border border-line bg-surface p-3"
     >
       <div>
-        <label htmlFor="hearing-date" className={label}>
-          Date
-        </label>
-        <input
+        <Label htmlFor="hearing-date">Date</Label>
+        <InlineInput
           id="hearing-date"
           type="date"
           required
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className="block h-11 rounded-card border border-line bg-surface px-3"
+          className="block"
         />
       </div>
       <div className="min-w-48 flex-1">
-        <label htmlFor="hearing-purpose" className={label}>
-          Listed for
-        </label>
-        <input
+        <Label htmlFor="hearing-purpose">Listed for</Label>
+        <InlineInput
           id="hearing-purpose"
           value={purpose}
           onChange={(e) => setPurpose(e.target.value)}
           placeholder="filing, evidence, arguments…"
-          className="block h-11 w-full rounded-card border border-line bg-surface px-3"
+          className="block w-full"
         />
       </div>
-      <button type="submit" disabled={schedule.isPending} className={primaryButton}>
+      <Button type="submit" variant="primary" disabled={schedule.isPending}>
         {schedule.isPending ? "Scheduling…" : "Schedule"}
-      </button>
+      </Button>
       {error && (
-        <p role="alert" className="w-full rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
+        <div className="w-full">
+          <FormError message={error} />
+        </div>
       )}
     </form>
   );
@@ -335,13 +321,13 @@ function DiaryEntry(props: { hearing: Hearing; rosterName: (id: string) => strin
     .join(", ");
 
   return (
-    <li className="border-b border-line px-3 py-3 last:border-b-0">
+    <li className="border-b border-line px-3 py-2 last:border-b-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="font-medium">{formatCalendarDate(hearing.spec?.date ?? "")}</span>
         {hearing.spec?.purpose && (
-          <span className="text-sm text-ink-muted">for {hearing.spec.purpose}</span>
+          <span className="text-xs text-ink-muted">for {hearing.spec.purpose}</span>
         )}
-        {listing && <span className="text-sm text-ink-faint">({listing})</span>}
+        {listing && <span className="text-xs text-ink-faint">({listing})</span>}
         <span
           className={
             scheduled
@@ -353,22 +339,18 @@ function DiaryEntry(props: { hearing: Hearing; rosterName: (id: string) => strin
         </span>
         {scheduled && (
           <span className="ml-auto flex gap-1">
-            <button type="button" onClick={() => setRecording((v) => !v)} className={quietButton}>
+            <Button onClick={() => setRecording((v) => !v)}>
               {recording ? "Close" : "Record outcome"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditingListing((v) => !v)}
-              className={quietButton}
-            >
+            </Button>
+            <Button onClick={() => setEditingListing((v) => !v)}>
               {editingListing ? "Close" : "Cause-list details"}
-            </button>
+            </Button>
           </span>
         )}
       </div>
 
       {!scheduled && (
-        <div className="mt-1 text-sm text-ink-muted">
+        <div className="mt-1 text-xs text-ink-muted">
           {hearing.status?.outcomeNotes && (
             <p className="whitespace-pre-wrap">{hearing.status.outcomeNotes}</p>
           )}
@@ -413,10 +395,10 @@ export function CaseDiary(props: { caseId: string }) {
   return (
     <section aria-label="Diary" className="mt-6">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="font-medium">Diary</h2>
-        <button type="button" onClick={() => setScheduling((v) => !v)} className={quietButton}>
+        <h2 className="text-sm font-semibold">Diary</h2>
+        <Button onClick={() => setScheduling((v) => !v)}>
           {scheduling ? "Close" : "Schedule a hearing"}
-        </button>
+        </Button>
       </div>
       {scheduling && (
         <ScheduleHearingForm caseId={props.caseId} onDone={() => setScheduling(false)} />

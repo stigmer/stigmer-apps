@@ -8,6 +8,8 @@ import { useState, type FormEvent } from "react";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { ConnectError } from "@connectrpc/connect";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { Button } from "../../components/Button.js";
+import { FormError, Label, TextArea } from "../../components/Field.js";
 import { Pagination } from "../../components/Pagination.js";
 import { formatInstant } from "../../lib/format.js";
 import { useFirmRoster } from "../members/queries.js";
@@ -35,33 +37,22 @@ export function CaseNotes(props: { caseId: string }) {
 
   return (
     <section aria-label="Notes" className="mt-6">
-      <h2 className="mb-2 font-medium">Notes</h2>
+      <h2 className="mb-2 text-sm font-semibold">Notes</h2>
 
-      <form onSubmit={(e) => void onSubmit(e)} className="mb-3">
-        <label htmlFor="new-note" className="mb-1 block text-sm font-medium">
-          Add a note
-        </label>
-        <textarea
+      <form onSubmit={(e) => void onSubmit(e)} className="mb-3 max-w-3xl">
+        <Label htmlFor="new-note">Add a note</Label>
+        <TextArea
           id="new-note"
           required
           maxLength={5000}
           rows={2}
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          className="mb-2 block w-full rounded-card border border-line bg-surface px-3 py-2"
         />
-        {error && (
-          <p role="alert" className="mb-2 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-            {error}
-          </p>
-        )}
-        <button
-          type="submit"
-          disabled={addNote.isPending}
-          className="h-11 rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong disabled:opacity-60"
-        >
+        <FormError message={error} />
+        <Button type="submit" variant="primary" disabled={addNote.isPending}>
           {addNote.isPending ? "Adding…" : "Add note"}
-        </button>
+        </Button>
       </form>
 
       {notes.isPending && <Loading label="Loading notes…" />}
@@ -78,7 +69,7 @@ export function CaseNotes(props: { caseId: string }) {
               const createdAt = note.metadata?.createdAt;
               return (
                 <li key={note.metadata?.id} className="border-b border-line px-3 py-2 last:border-b-0">
-                  <p className="text-sm text-ink-muted">
+                  <p className="text-xs text-ink-muted">
                     <span className="font-medium text-ink">
                       {/* Audit fields carry USER ids; the roster maps them. */}
                       {roster.data?.nameOfUser(note.metadata?.createdBy?.id ?? "") ?? "…"}

@@ -36,7 +36,7 @@ export function CaseHistory(props: { caseId: string }) {
 
   return (
     <section aria-label="History" className="mt-6">
-      <h2 className="mb-2 font-medium">History</h2>
+      <h2 className="mb-2 text-sm font-semibold">History</h2>
       {history.isPending && <Loading label="Loading the history…" />}
       {history.isError && (
         <ErrorState error={history.error} onRetry={() => void history.refetch()} />
@@ -63,7 +63,7 @@ export function CaseHistory(props: { caseId: string }) {
                     )}
                   </p>
                   {!created && (entry.spec?.changes.length ?? 0) > 0 && (
-                    <ul className="mt-1 text-sm text-ink-muted">
+                    <ul className="mt-1 text-xs text-ink-muted">
                       {entry.spec?.changes.map((change) => (
                         <li key={change.fieldPath}>
                           {change.fieldPath}:{" "}

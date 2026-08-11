@@ -7,6 +7,8 @@
 
 import { useState, type FormEvent } from "react";
 import { ConnectError } from "@connectrpc/connect";
+import { Button } from "../../components/Button.js";
+import { InlineInput, InlineSelect, Label } from "../../components/Field.js";
 import { FirmRole } from "../../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
 import { firmRoleLabel } from "../../lib/format.js";
 import { useOnboardMember, type IssuedActivation } from "./mutations.js";
@@ -50,62 +52,57 @@ export function AddMemberForm(props: {
       aria-label="Add a firm member"
       className="mb-4 rounded-card border border-line bg-surface p-4"
     >
-      <h2 className="mb-3 font-medium">Add a firm member</h2>
+      <h2 className="mb-3 text-sm font-semibold">Add a firm member</h2>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label htmlFor="member-name" className="mb-1 block text-sm font-medium">
-            Name
-          </label>
-          <input
+          <Label htmlFor="member-name">Name</Label>
+          <InlineInput
             id="member-name"
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="block h-11 w-full rounded-card border border-line bg-surface px-3"
+            className="block w-full"
           />
         </div>
         <div>
-          <label htmlFor="member-email" className="mb-1 block text-sm font-medium">
-            Email
-          </label>
-          <input
+          <Label htmlFor="member-email">Email</Label>
+          <InlineInput
             id="member-email"
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="block h-11 w-full rounded-card border border-line bg-surface px-3"
+            className="block w-full"
           />
         </div>
         <div>
-          <label htmlFor="member-phone" className="mb-1 block text-sm font-medium">
-            Phone for WhatsApp <span className="font-normal text-ink-muted">(optional, +country code)</span>
-          </label>
-          <input
+          <Label htmlFor="member-phone">
+            Phone for WhatsApp{" "}
+            <span className="font-normal text-ink-muted">(optional, +country code)</span>
+          </Label>
+          <InlineInput
             id="member-phone"
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="+91…"
-            className="block h-11 w-full rounded-card border border-line bg-surface px-3"
+            className="block w-full"
           />
         </div>
         <div>
-          <label htmlFor="member-role" className="mb-1 block text-sm font-medium">
-            Role
-          </label>
-          <select
+          <Label htmlFor="member-role">Role</Label>
+          <InlineSelect
             id="member-role"
             value={role}
             onChange={(e) => setRole(Number(e.target.value) as FirmRole)}
-            className="block h-11 w-full rounded-card border border-line bg-surface px-3"
+            className="block w-full"
           >
             {ASSIGNABLE_ROLES.map((r) => (
               <option key={r} value={r}>
                 {firmRoleLabel(r)}
               </option>
             ))}
-          </select>
+          </InlineSelect>
         </div>
       </div>
 
@@ -116,20 +113,10 @@ export function AddMemberForm(props: {
       )}
 
       <div className="mt-3 flex gap-2">
-        <button
-          type="submit"
-          disabled={onboard.isPending}
-          className="h-11 rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong disabled:opacity-60"
-        >
+        <Button type="submit" variant="primary" disabled={onboard.isPending}>
           {onboard.isPending ? "Adding…" : "Add member and get code"}
-        </button>
-        <button
-          type="button"
-          onClick={props.onCancel}
-          className="h-11 rounded-card px-3 text-sm text-ink-muted hover:text-ink"
-        >
-          Cancel
-        </button>
+        </Button>
+        <Button onClick={props.onCancel}>Cancel</Button>
       </div>
     </form>
   );

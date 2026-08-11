@@ -5,8 +5,9 @@
  */
 
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { ButtonLink } from "../../components/Button.js";
+import { ListCard } from "../../components/ListCard.js";
 import { Pagination } from "../../components/Pagination.js";
 import { TaskRow } from "../tasks/TaskRow.js";
 import { useTaskList } from "../tasks/queries.js";
@@ -18,13 +19,8 @@ export function CaseTasks(props: { caseId: string }) {
   return (
     <section aria-label="Tasks on this case" className="mt-6">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="font-medium">Tasks</h2>
-        <Link
-          to={`/tasks/new?case=${props.caseId}`}
-          className="flex h-11 items-center rounded-card px-3 text-sm text-brand hover:bg-brand-surface"
-        >
-          New task
-        </Link>
+        <h2 className="text-sm font-semibold">Tasks</h2>
+        <ButtonLink to={`/tasks/new?case=${props.caseId}`}>New task</ButtonLink>
       </div>
       {tasks.isPending && <Loading label="Loading tasks…" />}
       {tasks.isError && <ErrorState error={tasks.error} onRetry={() => void tasks.refetch()} />}
@@ -33,11 +29,11 @@ export function CaseTasks(props: { caseId: string }) {
       )}
       {tasks.isSuccess && tasks.data.items.length > 0 && (
         <>
-          <ul className="rounded-card border border-line bg-surface">
+          <ListCard>
             {tasks.data.items.map((task) => (
               <TaskRow key={task.metadata?.id} task={task} />
             ))}
-          </ul>
+          </ListCard>
           <Pagination page={page} totalCount={Number(tasks.data.totalCount)} onPage={setPage} />
         </>
       )}

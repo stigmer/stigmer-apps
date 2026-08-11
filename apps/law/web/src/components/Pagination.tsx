@@ -5,6 +5,7 @@
  */
 
 import { PAGE_SIZE } from "../lib/contract.js";
+import { Button } from "./Button.js";
 
 export function Pagination(props: {
   page: number;
@@ -15,25 +16,18 @@ export function Pagination(props: {
   if (pageCount <= 1) return null;
   return (
     <nav aria-label="Pagination" className="mt-3 flex items-center justify-between text-sm">
-      <button
-        type="button"
-        disabled={props.page === 0}
-        onClick={() => props.onPage(props.page - 1)}
-        className="h-11 rounded-card px-3 text-brand hover:bg-brand-surface disabled:text-ink-faint"
-      >
+      <Button disabled={props.page === 0} onClick={() => props.onPage(props.page - 1)}>
         ← Previous
-      </button>
+      </Button>
       <span className="text-ink-muted">
         Page {props.page + 1} of {pageCount}
       </span>
-      <button
-        type="button"
+      <Button
         disabled={props.page >= pageCount - 1}
         onClick={() => props.onPage(props.page + 1)}
-        className="h-11 rounded-card px-3 text-brand hover:bg-brand-surface disabled:text-ink-faint"
       >
         Next →
-      </button>
+      </Button>
     </nav>
   );
 }

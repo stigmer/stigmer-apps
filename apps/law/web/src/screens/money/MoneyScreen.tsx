@@ -10,6 +10,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { InlineSelect } from "../../components/Field.js";
+import { PageHeader } from "../../components/PageHeader.js";
 import { Pagination } from "../../components/Pagination.js";
 import { formatPaise } from "../../lib/format.js";
 import { useClientList } from "../clients/queries.js";
@@ -27,20 +29,19 @@ export function MoneyScreen() {
 
   return (
     <section aria-label="Money">
-      <h1 className="mb-4 text-xl font-semibold">Money</h1>
+      <PageHeader title="Money" />
 
       <div className="mb-3 text-sm">
         <label htmlFor="money-client" className="mr-2 text-ink-muted">
           Client
         </label>
-        <select
+        <InlineSelect
           id="money-client"
           value={clientId}
           onChange={(e) => {
             setClientId(e.target.value);
             setPage(0);
           }}
-          className="h-11 rounded-card border border-line bg-surface px-2"
         >
           <option value="">All clients</option>
           {clients.data?.items.map((client) => (
@@ -48,7 +49,7 @@ export function MoneyScreen() {
               {client.spec?.displayName}
             </option>
           ))}
-        </select>
+        </InlineSelect>
       </div>
 
       {outstanding.isPending && <Loading label="Adding up the ledgers…" />}
@@ -66,16 +67,16 @@ export function MoneyScreen() {
             </caption>
             <thead>
               <tr className="border-b border-line text-left text-ink-muted">
-                <th scope="col" className="px-3 py-2 font-medium">
+                <th scope="col" className="px-3 py-1.5 font-medium">
                   Matter
                 </th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">
+                <th scope="col" className="px-3 py-1.5 text-right font-medium">
                   Charged
                 </th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">
+                <th scope="col" className="px-3 py-1.5 text-right font-medium">
                   Received
                 </th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">
+                <th scope="col" className="px-3 py-1.5 text-right font-medium">
                   Outstanding
                 </th>
               </tr>
@@ -83,7 +84,7 @@ export function MoneyScreen() {
             <tbody>
               {outstanding.data.items.map((line) => (
                 <tr key={line.caseId} className="border-b border-line last:border-b-0">
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-1.5">
                     <Link to={`/cases/${line.caseId}`} className="font-medium text-brand hover:underline">
                       {line.fileNumber}
                     </Link>
@@ -91,12 +92,12 @@ export function MoneyScreen() {
                       <span className="ml-2 text-ink-muted">{clientName(line.clientId)}</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="px-3 py-1.5 text-right">
                     {formatPaise(line.chargesPaise + line.expensesPaise)}
                   </td>
-                  <td className="px-3 py-2 text-right">{formatPaise(line.receiptsPaise)}</td>
+                  <td className="px-3 py-1.5 text-right">{formatPaise(line.receiptsPaise)}</td>
                   <td
-                    className={`px-3 py-2 text-right font-medium ${
+                    className={`px-3 py-1.5 text-right font-medium ${
                       line.outstandingPaise > 0n ? "text-warn" : "text-ok"
                     }`}
                   >

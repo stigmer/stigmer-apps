@@ -5,7 +5,8 @@
  * meaning alone (D5): overdue and state always render as words.
  */
 
-import { Link } from "react-router-dom";
+import { Badge } from "../../components/Badge.js";
+import { ListRow, RowMeta, RowTitle } from "../../components/ListCard.js";
 import type { Task } from "../../gen/stigmer/law/task/v1/task_pb.js";
 import { TaskState } from "../../gen/stigmer/law/task/v1/task_pb.js";
 import { formatCalendarDate, taskPriorityLabel, taskStateLabel } from "../../lib/format.js";
@@ -16,39 +17,16 @@ export function TaskRow(props: { task: Task; showAssignee?: string }) {
   const state = task.status?.state ?? TaskState.UNSPECIFIED;
 
   return (
-    <li className="border-b border-line last:border-b-0">
-      <Link
-        to={`/tasks/${id}`}
-        className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 hover:bg-brand-surface"
-      >
-        <span className="flex-1 basis-48 font-medium">{task.spec?.title}</span>
-        {task.status?.caseFileNumber && (
-          <span className="text-sm text-ink-muted">{task.status.caseFileNumber}</span>
-        )}
-        {props.showAssignee && (
-          <span className="text-sm text-ink-muted">{props.showAssignee}</span>
-        )}
-        {task.spec?.dueDate && (
-          <span className="text-sm text-ink-muted">
-            Due {formatCalendarDate(task.spec.dueDate)}
-          </span>
-        )}
-        {task.status?.overdue && (
-          <span className="rounded-card bg-warn-surface px-2 py-0.5 text-xs font-medium text-warn">
-            Overdue
-          </span>
-        )}
-        <span className="text-sm text-ink-faint">{taskPriorityLabel(task.spec?.priority ?? 0)}</span>
-        <span
-          className={
-            state === TaskState.CLOSED
-              ? "rounded-card px-2 py-0.5 text-xs text-ink-faint"
-              : "rounded-card bg-brand-surface px-2 py-0.5 text-xs font-medium text-brand"
-          }
-        >
-          {taskStateLabel(state)}
-        </span>
-      </Link>
-    </li>
+    <ListRow to={`/tasks/${id}`}>
+      <RowTitle grow>{task.spec?.title}</RowTitle>
+      {task.status?.caseFileNumber && <RowMeta>{task.status.caseFileNumber}</RowMeta>}
+      {props.showAssignee && <RowMeta>{props.showAssignee}</RowMeta>}
+      {task.spec?.dueDate && <RowMeta>Due {formatCalendarDate(task.spec.dueDate)}</RowMeta>}
+      {task.status?.overdue && <Badge tone="warn">Overdue</Badge>}
+      <RowMeta faint>{taskPriorityLabel(task.spec?.priority ?? 0)}</RowMeta>
+      <Badge tone={state === TaskState.CLOSED ? "neutral" : "brand"}>
+        {taskStateLabel(state)}
+      </Badge>
+    </ListRow>
   );
 }

@@ -5,53 +5,99 @@
  * such package exists until vertical #2, dont-do #7). Tailwind v4 turns
  * each token into utilities (bg-paper, text-ink, border-line, ...).
  *
+ * Two layers, mirroring the Stigmer console's `--stgm-*` contract: raw
+ * values live on :root as `--law-*` variables; the @theme block only maps
+ * them to utility names. A future dark mode is then one added
+ * `[data-color-mode="dark"]` block of raw values — no utility remap, no
+ * component change.
+ *
  * The palette is deliberately quiet — this is a working tool for a law
  * office, read for hours: warm paper neutrals, one deep "counsel blue"
  * for actions, semantic red/amber reserved for meaning (errors, overdue),
- * never decoration.
+ * never decoration. Type is compact by design (text-sm as body, text-xs
+ * for meta — the Stigmer console's density), on Geist, the console's
+ * face.
  */
 
 @import "tailwindcss";
+@import "@fontsource-variable/geist";
 
-@theme {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
-
+:root {
   /* Surfaces */
-  --color-paper: oklch(0.98 0.004 85);
-  --color-surface: oklch(1 0 0);
-  --color-line: oklch(0.9 0.008 85);
+  --law-paper: oklch(0.98 0.004 85);
+  --law-surface: oklch(1 0 0);
+  --law-line: oklch(0.9 0.008 85);
 
   /* Text. Every step ≥ 4.5:1 on paper AND surface (WCAG AA, enforced by
    * the axe gate in e2e/quality.spec.ts) — hierarchy comes from small
    * lightness steps, never from dropping below readable contrast. */
-  --color-ink: oklch(0.27 0.02 260);
-  --color-ink-muted: oklch(0.47 0.015 260);
-  --color-ink-faint: oklch(0.52 0.012 260);
+  --law-ink: oklch(0.27 0.02 260);
+  --law-ink-muted: oklch(0.47 0.015 260);
+  --law-ink-faint: oklch(0.52 0.012 260);
 
   /* Actions — counsel blue */
-  --color-brand: oklch(0.45 0.09 255);
-  --color-brand-strong: oklch(0.38 0.09 255);
-  --color-brand-surface: oklch(0.955 0.015 255);
-  --color-on-brand: oklch(1 0 0);
+  --law-brand: oklch(0.45 0.09 255);
+  --law-brand-strong: oklch(0.38 0.09 255);
+  --law-brand-surface: oklch(0.955 0.015 255);
+  --law-on-brand: oklch(1 0 0);
 
   /* Meaning — each text color ≥ 4.5:1 on its paired surface. */
-  --color-danger: oklch(0.48 0.17 27);
-  --color-danger-surface: oklch(0.96 0.02 27);
-  --color-warn: oklch(0.47 0.12 65);
-  --color-warn-surface: oklch(0.965 0.025 80);
-  --color-ok: oklch(0.5 0.12 150);
+  --law-danger: oklch(0.48 0.17 27);
+  --law-danger-surface: oklch(0.96 0.02 27);
+  --law-warn: oklch(0.47 0.12 65);
+  --law-warn-surface: oklch(0.965 0.025 80);
+  --law-ok: oklch(0.5 0.12 150);
 
-  --radius-card: 0.625rem;
+  /* The sidebar's own quiet band: a step off the paper so the workspace
+   * reads as chrome + content without a hard divider doing all the work. */
+  --law-sidebar: oklch(0.965 0.006 85);
+  --law-sidebar-line: oklch(0.89 0.01 85);
+  --law-sidebar-ink: oklch(0.32 0.02 260);
+  --law-sidebar-muted: oklch(0.47 0.015 260);
+
+  --law-radius: 0.625rem;
+}
+
+@theme inline {
+  --font-sans:
+    "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans",
+    sans-serif;
+
+  --color-paper: var(--law-paper);
+  --color-surface: var(--law-surface);
+  --color-line: var(--law-line);
+
+  --color-ink: var(--law-ink);
+  --color-ink-muted: var(--law-ink-muted);
+  --color-ink-faint: var(--law-ink-faint);
+
+  --color-brand: var(--law-brand);
+  --color-brand-strong: var(--law-brand-strong);
+  --color-brand-surface: var(--law-brand-surface);
+  --color-on-brand: var(--law-on-brand);
+
+  --color-danger: var(--law-danger);
+  --color-danger-surface: var(--law-danger-surface);
+  --color-warn: var(--law-warn);
+  --color-warn-surface: var(--law-warn-surface);
+  --color-ok: var(--law-ok);
+
+  --color-sidebar: var(--law-sidebar);
+  --color-sidebar-line: var(--law-sidebar-line);
+  --color-sidebar-ink: var(--law-sidebar-ink);
+  --color-sidebar-muted: var(--law-sidebar-muted);
+
+  --radius-card: var(--law-radius);
 }
 
 @layer base {
   body {
-    @apply bg-paper text-ink font-sans antialiased;
+    @apply bg-paper text-ink font-sans text-sm antialiased;
   }
   /* One visible focus treatment everywhere — keyboard users see exactly
    * where they are (D5 accessibility). */
   :focus-visible {
-    outline: 2px solid var(--color-brand);
+    outline: 2px solid var(--law-brand);
     outline-offset: 2px;
   }
 }

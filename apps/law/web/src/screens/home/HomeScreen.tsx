@@ -17,8 +17,12 @@
  * morning, not a partner's.
  */
 
-import { Link } from "react-router-dom";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { Badge } from "../../components/Badge.js";
+import { ButtonLink } from "../../components/Button.js";
+import { ListRow, RowMeta, RowTitle } from "../../components/ListCard.js";
+import { PageHeader } from "../../components/PageHeader.js";
+import { SectionCard } from "../../components/SectionCard.js";
 import type { Deadline } from "../../gen/stigmer/law/deadline/v1/deadline_pb.js";
 import { OutcomeKind, type Hearing } from "../../gen/stigmer/law/hearing/v1/hearing_pb.js";
 import { addDays, firmToday } from "../../lib/firm-day.js";
@@ -26,24 +30,6 @@ import { formatCalendarDate } from "../../lib/format.js";
 import { useCaseList, useCaseSummaryMap } from "../cases/queries.js";
 import { useMyOpenDeadlines } from "../deadlines/queries.js";
 import { useHearingsInRange, useUnrecordedHearings } from "../hearings/queries.js";
-
-function SectionCard(props: {
-  title: string;
-  tone?: "warn";
-  children: React.ReactNode;
-}) {
-  return (
-    <section
-      aria-label={props.title}
-      className={`rounded-card border bg-surface p-4 ${
-        props.tone === "warn" ? "border-warn" : "border-line"
-      }`}
-    >
-      <h2 className="mb-2 font-medium">{props.title}</h2>
-      {props.children}
-    </section>
-  );
-}
 
 function HearingRow(props: { hearing: Hearing; fileNumber: string; today: string }) {
   const { hearing } = props;
@@ -54,21 +40,16 @@ function HearingRow(props: { hearing: Hearing; fileNumber: string; today: string
     .filter(Boolean)
     .join(", ");
   return (
-    <li className="border-b border-line last:border-b-0">
-      <Link
-        to={`/cases/${hearing.spec?.caseId}`}
-        className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-2 hover:bg-brand-surface"
-      >
-        <span className="font-medium">{props.fileNumber}</span>
-        <span className="text-sm text-ink-muted">
-          {hearing.spec?.date === props.today
-            ? "Today"
-            : formatCalendarDate(hearing.spec?.date ?? "")}
-          {hearing.spec?.purpose && ` — ${hearing.spec.purpose}`}
-        </span>
-        {listing && <span className="text-sm text-ink-faint">({listing})</span>}
-      </Link>
-    </li>
+    <ListRow to={`/cases/${hearing.spec?.caseId}`}>
+      <RowTitle>{props.fileNumber}</RowTitle>
+      <RowMeta>
+        {hearing.spec?.date === props.today
+          ? "Today"
+          : formatCalendarDate(hearing.spec?.date ?? "")}
+        {hearing.spec?.purpose && ` — ${hearing.spec.purpose}`}
+      </RowMeta>
+      {listing && <RowMeta faint>({listing})</RowMeta>}
+    </ListRow>
   );
 }
 
@@ -90,18 +71,15 @@ export function HomeScreen() {
 
   return (
     <div className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">Today</h1>
-        <Link to="/tasks" className="flex h-11 items-center rounded-card px-3 text-sm text-brand hover:bg-brand-surface">
-          My open tasks →
-        </Link>
-      </div>
+      <PageHeader title="Today">
+        <ButtonLink to="/tasks">My open tasks →</ButtonLink>
+      </PageHeader>
 
       {/* The nag renders FIRST when it has content: unrecorded outcomes
           are the one thing the product refuses to let go quiet. */}
       {unrecorded.isSuccess && unrecorded.data.items.length > 0 && (
         <SectionCard title="Hearings awaiting an outcome" tone="warn">
-          <p className="mb-2 text-sm text-ink-muted">
+          <p className="mb-2 text-xs text-ink-muted">
             These hearings have passed with nothing recorded. Open the matter and record what
             happened.
           </p>
@@ -149,28 +127,17 @@ export function HomeScreen() {
         {deadlines.isSuccess && deadlines.data.items.length > 0 && (
           <ul>
             {deadlines.data.items.map((deadline: Deadline) => (
-              <li key={deadline.metadata?.id} className="border-b border-line last:border-b-0">
-                <Link
-                  to={`/cases/${deadline.spec?.caseId}`}
-                  className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-2 hover:bg-brand-surface"
-                >
-                  <span className="font-medium">{deadline.spec?.title}</span>
-                  <span
-                    className={
-                      deadline.status?.overdue
-                        ? "rounded-card bg-danger-surface px-2 py-0.5 text-xs font-medium text-danger"
-                        : "text-sm text-ink-muted"
-                    }
-                  >
-                    {deadline.status?.overdue
-                      ? `OVERDUE — was due ${formatCalendarDate(deadline.spec?.dueDate ?? "")}`
-                      : `due ${formatCalendarDate(deadline.spec?.dueDate ?? "")}`}
-                  </span>
-                  <span className="text-sm text-ink-faint">
-                    {fileNumberOf(deadline.spec?.caseId)}
-                  </span>
-                </Link>
-              </li>
+              <ListRow key={deadline.metadata?.id} to={`/cases/${deadline.spec?.caseId}`}>
+                <RowTitle>{deadline.spec?.title}</RowTitle>
+                {deadline.status?.overdue ? (
+                  <Badge tone="danger">
+                    OVERDUE — was due {formatCalendarDate(deadline.spec?.dueDate ?? "")}
+                  </Badge>
+                ) : (
+                  <RowMeta>due {formatCalendarDate(deadline.spec?.dueDate ?? "")}</RowMeta>
+                )}
+                <RowMeta faint>{fileNumberOf(deadline.spec?.caseId)}</RowMeta>
+              </ListRow>
             ))}
           </ul>
         )}
@@ -186,20 +153,15 @@ export function HomeScreen() {
         )}
         {noNextDate.isSuccess && noNextDate.data.items.length > 0 && (
           <>
-            <p className="mb-2 text-sm text-ink-muted">
+            <p className="mb-2 text-xs text-ink-muted">
               Nothing is scheduled on these — open one and put the next date on the board.
             </p>
             <ul>
               {noNextDate.data.items.map((summary) => (
-                <li key={summary.id} className="border-b border-line last:border-b-0">
-                  <Link
-                    to={`/cases/${summary.id}`}
-                    className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-2 hover:bg-brand-surface"
-                  >
-                    <span className="font-medium">{summary.fileNumber}</span>
-                    <span className="text-sm text-ink-muted">{summary.caption}</span>
-                  </Link>
-                </li>
+                <ListRow key={summary.id} to={`/cases/${summary.id}`}>
+                  <RowTitle>{summary.fileNumber}</RowTitle>
+                  <RowMeta>{summary.caption}</RowMeta>
+                </ListRow>
               ))}
             </ul>
           </>

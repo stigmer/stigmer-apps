@@ -11,6 +11,8 @@
 import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ConnectError } from "@connectrpc/connect";
+import { buttonClass } from "../../components/Button.js";
+import { FormError, Input, Label } from "../../components/Field.js";
 import { useSessionKit } from "../../session/use-session.js";
 
 export function ActivateScreen() {
@@ -53,10 +55,7 @@ export function ActivateScreen() {
             className="rounded-card border border-line bg-surface p-6 text-center shadow-sm"
           >
             <p className="mb-4">Your password is set.</p>
-            <Link
-              to="/login"
-              className="inline-flex h-11 items-center rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong"
-            >
+            <Link to="/login" className={buttonClass("primary")}>
               Sign in
             </Link>
           </div>
@@ -66,25 +65,21 @@ export function ActivateScreen() {
             className="rounded-card border border-line bg-surface p-6 shadow-sm"
             aria-label="Set your password"
           >
-            <label htmlFor="activation-code" className="mb-1 block text-sm font-medium">
-              Activation code
-            </label>
+            <Label htmlFor="activation-code">Activation code</Label>
             <input
               id="activation-code"
               required
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="act_…"
-              className="mb-1 block h-11 w-full rounded-card border border-line bg-surface px-3 font-mono"
+              className="mb-1 block h-8 w-full rounded-card border border-line bg-surface px-2.5 font-mono text-sm"
             />
-            <p className="mb-4 text-sm text-ink-muted">
+            <p className="mb-4 text-xs text-ink-muted">
               The code your managing partner shared with you.
             </p>
 
-            <label htmlFor="new-password" className="mb-1 block text-sm font-medium">
-              Choose a password
-            </label>
-            <input
+            <Label htmlFor="new-password">Choose a password</Label>
+            <Input
               id="new-password"
               type="password"
               autoComplete="new-password"
@@ -92,13 +87,10 @@ export function ActivateScreen() {
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mb-4 block h-11 w-full rounded-card border border-line bg-surface px-3"
             />
 
-            <label htmlFor="confirm-password" className="mb-1 block text-sm font-medium">
-              Repeat the password
-            </label>
-            <input
+            <Label htmlFor="confirm-password">Repeat the password</Label>
+            <Input
               id="confirm-password"
               type="password"
               autoComplete="new-password"
@@ -106,20 +98,11 @@ export function ActivateScreen() {
               minLength={8}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              className="mb-4 block h-11 w-full rounded-card border border-line bg-surface px-3"
             />
 
-            {error && (
-              <p role="alert" className="mb-4 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-                {error}
-              </p>
-            )}
+            <FormError message={error} />
 
-            <button
-              type="submit"
-              disabled={pending}
-              className="h-11 w-full rounded-card bg-brand font-medium text-on-brand hover:bg-brand-strong disabled:opacity-60"
-            >
+            <button type="submit" disabled={pending} className={`${buttonClass("primary")} w-full`}>
               {pending ? "Setting your password…" : "Set password"}
             </button>
           </form>

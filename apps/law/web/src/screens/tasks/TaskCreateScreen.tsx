@@ -8,11 +8,13 @@
  */
 
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { create } from "@bufbuild/protobuf";
 import { ConnectError } from "@connectrpc/connect";
 import { useQuery } from "@tanstack/react-query";
 import { useApiClients } from "../../api/clients.js";
+import { Button, ButtonLink } from "../../components/Button.js";
+import { FormCard, FormError, Input, Label, Select, TextArea } from "../../components/Field.js";
 import { TaskPriority, TaskSpecSchema } from "../../gen/stigmer/law/task/v1/task_pb.js";
 import { useFirmRoster } from "../members/queries.js";
 import { useCreateTask } from "./queries.js";
@@ -63,13 +65,10 @@ export function TaskCreateScreen() {
     }
   }
 
-  const field = "mb-4 block h-11 w-full rounded-card border border-line bg-surface px-3";
-  const label = "mb-1 block text-sm font-medium";
-
   return (
     <section aria-label="New task" className="max-w-lg">
-      <h1 className="mb-4 text-xl font-semibold">New task</h1>
-      <form onSubmit={(e) => void onSubmit(e)} className="rounded-card border border-line bg-surface p-6">
+      <h1 className="mb-4 text-lg font-semibold">New task</h1>
+      <FormCard onSubmit={(e) => void onSubmit(e)}>
         {boundCaseId ? (
           <p className="mb-4 text-sm text-ink-muted">
             For matter{" "}
@@ -79,104 +78,71 @@ export function TaskCreateScreen() {
           </p>
         ) : (
           <>
-            <label htmlFor="task-case" className={label}>
-              File number
-            </label>
-            <input
+            <Label htmlFor="task-case">File number</Label>
+            <Input
               id="task-case"
               required
               value={fileNumber}
               onChange={(e) => setFileNumber(e.target.value)}
               placeholder="The firm's own number, e.g. CS/2026/042"
-              className={field}
             />
           </>
         )}
 
-        <label htmlFor="task-title" className={label}>
-          Title
-        </label>
-        <input
+        <Label htmlFor="task-title">Title</Label>
+        <Input
           id="task-title"
           required
           maxLength={200}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className={field}
         />
 
-        <label htmlFor="task-description" className={label}>
+        <Label htmlFor="task-description">
           Description <span className="font-normal text-ink-muted">(optional)</span>
-        </label>
-        <textarea
+        </Label>
+        <TextArea
           id="task-description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={3}
-          className="mb-4 block w-full rounded-card border border-line bg-surface px-3 py-2"
         />
 
-        <label htmlFor="task-assignee" className={label}>
-          Assign to
-        </label>
-        <select
-          id="task-assignee"
-          value={assigneeId}
-          onChange={(e) => setAssigneeId(e.target.value)}
-          className={field}
-        >
+        <Label htmlFor="task-assignee">Assign to</Label>
+        <Select id="task-assignee" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
           <option value="">Unassigned</option>
           {roster.data?.members.map((member) => (
             <option key={member.metadata?.id} value={member.metadata?.id}>
               {member.status?.userName || member.status?.userEmail}
             </option>
           ))}
-        </select>
+        </Select>
 
-        <label htmlFor="task-due" className={label}>
+        <Label htmlFor="task-due">
           Due date <span className="font-normal text-ink-muted">(optional)</span>
-        </label>
-        <input
-          id="task-due"
-          type="date"
-          value={dueDate}
-          onChange={(e) => setDueDate(e.target.value)}
-          className={field}
-        />
+        </Label>
+        <Input id="task-due" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
 
-        <label htmlFor="task-priority" className={label}>
-          Priority
-        </label>
-        <select
+        <Label htmlFor="task-priority">Priority</Label>
+        <Select
           id="task-priority"
           value={priority}
           onChange={(e) => setPriority(Number(e.target.value) as TaskPriority)}
-          className={field}
         >
           <option value={TaskPriority.LOW}>Low</option>
           <option value={TaskPriority.MEDIUM}>Medium</option>
           <option value={TaskPriority.HIGH}>High</option>
-        </select>
+        </Select>
 
-        {error && (
-          <p role="alert" className="mb-4 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-            {error}
-          </p>
-        )}
+        <FormError message={error} />
 
         <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={createTask.isPending}
-            className="h-11 rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong disabled:opacity-60"
-          >
+          <Button type="submit" variant="primary" disabled={createTask.isPending}>
             {createTask.isPending ? "Creating…" : "Create task"}
-          </button>
-          <Link to="/tasks" className="flex h-11 items-center rounded-card px-4 text-brand hover:bg-brand-surface">
-            Cancel
-          </Link>
+          </Button>
+          <ButtonLink to="/tasks">Cancel</ButtonLink>
         </div>
-      </form>
+      </FormCard>
     </section>
   );
 }

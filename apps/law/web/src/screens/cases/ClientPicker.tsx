@@ -11,6 +11,8 @@ import { useState, type FormEvent } from "react";
 import { ConnectError } from "@connectrpc/connect";
 import { create } from "@bufbuild/protobuf";
 import { ErrorState, Loading } from "../../components/async.js";
+import { Button } from "../../components/Button.js";
+import { FormError, Input, Label, Select } from "../../components/Field.js";
 import {
   ClientKind,
   type Client,
@@ -39,15 +41,9 @@ export function ClientPicker(props: {
     return (
       <div className="mb-4">
         <p className="mb-1 text-sm font-medium">Client</p>
-        <div className="flex min-h-11 flex-wrap items-center gap-3">
+        <div className="flex min-h-8 flex-wrap items-center gap-3">
           <span className="font-medium">{picked}</span>
-          <button
-            type="button"
-            onClick={() => setPicked(undefined)}
-            className="h-11 rounded-card px-3 text-sm text-brand hover:bg-brand-surface"
-          >
-            Change client
-          </button>
+          <Button onClick={() => setPicked(undefined)}>Change client</Button>
         </div>
       </div>
     );
@@ -55,16 +51,13 @@ export function ClientPicker(props: {
 
   return (
     <div className="mb-4">
-      <label htmlFor="case-client-search" className="mb-1 block text-sm font-medium">
-        Client
-      </label>
-      <input
+      <Label htmlFor="case-client-search">Client</Label>
+      <Input
         id="case-client-search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Type a name to search the register"
         autoComplete="off"
-        className="mb-2 block h-11 w-full rounded-card border border-line bg-surface px-3"
       />
 
       {search.isFetching && <Loading label="Searching the register…" />}
@@ -81,14 +74,14 @@ export function ClientPicker(props: {
                   <button
                     type="button"
                     onClick={() => pick(client)}
-                    className="flex min-h-11 w-full flex-wrap items-center gap-x-3 px-3 py-2 text-left hover:bg-brand-surface"
+                    className="flex min-h-9 w-full flex-wrap items-center gap-x-3 px-3 py-1.5 text-left hover:bg-brand-surface"
                   >
                     <span className="font-medium">{client.spec?.displayName}</span>
-                    <span className="text-sm text-ink-muted">
+                    <span className="text-xs text-ink-muted">
                       {clientKindLabel(client.spec?.clientKind ?? ClientKind.UNSPECIFIED)}
                     </span>
                     {client.spec?.phones[0] && (
-                      <span className="text-sm text-ink-faint">{client.spec.phones[0]}</span>
+                      <span className="text-xs text-ink-faint">{client.spec.phones[0]}</span>
                     )}
                   </button>
                 </li>
@@ -128,13 +121,7 @@ export function ClientPicker(props: {
       {creating ? (
         <InlineClientCreate initialName={query.trim()} onCreated={pick} onCancel={() => setCreating(false)} />
       ) : (
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="h-11 rounded-card px-3 text-sm text-brand hover:bg-brand-surface"
-        >
-          Add a new client
-        </button>
+        <Button onClick={() => setCreating(true)}>Add a new client</Button>
       )}
     </div>
   );
@@ -173,63 +160,30 @@ function InlineClientCreate(props: {
     }
   }
 
-  const field = "mb-3 block h-11 w-full rounded-card border border-line bg-surface px-3";
-  const label = "mb-1 block text-sm font-medium";
-
   return (
     <div className="rounded-card border border-line bg-paper p-4">
       <p className="mb-3 font-medium">New client</p>
-      <label htmlFor="new-client-name" className={label}>
-        Name
-      </label>
-      <input
-        id="new-client-name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className={field}
-      />
-      <label htmlFor="new-client-kind" className={label}>
-        Person or organisation
-      </label>
-      <select
+      <Label htmlFor="new-client-name">Name</Label>
+      <Input id="new-client-name" value={name} onChange={(e) => setName(e.target.value)} />
+      <Label htmlFor="new-client-kind">Person or organisation</Label>
+      <Select
         id="new-client-kind"
         value={kind}
         onChange={(e) => setKind(Number(e.target.value) as ClientKind)}
-        className={field}
       >
         <option value={ClientKind.INDIVIDUAL}>{clientKindLabel(ClientKind.INDIVIDUAL)}</option>
         <option value={ClientKind.ORGANIZATION}>{clientKindLabel(ClientKind.ORGANIZATION)}</option>
-      </select>
-      <label htmlFor="new-client-phone" className={label}>
+      </Select>
+      <Label htmlFor="new-client-phone">
         Phone <span className="font-normal text-ink-muted">(optional)</span>
-      </label>
-      <input
-        id="new-client-phone"
-        value={phone}
-        onChange={(e) => setPhone(e.target.value)}
-        className={field}
-      />
-      {error && (
-        <p role="alert" className="mb-3 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
-      )}
+      </Label>
+      <Input id="new-client-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      <FormError message={error} />
       <div className="flex gap-3">
-        <button
-          type="button"
-          disabled={createClient.isPending}
-          onClick={(e) => void onCreate(e)}
-          className="h-11 rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong disabled:opacity-60"
-        >
+        <Button variant="primary" disabled={createClient.isPending} onClick={(e) => void onCreate(e)}>
           {createClient.isPending ? "Adding…" : "Add client"}
-        </button>
-        <button
-          type="button"
-          onClick={props.onCancel}
-          className="h-11 rounded-card px-4 text-brand hover:bg-brand-surface"
-        >
-          Cancel
-        </button>
+        </Button>
+        <Button onClick={props.onCancel}>Cancel</Button>
       </div>
     </div>
   );

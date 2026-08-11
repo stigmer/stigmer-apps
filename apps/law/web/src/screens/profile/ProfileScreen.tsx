@@ -9,6 +9,8 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ConnectError } from "@connectrpc/connect";
+import { Button } from "../../components/Button.js";
+import { FormError, Input, Label } from "../../components/Field.js";
 import { useCurrentUser, useSessionKit } from "../../session/use-session.js";
 
 export function ProfileScreen() {
@@ -23,34 +25,32 @@ export function ProfileScreen() {
 
   return (
     <section aria-label="Profile" className="max-w-lg">
-      <h1 className="mb-4 text-xl font-semibold">Profile</h1>
+      <h1 className="mb-4 text-lg font-semibold">Profile</h1>
       <dl className="rounded-card border border-line bg-surface p-4">
         <div className="mb-3">
-          <dt className="text-sm text-ink-muted">Name</dt>
+          <dt className="text-xs text-ink-muted">Name</dt>
           <dd>{user.spec?.name || "—"}</dd>
         </div>
         <div className="mb-3">
-          <dt className="text-sm text-ink-muted">Email</dt>
+          <dt className="text-xs text-ink-muted">Email</dt>
           <dd>{user.spec?.email}</dd>
         </div>
         <div>
-          <dt className="text-sm text-ink-muted">Phone (for WhatsApp)</dt>
+          <dt className="text-xs text-ink-muted">Phone (for WhatsApp)</dt>
           <dd>{user.spec?.phone || "Not set"}</dd>
         </div>
       </dl>
-      <p className="mt-3 text-sm text-ink-muted">
+      <p className="mt-3 text-xs text-ink-muted">
         To change your details, ask your managing partner.
       </p>
 
       <ChangePasswordForm />
 
-      <button
-        type="button"
-        onClick={() => void onSignOut()}
-        className="mt-4 h-11 rounded-card border border-line px-4 font-medium text-danger hover:bg-danger-surface"
-      >
-        Sign out
-      </button>
+      <div className="mt-4">
+        <Button variant="danger" onClick={() => void onSignOut()}>
+          Sign out
+        </Button>
+      </div>
     </section>
   );
 }
@@ -94,25 +94,20 @@ function ChangePasswordForm() {
       aria-label="Change password"
       className="mt-4 rounded-card border border-line bg-surface p-4"
     >
-      <h2 className="mb-3 font-medium">Change password</h2>
+      <h2 className="mb-3 text-sm font-semibold">Change password</h2>
 
-      <label htmlFor="current-password" className="mb-1 block text-sm font-medium">
-        Current password
-      </label>
-      <input
+      <Label htmlFor="current-password">Current password</Label>
+      <Input
         id="current-password"
         type="password"
         autoComplete="current-password"
         required
         value={current}
         onChange={(e) => setCurrent(e.target.value)}
-        className="mb-4 block h-11 w-full rounded-card border border-line bg-surface px-3"
       />
 
-      <label htmlFor="next-password" className="mb-1 block text-sm font-medium">
-        New password
-      </label>
-      <input
+      <Label htmlFor="next-password">New password</Label>
+      <Input
         id="next-password"
         type="password"
         autoComplete="new-password"
@@ -120,13 +115,10 @@ function ChangePasswordForm() {
         minLength={8}
         value={next}
         onChange={(e) => setNext(e.target.value)}
-        className="mb-4 block h-11 w-full rounded-card border border-line bg-surface px-3"
       />
 
-      <label htmlFor="confirm-next-password" className="mb-1 block text-sm font-medium">
-        Repeat the new password
-      </label>
-      <input
+      <Label htmlFor="confirm-next-password">Repeat the new password</Label>
+      <Input
         id="confirm-next-password"
         type="password"
         autoComplete="new-password"
@@ -134,27 +126,18 @@ function ChangePasswordForm() {
         minLength={8}
         value={confirm}
         onChange={(e) => setConfirm(e.target.value)}
-        className="mb-4 block h-11 w-full rounded-card border border-line bg-surface px-3"
       />
 
-      {error && (
-        <p role="alert" className="mb-4 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
-      )}
+      <FormError message={error} />
       {done && (
         <p role="status" className="mb-4 rounded-card bg-brand-surface px-3 py-2 text-sm">
           Your password is changed.
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="h-11 rounded-card border border-line px-4 font-medium hover:bg-brand-surface disabled:opacity-60"
-      >
+      <Button type="submit" variant="outline" disabled={pending}>
         {pending ? "Changing…" : "Change password"}
-      </button>
+      </Button>
     </form>
   );
 }

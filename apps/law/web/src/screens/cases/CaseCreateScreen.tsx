@@ -10,7 +10,7 @@ export function CaseCreateScreen() {
 
   return (
     <section aria-label="New case" className="max-w-lg">
-      <h1 className="mb-4 text-xl font-semibold">New case</h1>
+      <h1 className="mb-4 text-lg font-semibold">New case</h1>
       <CaseForm
         submitLabel="Create case"
         pending={createCase.isPending}

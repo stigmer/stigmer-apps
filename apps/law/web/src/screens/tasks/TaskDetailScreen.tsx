@@ -9,6 +9,9 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ConnectError } from "@connectrpc/connect";
 import { ErrorState, Loading } from "../../components/async.js";
+import { Badge } from "../../components/Badge.js";
+import { Button } from "../../components/Button.js";
+import { FormError, InlineSelect } from "../../components/Field.js";
 import { TaskState } from "../../gen/stigmer/law/task/v1/task_pb.js";
 import { formatCalendarDate, taskPriorityLabel, taskStateLabel } from "../../lib/format.js";
 import { useFirmRoster } from "../members/queries.js";
@@ -39,7 +42,7 @@ export function TaskDetailScreen() {
 
   return (
     <section aria-label="Task">
-      <div className="mb-1 text-sm text-ink-muted">
+      <div className="mb-1 text-xs text-ink-muted">
         <Link to="/tasks" className="text-brand underline">
           Tasks
         </Link>{" "}
@@ -47,24 +50,16 @@ export function TaskDetailScreen() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">{t.spec?.title}</h1>
-        {!editing && (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="h-11 rounded-card px-4 text-brand hover:bg-brand-surface"
-          >
-            Edit
-          </button>
-        )}
+        <h1 className="text-lg font-semibold">{t.spec?.title}</h1>
+        {!editing && <Button onClick={() => setEditing(true)}>Edit</Button>}
       </div>
 
       {editing ? (
         <TaskEditForm task={t} onDone={() => setEditing(false)} />
       ) : (
-        <dl className="grid grid-cols-1 gap-x-8 gap-y-2 rounded-card border border-line bg-surface p-4 sm:grid-cols-2">
+        <dl className="grid max-w-3xl grid-cols-1 gap-x-8 gap-y-2 rounded-card border border-line bg-surface p-4 sm:grid-cols-2">
           <div>
-            <dt className="text-sm text-ink-muted">Case</dt>
+            <dt className="text-xs text-ink-muted">Case</dt>
             <dd>
               {t.spec?.caseId ? (
                 <Link to={`/cases/${t.spec.caseId}`} className="text-brand underline">
@@ -76,46 +71,41 @@ export function TaskDetailScreen() {
             </dd>
           </div>
           <div>
-            <dt className="text-sm text-ink-muted">Status</dt>
+            <dt className="text-xs text-ink-muted">Status</dt>
             <dd className="flex items-center gap-2">
               <label htmlFor="task-state" className="sr-only">
                 Status
               </label>
-              <select
+              <InlineSelect
                 id="task-state"
                 value={t.status?.state ?? TaskState.OPEN}
                 disabled={updateStatus.isPending}
                 onChange={(e) => void onStateChange(Number(e.target.value) as TaskState)}
-                className="h-11 rounded-card border border-line bg-surface px-2"
               >
                 <option value={TaskState.OPEN}>{taskStateLabel(TaskState.OPEN)}</option>
                 <option value={TaskState.IN_PROGRESS}>{taskStateLabel(TaskState.IN_PROGRESS)}</option>
                 <option value={TaskState.CLOSED}>{taskStateLabel(TaskState.CLOSED)}</option>
-              </select>
-              {t.status?.overdue && (
-                <span className="rounded-card bg-warn-surface px-2 py-0.5 text-xs font-medium text-warn">
-                  Overdue
-                </span>
-              )}
+              </InlineSelect>
+              {t.status?.overdue && <Badge tone="warn">Overdue</Badge>}
             </dd>
           </div>
           <div>
-            <dt className="text-sm text-ink-muted">Assigned to</dt>
+            <dt className="text-xs text-ink-muted">Assigned to</dt>
             <dd>
               {t.spec?.assigneeId ? roster.data?.nameOf(t.spec.assigneeId) ?? "…" : "Unassigned"}
             </dd>
           </div>
           <div>
-            <dt className="text-sm text-ink-muted">Due date</dt>
+            <dt className="text-xs text-ink-muted">Due date</dt>
             <dd>{t.spec?.dueDate ? formatCalendarDate(t.spec.dueDate) : "No due date"}</dd>
           </div>
           <div>
-            <dt className="text-sm text-ink-muted">Priority</dt>
+            <dt className="text-xs text-ink-muted">Priority</dt>
             <dd>{taskPriorityLabel(t.spec?.priority ?? 0)}</dd>
           </div>
           {t.spec?.description && (
             <div className="sm:col-span-2">
-              <dt className="text-sm text-ink-muted">Description</dt>
+              <dt className="text-xs text-ink-muted">Description</dt>
               <dd className="whitespace-pre-wrap">{t.spec.description}</dd>
             </div>
           )}
@@ -123,9 +113,9 @@ export function TaskDetailScreen() {
       )}
 
       {statusError && (
-        <p role="alert" className="mt-3 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {statusError}
-        </p>
+        <div className="mt-3">
+          <FormError message={statusError} />
+        </div>
       )}
 
       <TaskComments taskId={id} />

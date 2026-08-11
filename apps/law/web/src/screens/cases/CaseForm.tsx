@@ -11,6 +11,8 @@
 import { useState, type FormEvent } from "react";
 import { create } from "@bufbuild/protobuf";
 import { ConnectError } from "@connectrpc/connect";
+import { Button } from "../../components/Button.js";
+import { FormCard, FormError, InlineInput, Input, Label, Select } from "../../components/Field.js";
 import {
   ClientRole,
   ForumKind,
@@ -136,41 +138,28 @@ export function CaseForm(props: {
     }
   }
 
-  const field = "mb-4 block h-11 w-full rounded-card border border-line bg-surface px-3";
-  const label = "mb-1 block text-sm font-medium";
-
   return (
-    <form
-      onSubmit={(e) => void onSubmit(e)}
-      aria-label="Case details"
-      className="rounded-card border border-line bg-surface p-6"
-    >
+    <FormCard onSubmit={(e) => void onSubmit(e)} aria-label="Case details">
       <ClientPicker
         pickedName={props.initial ? props.initialClientName ?? "" : undefined}
         onPick={(client) => setClientId(client.metadata?.id ?? "")}
       />
 
-      <label htmlFor="case-file-number" className={label}>
-        File number
-      </label>
-      <input
+      <Label htmlFor="case-file-number">File number</Label>
+      <Input
         id="case-file-number"
         required
         value={fileNumber}
         onChange={(e) => setFileNumber(e.target.value)}
         placeholder="The firm's own number, e.g. CS/2026/042"
-        className={field}
       />
 
-      <label htmlFor="case-client-role" className={label}>
-        Our client is the
-      </label>
-      <select
+      <Label htmlFor="case-client-role">Our client is the</Label>
+      <Select
         id="case-client-role"
         required
         value={clientRole}
         onChange={(e) => setClientRole(Number(e.target.value) as ClientRole)}
-        className={field}
       >
         <option value={ClientRole.UNSPECIFIED} disabled>
           Pick a role
@@ -180,7 +169,7 @@ export function CaseForm(props: {
             {clientRoleLabel(role)}
           </option>
         ))}
-      </select>
+      </Select>
 
       <fieldset className="mb-4">
         <legend className="mb-1 text-sm font-medium">Opposing parties</legend>
@@ -189,57 +178,51 @@ export function CaseForm(props: {
             <label htmlFor={`opposing-name-${index}`} className="sr-only">
               Opposing party {index + 1} name
             </label>
-            <input
+            <InlineInput
               id={`opposing-name-${index}`}
               value={party.name}
               onChange={(e) => setParty(index, { name: e.target.value })}
               placeholder="Party name"
-              className="block h-11 flex-1 basis-48 rounded-card border border-line bg-surface px-3"
+              className="flex-1 basis-48"
             />
             <label htmlFor={`opposing-counsel-${index}`} className="sr-only">
               Opposing party {index + 1} counsel
             </label>
-            <input
+            <InlineInput
               id={`opposing-counsel-${index}`}
               value={party.counselName}
               onChange={(e) => setParty(index, { counselName: e.target.value })}
               placeholder="Their counsel (if known)"
-              className="block h-11 flex-1 basis-48 rounded-card border border-line bg-surface px-3"
+              className="flex-1 basis-48"
             />
             {opposingParties.length > 1 && (
-              <button
-                type="button"
+              <Button
+                variant="danger"
                 onClick={() =>
                   setOpposingParties((parties) => parties.filter((_, i) => i !== index))
                 }
                 aria-label={`Remove opposing party ${index + 1}`}
-                className="h-11 rounded-card px-3 text-sm text-danger hover:bg-danger-surface"
               >
                 Remove
-              </button>
+              </Button>
             )}
           </div>
         ))}
-        <button
-          type="button"
+        <Button
           onClick={() =>
             setOpposingParties((parties) => [...parties, { name: "", counselName: "" }])
           }
-          className="h-11 rounded-card px-3 text-sm text-brand hover:bg-brand-surface"
         >
           Add another party
-        </button>
+        </Button>
       </fieldset>
 
-      <label htmlFor="case-forum-kind" className={label}>
-        Forum
-      </label>
-      <select
+      <Label htmlFor="case-forum-kind">Forum</Label>
+      <Select
         id="case-forum-kind"
         required
         value={forumKind}
         onChange={(e) => setForumKind(Number(e.target.value) as ForumKind)}
-        className={field}
       >
         <option value={ForumKind.UNSPECIFIED} disabled>
           Pick a forum
@@ -249,57 +232,47 @@ export function CaseForm(props: {
             {forumKindLabel(kind)}
           </option>
         ))}
-      </select>
+      </Select>
 
-      <label htmlFor="case-forum-name" className={label}>
-        Court or forum name
-      </label>
-      <input
+      <Label htmlFor="case-forum-name">Court or forum name</Label>
+      <Input
         id="case-forum-name"
         required
         value={forumName}
         onChange={(e) => setForumName(e.target.value)}
         placeholder="As the cause list prints it"
-        className={field}
       />
 
-      <label htmlFor="case-bench" className={label}>
+      <Label htmlFor="case-bench">
         Bench <span className="font-normal text-ink-muted">(optional)</span>
-      </label>
-      <input id="case-bench" value={bench} onChange={(e) => setBench(e.target.value)} className={field} />
+      </Label>
+      <Input id="case-bench" value={bench} onChange={(e) => setBench(e.target.value)} />
 
-      <label htmlFor="case-type" className={label}>
-        Case type
-      </label>
-      <input
+      <Label htmlFor="case-type">Case type</Label>
+      <Input
         id="case-type"
         required
         value={caseType}
         onChange={(e) => setCaseType(e.target.value)}
         placeholder="civil, criminal, writ…"
-        className={field}
       />
 
-      <label htmlFor="case-stage" className={label}>
+      <Label htmlFor="case-stage">
         Stage <span className="font-normal text-ink-muted">(optional)</span>
-      </label>
-      <input
+      </Label>
+      <Input
         id="case-stage"
         value={stage}
         onChange={(e) => setStage(e.target.value)}
         placeholder="admission, evidence, arguments…"
-        className={field}
       />
 
-      <label htmlFor="case-lead" className={label}>
-        Lead lawyer
-      </label>
-      <select
+      <Label htmlFor="case-lead">Lead lawyer</Label>
+      <Select
         id="case-lead"
         required
         value={effectiveLead}
         onChange={(e) => setLeadLawyerId(e.target.value)}
-        className={field}
       >
         {roster.data?.members
           .filter((member) => LEAD_ROLES.includes(member.spec?.role ?? FirmRole.UNSPECIFIED))
@@ -308,45 +281,30 @@ export function CaseForm(props: {
               {member.status?.userName || member.status?.userEmail}
             </option>
           ))}
-      </select>
+      </Select>
 
-      <label htmlFor="case-court-number" className={label}>
+      <Label htmlFor="case-court-number">
         Court case number <span className="font-normal text-ink-muted">(optional, once filed)</span>
-      </label>
-      <input
+      </Label>
+      <Input
         id="case-court-number"
         value={courtCaseNumber}
         onChange={(e) => setCourtCaseNumber(e.target.value)}
-        className={field}
       />
 
-      <label htmlFor="case-cnr" className={label}>
+      <Label htmlFor="case-cnr">
         CNR <span className="font-normal text-ink-muted">(optional)</span>
-      </label>
-      <input id="case-cnr" value={cnr} onChange={(e) => setCnr(e.target.value)} className={field} />
+      </Label>
+      <Input id="case-cnr" value={cnr} onChange={(e) => setCnr(e.target.value)} />
 
-      {error && (
-        <p role="alert" className="mb-4 rounded-card bg-danger-surface px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
-      )}
+      <FormError message={error} />
 
       <div className="flex gap-3">
-        <button
-          type="submit"
-          disabled={props.pending}
-          className="h-11 rounded-card bg-brand px-4 font-medium text-on-brand hover:bg-brand-strong disabled:opacity-60"
-        >
+        <Button type="submit" variant="primary" disabled={props.pending}>
           {props.pending ? "Saving…" : props.submitLabel}
-        </button>
-        <button
-          type="button"
-          onClick={props.onCancel}
-          className="h-11 rounded-card px-4 text-brand hover:bg-brand-surface"
-        >
-          Cancel
-        </button>
+        </Button>
+        <Button onClick={props.onCancel}>Cancel</Button>
       </div>
-    </form>
+    </FormCard>
   );
 }
