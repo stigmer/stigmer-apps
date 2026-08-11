@@ -18,16 +18,21 @@ import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import type { ConnectRouter, HandlerContext } from "@connectrpc/connect";
 import type { CallerExtractor, ResourceStore } from "@stigmer/resource-api";
+import { hashActivationCode, type ActivationCodeStore } from "./activation-code.js";
 import type { CredentialStore } from "./credential-store.js";
 import {
   AuthService,
+  ChangePasswordResponseSchema,
   LoginResponseSchema,
   LogoutResponseSchema,
+  RedeemActivationCodeResponseSchema,
   RefreshResponseSchema,
+  type ChangePasswordRequest,
   type LoginRequest,
+  type RedeemActivationCodeRequest,
 } from "./gen/stigmer/identity/auth/v1/auth_pb.js";
 import type { User } from "./gen/stigmer/identity/user/v1/user_pb.js";
-import { verifyPassword } from "./password.js";
+import { hashPassword, verifyPassword } from "./password.js";
 import { createMemoryRateLimiter, type LoginRateLimiter } from "./rate-limit.js";
 import {
   generateRefreshToken,
@@ -45,6 +50,10 @@ import { USER_KIND } from "./user-resource.js";
  */
 const UNIFORM_LOGIN_FAILURE = "Email or password is incorrect";
 
+/** The redeem twin of the login rule: unknown, already-used, and expired
+ * codes answer identically — which one it was is nobody's business. */
+const UNIFORM_REDEEM_FAILURE = "This code is not valid or has expired";
+
 const REFRESH_COOKIE = "stigmer_refresh";
 
 export interface AuthServiceDeps {
@@ -52,6 +61,8 @@ export interface AuthServiceDeps {
   readonly store: ResourceStore;
   readonly credentials: CredentialStore;
   readonly refreshTokens: RefreshTokenStore;
+  /** The redeem surface (DD-003 D4). */
+  readonly activationCodes: ActivationCodeStore;
   readonly issuer: AccessTokenIssuer;
   /** The app's caller seam (WhoAmI needs the authenticated principal). */
   readonly caller: CallerExtractor;
@@ -180,6 +191,78 @@ export function authService(deps: AuthServiceDeps): {
             throw new ConnectError(`User '${caller.id}' not found`, Code.NotFound);
           }
           return user;
+        },
+
+        async redeemActivationCode(req: RedeemActivationCodeRequest) {
+          if (!req.code || req.newPassword.length < 8) {
+            throw new ConnectError(
+              "A code and a password of at least 8 characters are required",
+              Code.InvalidArgument,
+            );
+          }
+          // The login limiter, keyed by the presented code: entropy is
+          // the real brute-force defense (128 random bits), this bounds
+          // per-code retry noise the same way login bounds per-email.
+          const budget = rateLimiter.check(`redeem:${req.code}`);
+          if (!budget.allowed) {
+            const minutes = Math.max(1, Math.ceil((budget.retryAfterSeconds ?? 60) / 60));
+            throw new ConnectError(
+              `Too many attempts. Try again in about ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+              Code.ResourceExhausted,
+            );
+          }
+
+          const consumed = await deps.activationCodes.consume(hashActivationCode(req.code));
+          if (!consumed) {
+            rateLimiter.recordFailure(`redeem:${req.code}`);
+            throw new ConnectError(UNIFORM_REDEEM_FAILURE, Code.Unauthenticated);
+          }
+
+          await deps.credentials.setPasswordHash(
+            consumed.userId,
+            await hashPassword(req.newPassword),
+          );
+          // Reset-after-compromise semantics: whatever sessions the OLD
+          // credential earned die with it. The person signs in fresh.
+          await deps.refreshTokens.revokeAllForUser(consumed.userId);
+          return create(RedeemActivationCodeResponseSchema, {});
+        },
+
+        async changePassword(req: ChangePasswordRequest, ctx) {
+          const caller = await deps.caller(ctx);
+          if (!caller || caller.kind !== "user") {
+            throw new ConnectError("Authentication required", Code.Unauthenticated);
+          }
+          if (req.newPassword.length < 8) {
+            throw new ConnectError(
+              "The new password must be at least 8 characters",
+              Code.InvalidArgument,
+            );
+          }
+          // Proof of possession, rate-limited like login (an attacker
+          // with a stolen session must not get free guesses at the
+          // current password).
+          const budget = rateLimiter.check(`change:${caller.id}`);
+          if (!budget.allowed) {
+            const minutes = Math.max(1, Math.ceil((budget.retryAfterSeconds ?? 60) / 60));
+            throw new ConnectError(
+              `Too many attempts. Try again in about ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+              Code.ResourceExhausted,
+            );
+          }
+          const currentHash = await deps.credentials.getPasswordHash(caller.id);
+          if (!currentHash || !(await verifyPassword(req.currentPassword, currentHash))) {
+            rateLimiter.recordFailure(`change:${caller.id}`);
+            throw new ConnectError("The current password is incorrect", Code.PermissionDenied);
+          }
+          rateLimiter.recordSuccess(`change:${caller.id}`);
+
+          await deps.credentials.setPasswordHash(caller.id, await hashPassword(req.newPassword));
+          // Every session dies — including this one's refresh cookie.
+          // The client signs in again with the password it just set.
+          await deps.refreshTokens.revokeAllForUser(caller.id);
+          clearRefreshCookie(ctx, cookiePath);
+          return create(ChangePasswordResponseSchema, {});
         },
       });
     },

@@ -5,6 +5,7 @@
  */
 
 import type pg from "pg";
+import type { ActivationCodeStore } from "../activation-code.js";
 import type { CredentialStore } from "../credential-store.js";
 import type { RefreshConsumeResult, RefreshTokenStore } from "../refresh-token.js";
 
@@ -98,6 +99,39 @@ export function createPgRefreshTokenStore(pool: pg.Pool): RefreshTokenStore {
 
     async revokeAllForUser(userId) {
       await pool.query(`DELETE FROM refresh_tokens WHERE user_id = $1`, [userId]);
+    },
+  };
+}
+
+export function createPgActivationCodeStore(pool: pg.Pool): ActivationCodeStore {
+  return {
+    async issue(userId, codeSha256Hex, expiresAt) {
+      // The primary key makes issuing a REPLACEMENT: one live code per
+      // user, and the previous one dies here rather than lingering.
+      await pool.query(
+        `INSERT INTO activation_codes (user_id, code_hash, expires_at)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (user_id) DO UPDATE
+           SET code_hash = EXCLUDED.code_hash,
+               expires_at = EXCLUDED.expires_at,
+               created_at = now()`,
+        [userId, codeSha256Hex, expiresAt],
+      );
+    },
+
+    async consume(codeSha256Hex) {
+      // Atomic one-time-use: delete-returning with the expiry check in
+      // the same statement — two racing redeems serialize on the row,
+      // and exactly one gets it. Expired rows die on the way out too.
+      const res = await pool.query<{ user_id: string; live: boolean }>(
+        `DELETE FROM activation_codes
+          WHERE code_hash = $1
+          RETURNING user_id, expires_at >= now() AS live`,
+        [codeSha256Hex],
+      );
+      const row = res.rows[0];
+      if (!row || !row.live) return undefined;
+      return { userId: row.user_id };
     },
   };
 }

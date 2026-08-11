@@ -48,6 +48,26 @@ message LogoutResponse {}
 
 message WhoAmIRequest {}
 
+message RedeemActivationCodeRequest {
+  // The one-time code an administrator handed over out-of-band.
+  string code = 1 [(buf.validate.field).string.min_len = 1];
+  // The password the person chooses for themselves — same floor as
+  // SetPassword. Bcrypt-hashed server-side, never stored or echoed.
+  string new_password = 2 [(buf.validate.field).string.min_len = 8];
+}
+
+message RedeemActivationCodeResponse {}
+
+message ChangePasswordRequest {
+  // Proof of possession: self-service change requires the current
+  // password even with a valid session (a walked-away-from screen must
+  // not be a takeover lever).
+  string current_password = 1 [(buf.validate.field).string.min_len = 1];
+  string new_password = 2 [(buf.validate.field).string.min_len = 8];
+}
+
+message ChangePasswordResponse {}
+
 service AuthService {
   // Verify email + password; mint the token pair. Failures are uniform
   // ("email or password is incorrect") — the one recorded exception to
@@ -61,4 +81,16 @@ service AuthService {
   rpc Logout(LogoutRequest) returns (LogoutResponse);
   // The caller's own User record — the web app's session bootstrap.
   rpc WhoAmI(WhoAmIRequest) returns (stigmer.identity.user.v1.User);
+  // Redeem a one-time activation code and set the account's password —
+  // necessarily pre-authentication, like Login. Failures are uniform
+  // ("not valid or has expired": which is nobody's business); a
+  // successful redeem consumes the code and revokes every session of
+  // the account (reset-after-compromise semantics). The person signs in
+  // normally afterwards.
+  rpc RedeemActivationCode(RedeemActivationCodeRequest) returns (RedeemActivationCodeResponse);
+  // Change the caller's own password (self-scoped by construction, like
+  // WhoAmI). Verifies the current password, sets the new one, and
+  // revokes every session — the client simply signs in again with the
+  // password it just set.
+  rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
 }

@@ -32,9 +32,17 @@ import {
   listOperation,
   updateOperation,
 } from "@stigmer/resource-api";
+import {
+  ACTIVATION_CODE_TTL_SECONDS,
+  generateActivationCode,
+  type ActivationCodeStore,
+} from "./activation-code.js";
 import type { CredentialStore } from "./credential-store.js";
 import {
   type GetUserRequest,
+  type IssueActivationCodeRequest,
+  type IssueActivationCodeResponse,
+  IssueActivationCodeResponseSchema,
   type ListUsersRequest,
   type ListUsersResponse,
   ListUsersResponseSchema,
@@ -80,6 +88,8 @@ export interface UserResourceDeps {
   readonly credentials: CredentialStore;
   /** Required so SetPassword can revoke sessions (DD-005 D9). */
   readonly refreshTokens: RefreshTokenStore;
+  /** The no-email onboarding/reset path (DD-003 D4). */
+  readonly activationCodes: ActivationCodeStore;
 }
 
 export function userResource(deps: UserResourceDeps) {
@@ -140,6 +150,33 @@ export function userResource(deps: UserResourceDeps) {
           // tail is the accepted remainder.
           await deps.refreshTokens.revokeAllForUser(userId);
           return create(SetPasswordResponseSchema, {});
+        },
+      }),
+      issueActivationCode: customOperation<
+        User,
+        IssueActivationCodeRequest,
+        IssueActivationCodeResponse
+      >({
+        async handler(ctx) {
+          // load() authorizes "issueActivationCode" against the consumer
+          // policy (operator, or a delegated administrator role).
+          const user = await ctx.load({
+            id: ctx.input.id || undefined,
+            naturalKey: ctx.input.email ? ctx.input.email.trim().toLowerCase() : undefined,
+          });
+          const generated = generateActivationCode();
+          await deps.activationCodes.issue(
+            user.metadata?.id as string,
+            generated.sha256Hex,
+            new Date(Date.now() + ACTIVATION_CODE_TTL_SECONDS * 1000),
+          );
+          // Deliberately NOT touching the password or sessions here: a
+          // reset takes effect when the code is REDEEMED — visibly to
+          // the account holder — never silently at issue time.
+          return create(IssueActivationCodeResponseSchema, {
+            code: generated.code,
+            expiresInSeconds: ACTIVATION_CODE_TTL_SECONDS,
+          });
         },
       }),
       // No delete: with sessions revoked by SetPassword (D9), removal is

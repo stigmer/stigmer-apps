@@ -24,7 +24,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file stigmer/identity/auth/v1/auth.proto.
  */
 export const file_stigmer_identity_auth_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("CiNzdGlnbWVyL2lkZW50aXR5L2F1dGgvdjEvYXV0aC5wcm90bxIYc3RpZ21lci5pZGVudGl0eS5hdXRoLnYxIkEKDExvZ2luUmVxdWVzdBIWCgVlbWFpbBgBIAEoCUIHukgEcgJgARIZCghwYXNzd29yZBgCIAEoCUIHukgEcgIQASJvCg1Mb2dpblJlc3BvbnNlEhQKDGFjY2Vzc190b2tlbhgBIAEoCRIaChJleHBpcmVzX2luX3NlY29uZHMYAiABKAUSLAoEdXNlchgDIAEoCzIeLnN0aWdtZXIuaWRlbnRpdHkudXNlci52MS5Vc2VyIhAKDlJlZnJlc2hSZXF1ZXN0IkMKD1JlZnJlc2hSZXNwb25zZRIUCgxhY2Nlc3NfdG9rZW4YASABKAkSGgoSZXhwaXJlc19pbl9zZWNvbmRzGAIgASgFIg8KDUxvZ291dFJlcXVlc3QiEAoOTG9nb3V0UmVzcG9uc2UiDwoNV2hvQW1JUmVxdWVzdDL3AgoLQXV0aFNlcnZpY2USWAoFTG9naW4SJi5zdGlnbWVyLmlkZW50aXR5LmF1dGgudjEuTG9naW5SZXF1ZXN0Gicuc3RpZ21lci5pZGVudGl0eS5hdXRoLnYxLkxvZ2luUmVzcG9uc2USXgoHUmVmcmVzaBIoLnN0aWdtZXIuaWRlbnRpdHkuYXV0aC52MS5SZWZyZXNoUmVxdWVzdBopLnN0aWdtZXIuaWRlbnRpdHkuYXV0aC52MS5SZWZyZXNoUmVzcG9uc2USWwoGTG9nb3V0Eicuc3RpZ21lci5pZGVudGl0eS5hdXRoLnYxLkxvZ291dFJlcXVlc3QaKC5zdGlnbWVyLmlkZW50aXR5LmF1dGgudjEuTG9nb3V0UmVzcG9uc2USUQoGV2hvQW1JEicuc3RpZ21lci5pZGVudGl0eS5hdXRoLnYxLldob0FtSVJlcXVlc3QaHi5zdGlnbWVyLmlkZW50aXR5LnVzZXIudjEuVXNlcmIGcHJvdG8z", [file_buf_validate_validate, file_stigmer_identity_user_v1_user]);
+  fileDesc("CiNzdGlnbWVyL2lkZW50aXR5L2F1dGgvdjEvYXV0aC5wcm90bxIYc3RpZ21lci5pZGVudGl0eS5hdXRoLnYxIkEKDExvZ2luUmVxdWVzdBIWCgVlbWFpbBgBIAEoCUIHukgEcgJgARIZCghwYXNzd29yZBgCIAEoCUIHukgEcgIQASJvCg1Mb2dpblJlc3BvbnNlEhQKDGFjY2Vzc190b2tlbhgBIAEoCRIaChJleHBpcmVzX2luX3NlY29uZHMYAiABKAUSLAoEdXNlchgDIAEoCzIeLnN0aWdtZXIuaWRlbnRpdHkudXNlci52MS5Vc2VyIhAKDlJlZnJlc2hSZXF1ZXN0IkMKD1JlZnJlc2hSZXNwb25zZRIUCgxhY2Nlc3NfdG9rZW4YASABKAkSGgoSZXhwaXJlc19pbl9zZWNvbmRzGAIgASgFIg8KDUxvZ291dFJlcXVlc3QiEAoOTG9nb3V0UmVzcG9uc2UiDwoNV2hvQW1JUmVxdWVzdCJTChtSZWRlZW1BY3RpdmF0aW9uQ29kZVJlcXVlc3QSFQoEY29kZRgBIAEoCUIHukgEcgIQARIdCgxuZXdfcGFzc3dvcmQYAiABKAlCB7pIBHICEAgiHgocUmVkZWVtQWN0aXZhdGlvbkNvZGVSZXNwb25zZSJZChVDaGFuZ2VQYXNzd29yZFJlcXVlc3QSIQoQY3VycmVudF9wYXNzd29yZBgBIAEoCUIHukgEcgIQARIdCgxuZXdfcGFzc3dvcmQYAiABKAlCB7pIBHICEAgiGAoWQ2hhbmdlUGFzc3dvcmRSZXNwb25zZTL0BAoLQXV0aFNlcnZpY2USWAoFTG9naW4SJi5zdGlnbWVyLmlkZW50aXR5LmF1dGgudjEuTG9naW5SZXF1ZXN0Gicuc3RpZ21lci5pZGVudGl0eS5hdXRoLnYxLkxvZ2luUmVzcG9uc2USXgoHUmVmcmVzaBIoLnN0aWdtZXIuaWRlbnRpdHkuYXV0aC52MS5SZWZyZXNoUmVxdWVzdBopLnN0aWdtZXIuaWRlbnRpdHkuYXV0aC52MS5SZWZyZXNoUmVzcG9uc2USWwoGTG9nb3V0Eicuc3RpZ21lci5pZGVudGl0eS5hdXRoLnYxLkxvZ291dFJlcXVlc3QaKC5zdGlnbWVyLmlkZW50aXR5LmF1dGgudjEuTG9nb3V0UmVzcG9uc2USUQoGV2hvQW1JEicuc3RpZ21lci5pZGVudGl0eS5hdXRoLnYxLldob0FtSVJlcXVlc3QaHi5zdGlnbWVyLmlkZW50aXR5LnVzZXIudjEuVXNlchKFAQoUUmVkZWVtQWN0aXZhdGlvbkNvZGUSNS5zdGlnbWVyLmlkZW50aXR5LmF1dGgudjEuUmVkZWVtQWN0aXZhdGlvbkNvZGVSZXF1ZXN0GjYuc3RpZ21lci5pZGVudGl0eS5hdXRoLnYxLlJlZGVlbUFjdGl2YXRpb25Db2RlUmVzcG9uc2UScwoOQ2hhbmdlUGFzc3dvcmQSLy5zdGlnbWVyLmlkZW50aXR5LmF1dGgudjEuQ2hhbmdlUGFzc3dvcmRSZXF1ZXN0GjAuc3RpZ21lci5pZGVudGl0eS5hdXRoLnYxLkNoYW5nZVBhc3N3b3JkUmVzcG9uc2ViBnByb3RvMw", [file_buf_validate_validate, file_stigmer_identity_user_v1_user]);
 
 /**
  * @generated from message stigmer.identity.auth.v1.LoginRequest
@@ -164,6 +164,85 @@ export const WhoAmIRequestSchema: GenMessage<WhoAmIRequest> = /*@__PURE__*/
   messageDesc(file_stigmer_identity_auth_v1_auth, 6);
 
 /**
+ * @generated from message stigmer.identity.auth.v1.RedeemActivationCodeRequest
+ */
+export type RedeemActivationCodeRequest = Message<"stigmer.identity.auth.v1.RedeemActivationCodeRequest"> & {
+  /**
+   * The one-time code an administrator handed over out-of-band.
+   *
+   * @generated from field: string code = 1;
+   */
+  code: string;
+
+  /**
+   * The password the person chooses for themselves — same floor as
+   * SetPassword. Bcrypt-hashed server-side, never stored or echoed.
+   *
+   * @generated from field: string new_password = 2;
+   */
+  newPassword: string;
+};
+
+/**
+ * Describes the message stigmer.identity.auth.v1.RedeemActivationCodeRequest.
+ * Use `create(RedeemActivationCodeRequestSchema)` to create a new message.
+ */
+export const RedeemActivationCodeRequestSchema: GenMessage<RedeemActivationCodeRequest> = /*@__PURE__*/
+  messageDesc(file_stigmer_identity_auth_v1_auth, 7);
+
+/**
+ * @generated from message stigmer.identity.auth.v1.RedeemActivationCodeResponse
+ */
+export type RedeemActivationCodeResponse = Message<"stigmer.identity.auth.v1.RedeemActivationCodeResponse"> & {
+};
+
+/**
+ * Describes the message stigmer.identity.auth.v1.RedeemActivationCodeResponse.
+ * Use `create(RedeemActivationCodeResponseSchema)` to create a new message.
+ */
+export const RedeemActivationCodeResponseSchema: GenMessage<RedeemActivationCodeResponse> = /*@__PURE__*/
+  messageDesc(file_stigmer_identity_auth_v1_auth, 8);
+
+/**
+ * @generated from message stigmer.identity.auth.v1.ChangePasswordRequest
+ */
+export type ChangePasswordRequest = Message<"stigmer.identity.auth.v1.ChangePasswordRequest"> & {
+  /**
+   * Proof of possession: self-service change requires the current
+   * password even with a valid session (a walked-away-from screen must
+   * not be a takeover lever).
+   *
+   * @generated from field: string current_password = 1;
+   */
+  currentPassword: string;
+
+  /**
+   * @generated from field: string new_password = 2;
+   */
+  newPassword: string;
+};
+
+/**
+ * Describes the message stigmer.identity.auth.v1.ChangePasswordRequest.
+ * Use `create(ChangePasswordRequestSchema)` to create a new message.
+ */
+export const ChangePasswordRequestSchema: GenMessage<ChangePasswordRequest> = /*@__PURE__*/
+  messageDesc(file_stigmer_identity_auth_v1_auth, 9);
+
+/**
+ * @generated from message stigmer.identity.auth.v1.ChangePasswordResponse
+ */
+export type ChangePasswordResponse = Message<"stigmer.identity.auth.v1.ChangePasswordResponse"> & {
+};
+
+/**
+ * Describes the message stigmer.identity.auth.v1.ChangePasswordResponse.
+ * Use `create(ChangePasswordResponseSchema)` to create a new message.
+ */
+export const ChangePasswordResponseSchema: GenMessage<ChangePasswordResponse> = /*@__PURE__*/
+  messageDesc(file_stigmer_identity_auth_v1_auth, 10);
+
+/**
  * @generated from service stigmer.identity.auth.v1.AuthService
  */
 export const AuthService: GenService<{
@@ -209,6 +288,34 @@ export const AuthService: GenService<{
     methodKind: "unary";
     input: typeof WhoAmIRequestSchema;
     output: typeof UserSchema;
+  },
+  /**
+   * Redeem a one-time activation code and set the account's password —
+   * necessarily pre-authentication, like Login. Failures are uniform
+   * ("not valid or has expired": which is nobody's business); a
+   * successful redeem consumes the code and revokes every session of
+   * the account (reset-after-compromise semantics). The person signs in
+   * normally afterwards.
+   *
+   * @generated from rpc stigmer.identity.auth.v1.AuthService.RedeemActivationCode
+   */
+  redeemActivationCode: {
+    methodKind: "unary";
+    input: typeof RedeemActivationCodeRequestSchema;
+    output: typeof RedeemActivationCodeResponseSchema;
+  },
+  /**
+   * Change the caller's own password (self-scoped by construction, like
+   * WhoAmI). Verifies the current password, sets the new one, and
+   * revokes every session — the client simply signs in again with the
+   * password it just set.
+   *
+   * @generated from rpc stigmer.identity.auth.v1.AuthService.ChangePassword
+   */
+  changePassword: {
+    methodKind: "unary";
+    input: typeof ChangePasswordRequestSchema;
+    output: typeof ChangePasswordResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_stigmer_identity_auth_v1_auth, 0);

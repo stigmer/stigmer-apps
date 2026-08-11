@@ -37,14 +37,27 @@ user id**. Verticals extend by reference, never by widening this
 package's proto. A field proposed for `UserSpec` must be an attribute of
 *identity itself*, meaningful to every vertical, or it does not land.
 
-Operation matrix: `create`, `update`, `get`, `list`, `setPassword` — no
-delete (SetPassword's session revocation is the offboarding lever). The
-writes are operator-only by consumer-policy convention, **update
-included and at the same tier**: `spec.phone` is a channel binding, so
-whoever may update a user decides which verified WhatsApp sender
-resolves to them — profile editing one notch below operator would be a
-self-service impersonation lever (the proto's Update comment carries the
-full reasoning).
+Operation matrix: `create`, `update`, `get`, `list`, `setPassword`,
+`issueActivationCode` — no delete (SetPassword's session revocation is
+the offboarding lever). The writes are administration-tier by
+consumer-policy convention (an operator, or a delegated administrator
+role the consuming app names), **update included and at the same tier**:
+`spec.phone` is a channel binding, so whoever may update a user decides
+which verified WhatsApp sender resolves to them — profile editing one
+notch below the administration tier would be a self-service
+impersonation lever (the proto's Update comment carries the full
+reasoning).
+
+**Activation codes** are the no-email onboarding/reset path: an
+administrator issues a one-time code (shown once, hashed at rest, three
+days, replaced by reissue) and hands it over out-of-band; the person
+redeems it (`AuthService.RedeemActivationCode`, pre-auth like Login) to
+set their own password, which also revokes every session of the
+account. `AuthService.ChangePassword` is the self-service change —
+current password as proof of possession, all sessions revoked, the
+client signs back in with the password it just set. SetPassword stays a
+break-glass direct write: setting a password FOR someone is a silent
+takeover, while a code redemption is visible to the account holder.
 
 ## Composing into an app
 

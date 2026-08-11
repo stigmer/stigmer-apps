@@ -84,6 +84,22 @@ message SetPasswordRequest {
 
 message SetPasswordResponse {}
 
+message IssueActivationCodeRequest {
+  // Target user by internal id or email (case-insensitive).
+  string id = 1;
+  string email = 2;
+}
+
+message IssueActivationCodeResponse {
+  // The one-time code, shown exactly once — the server stores only its
+  // hash. The administrator hands it to the person out-of-band; the
+  // person redeems it (AuthService.RedeemActivationCode) to set their
+  // own password.
+  string code = 1;
+  // Validity window, for the administrator to relay ("valid for 3 days").
+  int32 expires_in_seconds = 2;
+}
+
 service UserService {
   // Create a user account. Operator-only (consumer policy): accounts are
   // created by an operator, no self-registration. Duplicate emails answer
@@ -105,9 +121,19 @@ service UserService {
   rpc Get(GetUserRequest) returns (User);
   // List users, ordered by email.
   rpc List(ListUsersRequest) returns (ListUsersResponse);
-  // Set (or reset) a user's password. Operator-only: password reset is an
-  // operator action. The hash lands in user_credentials, never in the
-  // User resource. Resetting also revokes the user's refresh sessions
-  // (DD-005 D9) — this is the offboarding lever.
+  // Set (or reset) a user's password. Operator-only: setting a password
+  // FOR someone is a silent-takeover lever, so it stays a break-glass
+  // action (delegated administration issues activation codes instead).
+  // The hash lands in user_credentials, never in the User resource.
+  // Resetting also revokes the user's refresh sessions (DD-005 D9) —
+  // this is the offboarding lever.
   rpc SetPassword(SetPasswordRequest) returns (SetPasswordResponse);
+  // Issue a one-time activation code for a user — the no-email
+  // onboarding/reset path: whoever the consumer policy allows (an
+  // operator, or a delegated administrator role) receives the code once
+  // and hands it over out-of-band; the person sets their OWN password by
+  // redeeming it. Issuing replaces any earlier unredeemed code for the
+  // user; it does NOT touch the current password or sessions (the reset
+  // takes effect when redeemed, visibly — unlike SetPassword).
+  rpc IssueActivationCode(IssueActivationCodeRequest) returns (IssueActivationCodeResponse);
 }

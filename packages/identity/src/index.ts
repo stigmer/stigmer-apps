@@ -44,6 +44,15 @@ export {
 // Credentials
 export type { CredentialStore } from "./credential-store.js";
 export { hashPassword, verifyPassword } from "./password.js";
+
+// Activation codes (DD-003 D4): the no-email onboarding/reset path
+export type { ActivationCodeStore, GeneratedActivationCode } from "./activation-code.js";
+export {
+  ACTIVATION_CODE_PREFIX,
+  ACTIVATION_CODE_TTL_SECONDS,
+  generateActivationCode,
+  hashActivationCode,
+} from "./activation-code.js";
 export {
   OPERATOR_KEY_PREFIX,
   OPERATOR_PRINCIPAL,
@@ -78,6 +87,8 @@ export { createMemoryRateLimiter } from "./rate-limit.js";
 // Generated contracts (apps never deep-import another package's gen/)
 export {
   GetUserRequestSchema,
+  IssueActivationCodeRequestSchema,
+  IssueActivationCodeResponseSchema,
   ListUsersRequestSchema,
   ListUsersResponseSchema,
   SetPasswordRequestSchema,
@@ -88,6 +99,8 @@ export {
 } from "./gen/stigmer/identity/user/v1/user_pb.js";
 export type {
   GetUserRequest,
+  IssueActivationCodeRequest,
+  IssueActivationCodeResponse,
   ListUsersRequest,
   ListUsersResponse,
   SetPasswordRequest,
@@ -97,19 +110,27 @@ export type {
 } from "./gen/stigmer/identity/user/v1/user_pb.js";
 export {
   AuthService,
+  ChangePasswordRequestSchema,
+  ChangePasswordResponseSchema,
   LoginRequestSchema,
   LoginResponseSchema,
   LogoutRequestSchema,
   LogoutResponseSchema,
+  RedeemActivationCodeRequestSchema,
+  RedeemActivationCodeResponseSchema,
   RefreshRequestSchema,
   RefreshResponseSchema,
   WhoAmIRequestSchema,
 } from "./gen/stigmer/identity/auth/v1/auth_pb.js";
 export type {
+  ChangePasswordRequest,
+  ChangePasswordResponse,
   LoginRequest,
   LoginResponse,
   LogoutRequest,
   LogoutResponse,
+  RedeemActivationCodeRequest,
+  RedeemActivationCodeResponse,
   RefreshRequest,
   RefreshResponse,
   WhoAmIRequest,

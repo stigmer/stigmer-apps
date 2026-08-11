@@ -1,6 +1,6 @@
 {
   "name": "@stigmer/identity",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Shared identity for Stigmer vertical apps: the User resource, credential storage, token issuing/verification, and a pluggable authenticator chain. Owns the seam; ships the smallest correct issuer (DD-005).",
   "license": "Apache-2.0",
   "repository": {

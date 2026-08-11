@@ -30,7 +30,11 @@ import { createAccessTokenIssuer, type AccessTokenIssuer } from "../../token.js"
 import { createCallerResolver } from "../../transport.js";
 import { userResource } from "../../user-resource.js";
 import { identityStoreKinds } from "../kind-config.js";
-import { createPgCredentialStore, createPgRefreshTokenStore } from "../stores.js";
+import {
+  createPgActivationCodeStore,
+  createPgCredentialStore,
+  createPgRefreshTokenStore,
+} from "../stores.js";
 import { startTestDatabase, type TestDatabase } from "./testcontainers.js";
 
 const MIGRATIONS_DIR = new URL("../../../migrations", import.meta.url).pathname;
@@ -60,6 +64,7 @@ let issuer: AccessTokenIssuer;
 let operatorKey: string;
 let client: ReturnType<typeof makeClient>;
 let refreshTokens: ReturnType<typeof createPgRefreshTokenStore>;
+let activationCodes: ReturnType<typeof createPgActivationCodeStore>;
 let credentials: ReturnType<typeof createPgCredentialStore>;
 
 function makeClient() {
@@ -73,6 +78,7 @@ function makeClient() {
     caller: resolver.fromConnect,
     credentials,
     refreshTokens,
+    activationCodes,
   });
   return createClient(UserService, createRouterTransport(resource.routes));
 }
@@ -104,6 +110,7 @@ beforeAll(async () => {
   operatorKey = generatedOperator.key;
   credentials = createPgCredentialStore(pool);
   refreshTokens = createPgRefreshTokenStore(pool);
+  activationCodes = createPgActivationCodeStore(pool);
   client = makeClient();
 }, 120_000);
 
@@ -162,6 +169,7 @@ describe("User on the commons pipeline (identity edition)", () => {
       caller: resolver.fromConnect,
       credentials,
       refreshTokens,
+      activationCodes,
     });
     const guardedClient = createClient(
       UserService,
