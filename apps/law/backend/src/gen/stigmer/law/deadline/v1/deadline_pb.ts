@@ -186,7 +186,11 @@ export type ListDeadlinesRequest = Message<"stigmer.law.deadline.v1.ListDeadline
   caseId: string;
 
   /**
-   * The caller's own deadlines — "my deadlines" (owner view).
+   * The caller's own deadlines on their visible cases — "my deadlines"
+   * (owner view). Like every list shape, this intersects with the
+   * member-case visibility matrix: an owned deadline on a case the
+   * caller cannot work does not list (the list never shows what Get
+   * would refuse).
    *
    * @generated from field: bool mine = 4;
    */

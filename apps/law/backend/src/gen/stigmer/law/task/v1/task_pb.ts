@@ -195,9 +195,11 @@ export type ListTasksRequest = Message<"stigmer.law.task.v1.ListTasksRequest"> &
 
   /**
    * Filters. When neither is set (and scope is not FIRM) the list
-   * defaults to the caller's own assignments — "My Tasks" (FR-TASK scope
-   * contract). case_id serves the case detail view; assignee_id serves
-   * an explicit person view.
+   * defaults to the caller's own assignments on their visible cases —
+   * "My Tasks" (FR-TASK scope contract). case_id serves the case detail
+   * view; assignee_id serves an explicit person view. Every shape
+   * intersects with the caller's visibility (the request widens the
+   * ask, never the visibility).
    *
    * @generated from field: string case_id = 3;
    */
@@ -399,8 +401,11 @@ export enum TaskListScope {
   UNSPECIFIED = 0,
 
   /**
-   * The caller's own assignments (when no explicit case/assignee filter
-   * is set — an explicit filter already names its scope).
+   * The caller's own assignments on their visible cases (when no
+   * explicit case/assignee filter is set — an explicit filter already
+   * names its scope). Like every scope, this narrows to the member-case
+   * visibility matrix: an assignment on a case the caller cannot work
+   * does not list (the list never shows what Get would refuse).
    *
    * @generated from enum value: TASK_LIST_SCOPE_MINE = 1;
    */

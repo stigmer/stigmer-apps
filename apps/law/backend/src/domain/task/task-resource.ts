@@ -201,8 +201,12 @@ export function taskResource(deps: {
             } else if (ctx.input.scope === TaskListScope.FIRM) {
               scope = visibility;
             } else {
-              // "My Tasks": my assignments, by my FirmMember id.
-              scope = { assigneeId: member.metadata?.id ?? "" };
+              // "My Tasks": my assignments, on my visible cases. The
+              // intersection is what keeps list and detail in agreement:
+              // an assignment on a case the caller lost membership of
+              // must not list here only for get() to refuse it — the
+              // same rule the WhatsApp my_day answer rides.
+              scope = { ...visibility, assigneeId: member.metadata?.id ?? "" };
             }
           }
 

@@ -66,6 +66,7 @@ import {
   LedgerEntryService,
 } from "../gen/stigmer/law/ledgerentry/v1/ledgerentry_pb.js";
 import { NotificationService } from "../gen/stigmer/law/notification/v1/notification_pb.js";
+import { TaskSchema, TaskService } from "../gen/stigmer/law/task/v1/task_pb.js";
 import { addDaysToIsoDate, todayInFirmTimezone } from "../domain/firm-clock.js";
 import { runSweepOnce } from "../domain/reminders/sweep.js";
 import type { AuthorizationEngine } from "@stigmer/authorization";
@@ -111,6 +112,7 @@ describe("the rebuilt firm, end to end", () => {
   let notifications: Client<typeof NotificationService>;
   let audit: Client<typeof AuditEntryService>;
   let firmMembers: Client<typeof FirmMemberService>;
+  let tasks: Client<typeof TaskService>;
 
   // The firm: user ids (tokens) and FirmMember ids (person references).
   const people = {
@@ -159,6 +161,7 @@ describe("the rebuilt firm, end to end", () => {
     notifications = createClient(NotificationService, transport);
     audit = createClient(AuditEntryService, transport);
     firmMembers = createClient(FirmMemberService, transport);
+    tasks = createClient(TaskService, transport);
 
     // Seed the firm through the operator path (FR-AUTH-002): a User is
     // not staff until a FirmMember profile exists (fail-closed).
@@ -543,6 +546,75 @@ describe("the rebuilt firm, end to end", () => {
       Code.PermissionDenied,
       /partners only/,
     );
+  });
+
+  /* --------- list/detail agreement (FR-AUTHZ-002, "my" scopes) ------ */
+
+  it("My Tasks never lists an assignment on a case the assignee cannot open", async () => {
+    // The NK production shape: a task assigned to someone WITHOUT case
+    // membership (associate2 is firm staff but not on this matter). The
+    // detail read refuses them, so the default list must omit it — a
+    // list line the caller cannot open is a broken promise, and the
+    // WhatsApp my_day answer rides this same handler.
+    const strayTask = await tasks.create(
+      create(TaskSchema, {
+        spec: { caseId, title: "Prepare index of documents", assigneeId: people.associate2.memberId },
+      }),
+      auth.as(people.associate.userId),
+    );
+    await expectCode(
+      tasks.get({ id: strayTask.metadata?.id ?? "" }, auth.as(people.associate2.userId)),
+      Code.PermissionDenied,
+      /case members and partners/,
+    );
+    const myTasks = await tasks.list({}, auth.as(people.associate2.userId));
+    expect(myTasks.items.map((t) => t.metadata?.id)).not.toContain(strayTask.metadata?.id);
+
+    // Positive control: a MEMBER's assignment lists and opens — the
+    // intersection narrows to visibility, never below it.
+    const memberTask = await tasks.create(
+      create(TaskSchema, {
+        spec: { caseId, title: "Serve notice on respondent", assigneeId: people.clerk.memberId },
+      }),
+      auth.as(people.associate.userId),
+    );
+    const clerkTasks = await tasks.list({}, auth.as(people.clerk.userId));
+    expect(clerkTasks.items.map((t) => t.metadata?.id)).toContain(memberTask.metadata?.id);
+    const opened = await tasks.get(
+      { id: memberTask.metadata?.id ?? "" },
+      auth.as(people.clerk.userId),
+    );
+    expect(opened.spec?.title).toBe("Serve notice on respondent");
+  });
+
+  it("my-deadlines never lists an owned deadline on a case the owner cannot open", async () => {
+    // Same agreement rule, the deadline flavor: ownership does not
+    // widen visibility (the request widens the ask, never the
+    // visibility — the handler's own contract).
+    const strayDeadline = await deadlines.create(
+      create(DeadlineSchema, {
+        spec: {
+          caseId,
+          title: "Vet the paper book",
+          dueDate: addDaysToIsoDate(todayInFirmTimezone(), 10),
+          statutoryBasis: "listing direction",
+          ownerId: people.associate2.memberId,
+        },
+      }),
+      auth.as(people.associate.userId),
+    );
+    await expectCode(
+      deadlines.get({ id: strayDeadline.metadata?.id ?? "" }, auth.as(people.associate2.userId)),
+      Code.PermissionDenied,
+      /case members and partners/,
+    );
+    const mine = await deadlines.list({ mine: true }, auth.as(people.associate2.userId));
+    expect(mine.items.map((d) => d.metadata?.id)).not.toContain(strayDeadline.metadata?.id);
+
+    // Positive control: the lead's own deadline (FR-DEAD-001's) still
+    // answers their "mine" view.
+    const leadMine = await deadlines.list({ mine: true }, auth.as(people.associate.userId));
+    expect(leadMine.items.map((d) => d.spec?.title)).toContain("File written statement");
   });
 
   /* -------------------- offboarding (FR-MEMBER-002) ----------------- */

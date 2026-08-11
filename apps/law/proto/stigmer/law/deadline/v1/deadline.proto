@@ -84,7 +84,11 @@ message ListDeadlinesRequest {
   // One case's deadlines. Case content: members and partners only.
   string case_id = 3;
 
-  // The caller's own deadlines — "my deadlines" (owner view).
+  // The caller's own deadlines on their visible cases — "my deadlines"
+  // (owner view). Like every list shape, this intersects with the
+  // member-case visibility matrix: an owned deadline on a case the
+  // caller cannot work does not list (the list never shows what Get
+  // would refuse).
   bool mine = 4;
 
   // Only OPEN deadlines (the working view; resolved ones are record).

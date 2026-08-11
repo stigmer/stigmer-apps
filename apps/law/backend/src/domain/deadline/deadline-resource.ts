@@ -147,13 +147,18 @@ export function deadlineResource(deps: {
             scope = { caseId: ctx.input.caseId };
           } else {
             const member = await deps.guards.requireMember(ctx.caller);
+            // Both arms scope to the caller's visible cases — the request
+            // widens the ask, never the visibility. "Mine" narrows within
+            // that set by ownership; an owned deadline on a case the
+            // caller lost membership of must not list here only for
+            // get() to refuse it (list/detail agreement, and the same
+            // rule the WhatsApp my_day/my_deadlines answers ride).
+            const visible = await deps.guards.visibleCaseIds(member);
+            if (visible !== undefined) {
+              scope = { caseId: { in: [...visible] } };
+            }
             if (ctx.input.mine) {
-              scope = { ownerId: member.metadata?.id ?? "" };
-            } else {
-              const visible = await deps.guards.visibleCaseIds(member);
-              if (visible !== undefined) {
-                scope = { caseId: { in: [...visible] } };
-              }
+              scope = { ...scope, ownerId: member.metadata?.id ?? "" };
             }
           }
 
