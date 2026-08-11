@@ -1,0 +1,52 @@
+{
+  "name": "@stigmer/authorization",
+  "version": "0.1.0",
+  "description": "Shared FGA authorization machinery for Stigmer vertical apps: an OpenFGA-backed engine, idempotent store/model bootstrap, and a set-diff tuple reconciler. Business-agnostic by contract — models and policy live in each app.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stigmer/stigmer-apps.git",
+    "directory": "packages/authorization"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@openfga/sdk": "^0.9.6",
+    "@openfga/syntax-transformer": "^0.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "testcontainers": "^12.1.0",
+    "typescript": "^7.0.2",
+    "vitest": "^3.2.7"
+  },
+  "peerDependencies": {
+    "testcontainers": "^12.1.0"
+  },
+  "peerDependenciesMeta": {
+    "testcontainers": {
+      "optional": true
+    }
+  }
+}
