@@ -40,7 +40,10 @@
 #                                            operator-key-sha256,
 #                                            mcp-shared-secret,
 #                                            fga-preshared-key — from
-#                                            scripts/generate-auth-secrets.mjs)
+#                                            scripts/generate-auth-secrets.mjs
+#                                            — plus platform-client-secret
+#                                            when the firm has the web
+#                                            assistant, T05 web leg)
 # The platform validates every reference exists at apply time, so the
 # secrets must be applied BEFORE this chart is installed (fail-closed).
 #
@@ -147,6 +150,24 @@ spec:
           - name: AUTH_JWT_PREVIOUS_PUBLIC_KEY
             value: {{ values.auth_jwt_previous_public_key }}
           {% endif %}
+          {% if values.assistant_agent_instance_id %}
+          # ── The web assistant (T05 web leg): the backend's optional
+          # all-or-nothing STIGMER_* group (backend/src/config.ts) —
+          # rendered only when the firm has an assistant. The instance
+          # id is the firm's org-visible web AgentInstance (it carries
+          # the MCP secret to embed sessions); the client id pairs with
+          # the platform-client-secret key in the secrets block below.
+          - name: STIGMER_API_BASE_URL
+            value: {{ values.assistant_api_base_url }}
+          - name: STIGMER_ORG
+            value: {{ values.assistant_org }}
+          - name: STIGMER_AGENT_INSTANCE_ID
+            value: {{ values.assistant_agent_instance_id }}
+          - name: STIGMER_PLATFORM_CLIENT_ID
+            value: {{ values.assistant_platform_client_id }}
+          - name: STIGMER_CONSOLE_URL
+            value: {{ values.assistant_console_url }}
+          {% endif %}
         secrets:
           - name: PGPASSWORD
             value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-postgres-credentials
@@ -169,6 +190,13 @@ spec:
           # sidecar enforces below.
           - name: FGA_API_TOKEN
             value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-auth-keys/fga-preshared-key
+          {% if values.assistant_agent_instance_id %}
+          # The PlatformClient's secret (T05 web leg): proves THIS
+          # backend to the agent platform when minting user tokens.
+          # Server-only by definition — the browser never sees it.
+          - name: STIGMER_PLATFORM_CLIENT_SECRET
+            value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-auth-keys/platform-client-secret
+          {% endif %}
       # All three probes hit /healthz, which answers before auth and
       # deliberately does NOT touch the database (server.ts): a store
       # outage must degrade requests, not restart or de-route the pod —
