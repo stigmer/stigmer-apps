@@ -77,7 +77,11 @@ test("intake → diary → recorded outcome auto-schedules → notes → documen
   await page.getByLabel("Listed for").last().fill("evidence");
   await page.getByRole("form", { name: /Record outcome/ }).getByRole("button", { name: "Record outcome" }).click();
   await expect(page.getByRole("status")).toContainText("Next hearing scheduled for 12/09/2099");
-  await expect(page.getByText("Next hearing 12/09/2099")).toBeVisible();
+  // The case's derived next date follows — read from the context rail,
+  // the facts surface (the diary shows the same date in the story).
+  await expect(
+    page.getByRole("complementary", { name: "Matter facts" }).getByText("12/09/2099"),
+  ).toBeVisible();
 
   // Notes: append-only running record, author from the envelope.
   await page.getByRole("button", { name: "Notes" }).click();

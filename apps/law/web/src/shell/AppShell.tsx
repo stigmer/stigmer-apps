@@ -2,8 +2,10 @@
  * The signed-in frame, on the Stigmer console's pattern: no top bar — a
  * full-window flex row of one collapsible left sidebar (brand, primary
  * navigation, the caller in a footer band) and the content column.
- * Screens render into the outlet and own their internal width; the shell
- * gives them the whole window.
+ * Screens render into a centered, width-capped container (the console's
+ * own convention — DD-005): one width for every screen means zero layout
+ * shift between list and detail, and no screen can forget to cap itself.
+ * Content-scoped caps (forms, search boxes) stay inside the screens.
  *
  * The sidebar collapses on every viewport (a floating reopen button
  * appears when closed); below lg it overlays the content instead of
@@ -176,7 +178,7 @@ export function AppShell() {
       </div>
 
       <main className="min-w-0 flex-1 overflow-y-auto">
-        <div className="p-4">
+        <div className="mx-auto w-full max-w-6xl p-4">
           <Outlet />
         </div>
       </main>

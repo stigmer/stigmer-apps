@@ -34,7 +34,7 @@ export function TaskComments(props: { taskId: string }) {
   }
 
   return (
-    <section aria-label="Comments" className="mt-6 max-w-3xl">
+    <section aria-label="Comments" className="mt-6">
       <h2 className="mb-2 text-sm font-semibold">Comments</h2>
 
       {comments.isPending && <Loading label="Loading comments…" />}

@@ -1,9 +1,18 @@
 /**
- * The case story (journey J6): everything about one matter, tabbed by
- * how the day uses it — the diary first (it IS the case), then
- * deadlines, tasks-by-case live on the tasks screen, notes, documents,
- * the working team, and for PARTNERS the money and history tabs (the
- * server refuses everyone else; the tabs simply don't render).
+ * The case story (journey J6) on the DD-005 detail frame: the tabbed
+ * story (the diary first — it IS the case — then deadlines, tasks,
+ * notes, documents, the working team, and for PARTNERS money and
+ * history) in the reading column; the matter's facts, lifecycle, and a
+ * team glance in the context rail, so "next hearing" and "who's on
+ * this" survive however deep the diary scrolls.
+ *
+ * The active tab lives in the URL (?tab=…) and is DERIVED on every
+ * render, validated against the caller's currently-allowed tab set —
+ * never copied into state. That makes the role-resolution race
+ * unrepresentable: while the caller's role is still loading, a deep
+ * link to a partner tab renders the Diary, and the real tab appears
+ * the moment the role confirms. The server refuses non-partners
+ * regardless; the URL merely selects among tabs the caller may see.
  *
  * Editing facts is full-spec replacement through CaseForm; the
  * lifecycle moves ONLY through its own control (a spec edit cannot
@@ -11,16 +20,19 @@
  */
 
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ConnectError } from "@connectrpc/connect";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
 import { Badge } from "../../components/Badge.js";
 import { Button } from "../../components/Button.js";
+import { DetailLayout } from "../../components/DetailLayout.js";
 import { FormError, InlineSelect } from "../../components/Field.js";
+import { MetaItem, MetaPanel } from "../../components/MetaPanel.js";
 import {
   CaseLifecycle,
   type Case,
 } from "../../gen/stigmer/law/case/v1/case_pb.js";
+import { RoleOnCase } from "../../gen/stigmer/law/casemember/v1/casemember_pb.js";
 import {
   caseLifecycleLabel,
   clientRoleLabel,
@@ -28,6 +40,7 @@ import {
   forumKindLabel,
 } from "../../lib/format.js";
 import { isPartnerRole, useMyRole } from "../../session/use-firm-member.js";
+import { useFirmRoster } from "../members/queries.js";
 import { useClient } from "../clients/queries.js";
 import { CaseDeadlines } from "./CaseDeadlines.js";
 import { CaseDiary } from "./CaseDiary.js";
@@ -38,7 +51,7 @@ import { CaseMembersSection } from "./CaseMembersSection.js";
 import { CaseMoney } from "./CaseMoney.js";
 import { CaseNotes } from "./CaseNotes.js";
 import { CaseTasks } from "./CaseTasks.js";
-import { useCase, useUpdateCase, useUpdateCaseLifecycle } from "./queries.js";
+import { useCase, useCaseMembers, useUpdateCase, useUpdateCaseLifecycle } from "./queries.js";
 
 const TABS = ["Diary", "Deadlines", "Tasks", "Notes", "Documents", "Team"] as const;
 const PARTNER_TABS = ["Money", "History"] as const;
@@ -84,14 +97,76 @@ function LifecycleControl(props: { matter: Case }) {
   );
 }
 
+/**
+ * The rail's read-only team glance: who works this matter, always
+ * visible beside the story. Management lives on the Team tab; the one
+ * action here is the jump to it. Shares the Team tab's query — React
+ * Query serves both from one fetch.
+ */
+function TeamGlance(props: { caseId: string; leadMemberId: string; onManage: () => void }) {
+  const members = useCaseMembers(props.caseId);
+  const roster = useFirmRoster();
+
+  return (
+    <section aria-label="Team glance" className="rounded-card border border-line bg-surface p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-semibold">Team</h2>
+        <Button onClick={props.onManage}>Manage</Button>
+      </div>
+      {members.isPending && <Loading label="Loading the team…" />}
+      {members.isError && (
+        <ErrorState error={members.error} onRetry={() => void members.refetch()} />
+      )}
+      {members.isSuccess && members.data.items.length === 0 && (
+        <p className="text-xs text-ink-muted">Nobody on this matter yet.</p>
+      )}
+      {members.isSuccess && members.data.items.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {members.data.items.map((membership) => {
+            const memberId = membership.spec?.memberId ?? "";
+            return (
+              <li key={membership.metadata?.id} className="flex items-center gap-2">
+                <span className="min-w-0 truncate">
+                  {roster.data?.nameOf(memberId) ?? memberId}
+                </span>
+                <span className="text-xs text-ink-muted">
+                  {membership.spec?.roleOnCase === RoleOnCase.CLERK ? "Clerk" : "Lawyer"}
+                </span>
+                {memberId === props.leadMemberId && <Badge>Lead</Badge>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export function CaseDetailScreen() {
   const { id = "" } = useParams();
   const matter = useCase(id);
   const client = useClient(matter.data?.spec?.clientId ?? "");
   const updateCase = useUpdateCase();
   const partner = isPartnerRole(useMyRole());
-  const [tab, setTab] = useState<Tab>("Diary");
+  const [searchParams, setSearchParams] = useSearchParams();
   const [editing, setEditing] = useState(false);
+
+  const tabs: readonly Tab[] = partner ? [...TABS, ...PARTNER_TABS] : TABS;
+  // Derived, never stored: unknown or not-yet-allowed values render the
+  // Diary; the URL stays authoritative when the role resolves.
+  const requested = searchParams.get("tab");
+  const tab: Tab = tabs.find((name) => name === requested) ?? "Diary";
+
+  function onSelectTab(name: Tab) {
+    setSearchParams(
+      (params) => {
+        if (name === "Diary") params.delete("tab");
+        else params.set("tab", name);
+        return params;
+      },
+      { replace: true },
+    );
+  }
 
   if (matter.isPending) return <Loading label="Loading the matter…" />;
   if (matter.isError) {
@@ -105,7 +180,6 @@ export function CaseDetailScreen() {
   const parties = spec.opposingParties.map((p) =>
     p.counselName ? `${p.name} (counsel: ${p.counselName})` : p.name,
   );
-  const tabs: readonly Tab[] = partner ? [...TABS, ...PARTNER_TABS] : TABS;
 
   if (editing) {
     return (
@@ -128,68 +202,82 @@ export function CaseDetailScreen() {
 
   return (
     <section aria-label={spec.fileNumber}>
-      <div className="mb-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-lg font-semibold">{spec.fileNumber}</h1>
-        <LifecycleControl matter={matter.data} />
-        <Button onClick={() => setEditing(true)}>Edit details</Button>
-      </div>
+      <h1 className="mb-4 text-lg font-semibold">{spec.fileNumber}</h1>
 
-      <div className="mb-4 rounded-card border border-line bg-surface p-4 text-sm">
-        <p>
-          <Link to={`/clients/${spec.clientId}`} className="font-medium text-brand hover:underline">
-            {client.data?.spec?.displayName ?? "…"}
-          </Link>{" "}
-          <span className="text-ink-muted">({clientRoleLabel(spec.clientRole)})</span>
-          {parties.length > 0 && <span> vs {parties.join("; ")}</span>}
-        </p>
-        <p className="mt-1 text-xs text-ink-muted">
-          {forumKindLabel(spec.forum?.forumKind ?? 0)}
-          {spec.forum?.name && ` — ${spec.forum.name}`}
-          {spec.forum?.bench && `, ${spec.forum.bench}`}
-          {spec.stage && ` · stage: ${spec.stage}`}
-          {spec.caseType && ` · ${spec.caseType}`}
-        </p>
-        <p className="mt-1 text-xs text-ink-muted">
-          {spec.courtCaseNumber
-            ? `Court no. ${spec.courtCaseNumber}`
-            : "Court number not assigned yet"}
-          {spec.cnr && ` · CNR ${spec.cnr}`}
-        </p>
-        <p className="mt-1">
-          {matter.data.status?.nextHearingDate ? (
-            <>Next hearing {formatCalendarDate(matter.data.status.nextHearingDate)}</>
-          ) : (
-            <Badge tone="warn">No next date — nothing is scheduled on this matter</Badge>
-          )}
-        </p>
-      </div>
+      <DetailLayout
+        railLabel="Matter facts"
+        rail={
+          <>
+            <MetaPanel footer={<Button onClick={() => setEditing(true)}>Edit details</Button>}>
+              <MetaItem label="Client">
+                <Link
+                  to={`/clients/${spec.clientId}`}
+                  className="font-medium text-brand hover:underline"
+                >
+                  {client.data?.spec?.displayName ?? "…"}
+                </Link>{" "}
+                <span className="text-xs text-ink-muted">
+                  ({clientRoleLabel(spec.clientRole)})
+                </span>
+              </MetaItem>
+              {parties.length > 0 && <MetaItem label="Versus">{parties.join("; ")}</MetaItem>}
+              <MetaItem label="Forum">
+                {forumKindLabel(spec.forum?.forumKind ?? 0)}
+                {spec.forum?.name && ` — ${spec.forum.name}`}
+                {spec.forum?.bench && `, ${spec.forum.bench}`}
+              </MetaItem>
+              {spec.stage && <MetaItem label="Stage">{spec.stage}</MetaItem>}
+              {spec.caseType && <MetaItem label="Case type">{spec.caseType}</MetaItem>}
+              <MetaItem label="Court number">
+                {spec.courtCaseNumber || "Not assigned yet"}
+              </MetaItem>
+              {spec.cnr && <MetaItem label="CNR">{spec.cnr}</MetaItem>}
+              <MetaItem label="Next hearing">
+                {matter.data.status?.nextHearingDate ? (
+                  formatCalendarDate(matter.data.status.nextHearingDate)
+                ) : (
+                  <Badge tone="warn">No next date — nothing is scheduled on this matter</Badge>
+                )}
+              </MetaItem>
+              <MetaItem label="Matter status">
+                <LifecycleControl matter={matter.data} />
+              </MetaItem>
+            </MetaPanel>
+            <TeamGlance
+              caseId={id}
+              leadMemberId={spec.leadLawyerId}
+              onManage={() => onSelectTab("Team")}
+            />
+          </>
+        }
+      >
+        <nav aria-label="Matter sections" className="flex flex-wrap gap-1 border-b border-line">
+          {tabs.map((name) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => onSelectTab(name)}
+              aria-current={tab === name ? "page" : undefined}
+              className={
+                tab === name
+                  ? "h-9 rounded-t-card border-b-2 border-brand px-3 text-sm font-medium text-brand"
+                  : "h-9 rounded-t-card px-3 text-sm text-ink-muted hover:text-ink"
+              }
+            >
+              {name}
+            </button>
+          ))}
+        </nav>
 
-      <nav aria-label="Matter sections" className="flex flex-wrap gap-1 border-b border-line">
-        {tabs.map((name) => (
-          <button
-            key={name}
-            type="button"
-            onClick={() => setTab(name)}
-            aria-current={tab === name ? "page" : undefined}
-            className={
-              tab === name
-                ? "h-9 rounded-t-card border-b-2 border-brand px-3 text-sm font-medium text-brand"
-                : "h-9 rounded-t-card px-3 text-sm text-ink-muted hover:text-ink"
-            }
-          >
-            {name}
-          </button>
-        ))}
-      </nav>
-
-      {tab === "Diary" && <CaseDiary caseId={id} />}
-      {tab === "Deadlines" && <CaseDeadlines caseId={id} />}
-      {tab === "Tasks" && <CaseTasks caseId={id} />}
-      {tab === "Notes" && <CaseNotes caseId={id} />}
-      {tab === "Documents" && <CaseDocuments caseId={id} />}
-      {tab === "Team" && <CaseMembersSection caseId={id} leadMemberId={spec.leadLawyerId} />}
-      {tab === "Money" && partner && <CaseMoney caseId={id} />}
-      {tab === "History" && partner && <CaseHistory caseId={id} />}
+        {tab === "Diary" && <CaseDiary caseId={id} />}
+        {tab === "Deadlines" && <CaseDeadlines caseId={id} />}
+        {tab === "Tasks" && <CaseTasks caseId={id} />}
+        {tab === "Notes" && <CaseNotes caseId={id} />}
+        {tab === "Documents" && <CaseDocuments caseId={id} />}
+        {tab === "Team" && <CaseMembersSection caseId={id} leadMemberId={spec.leadLawyerId} />}
+        {tab === "Money" && partner && <CaseMoney caseId={id} />}
+        {tab === "History" && partner && <CaseHistory caseId={id} />}
+      </DetailLayout>
     </section>
   );
 }

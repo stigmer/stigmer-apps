@@ -1,15 +1,22 @@
 /**
- * One client and all their matters (FR-CLIENT-002) — the cross-case view
- * the register exists for. The matter list is the server's summary list
- * scoped by client, so a non-member lawyer sees exactly the list lines
- * the matrix allows and nothing more.
+ * One client and all their matters (FR-CLIENT-002) on the DD-005 detail
+ * frame: the matter list — the cross-case view the register exists for
+ * — in the reading column, the client's contact facts in the context
+ * rail. The matter list is the server's summary list scoped by client,
+ * so a non-member lawyer sees exactly the list lines the matrix allows
+ * and nothing more.
+ *
+ * Edit mode replaces the whole detail frame with the focused form
+ * (DD-005's uniform rule).
  */
 
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
 import { Button, ButtonLink } from "../../components/Button.js";
+import { DetailLayout } from "../../components/DetailLayout.js";
 import { ListCard } from "../../components/ListCard.js";
+import { MetaItem, MetaPanel } from "../../components/MetaPanel.js";
 import { Pagination } from "../../components/Pagination.js";
 import { ClientKind } from "../../gen/stigmer/law/client/v1/client_pb.js";
 import { clientKindLabel } from "../../lib/format.js";
@@ -53,48 +60,56 @@ export function ClientDetailScreen() {
 
   return (
     <section aria-label={spec.displayName}>
-      <div className="mb-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-lg font-semibold">{spec.displayName}</h1>
-        <Button onClick={() => setEditing(true)}>Edit</Button>
-      </div>
+      <h1 className="mb-4 text-lg font-semibold">{spec.displayName}</h1>
 
-      <div className="mb-4 rounded-card border border-line bg-surface p-4 text-sm">
-        <p className="text-ink-muted">
-          {clientKindLabel(spec.clientKind ?? ClientKind.UNSPECIFIED)}
-          {spec.phones.length > 0 && ` · ${spec.phones.join(", ")}`}
-          {spec.email && ` · ${spec.email}`}
-        </p>
-        {spec.address && <p className="mt-1 text-ink-muted">{spec.address}</p>}
-        {spec.notes && <p className="mt-1 whitespace-pre-wrap">{spec.notes}</p>}
-      </div>
-
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">Matters</h2>
-        <ButtonLink to="/cases/new" variant="primary">
-          New case
-        </ButtonLink>
-      </div>
-      {matters.isPending && <Loading label="Loading matters…" />}
-      {matters.isError && (
-        <ErrorState error={matters.error} onRetry={() => void matters.refetch()} />
-      )}
-      {matters.isSuccess && matters.data.items.length === 0 && (
-        <EmptyState title="No matters for this client yet" />
-      )}
-      {matters.isSuccess && matters.data.items.length > 0 && (
-        <>
-          <ListCard>
-            {matters.data.items.map((summary) => (
-              <CaseSummaryRow key={summary.id} summary={summary} />
-            ))}
-          </ListCard>
-          <Pagination
-            page={page}
-            totalCount={Number(matters.data.totalCount)}
-            onPage={setPage}
-          />
-        </>
-      )}
+      <DetailLayout
+        railLabel="Client facts"
+        rail={
+          <MetaPanel footer={<Button onClick={() => setEditing(true)}>Edit</Button>}>
+            <MetaItem label="Kind">
+              {clientKindLabel(spec.clientKind ?? ClientKind.UNSPECIFIED)}
+            </MetaItem>
+            {spec.phones.length > 0 && (
+              <MetaItem label="Phone">{spec.phones.join(", ")}</MetaItem>
+            )}
+            {spec.email && <MetaItem label="Email">{spec.email}</MetaItem>}
+            {spec.address && <MetaItem label="Address">{spec.address}</MetaItem>}
+            {spec.notes && (
+              <MetaItem label="Notes">
+                <span className="whitespace-pre-wrap">{spec.notes}</span>
+              </MetaItem>
+            )}
+          </MetaPanel>
+        }
+      >
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">Matters</h2>
+          <ButtonLink to="/cases/new" variant="primary">
+            New case
+          </ButtonLink>
+        </div>
+        {matters.isPending && <Loading label="Loading matters…" />}
+        {matters.isError && (
+          <ErrorState error={matters.error} onRetry={() => void matters.refetch()} />
+        )}
+        {matters.isSuccess && matters.data.items.length === 0 && (
+          <EmptyState title="No matters for this client yet" />
+        )}
+        {matters.isSuccess && matters.data.items.length > 0 && (
+          <>
+            <ListCard>
+              {matters.data.items.map((summary) => (
+                <CaseSummaryRow key={summary.id} summary={summary} />
+              ))}
+            </ListCard>
+            <Pagination
+              page={page}
+              totalCount={Number(matters.data.totalCount)}
+              onPage={setPage}
+            />
+          </>
+        )}
+      </DetailLayout>
     </section>
   );
 }
