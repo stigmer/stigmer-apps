@@ -12,6 +12,11 @@ import type { ReactNode } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { vi } from "vitest";
 import { ApiClientsProvider, type ApiClients } from "../api/clients.js";
+import { AssistantProvider } from "../assistant/assistant-context.js";
+import {
+  GetAssistantConfigResponseSchema,
+  MintAssistantTokenResponseSchema,
+} from "../gen/stigmer/law/assistant/v1/assistant_pb.js";
 import {
   FirmMemberSchema,
   FirmRole,
@@ -54,6 +59,32 @@ export function fakeFirmMembers() {
   };
 }
 
+/**
+ * The assistant surface fake — DISABLED by default, so every screen
+ * renders exactly as an open-source deployment without a platform org
+ * would (no Ask AI affordance). Suites testing the assistant pass
+ * enabled config explicitly.
+ */
+export function fakeAssistant(config?: {
+  enabled?: boolean;
+  apiBaseUrl?: string;
+  org?: string;
+  agentInstanceId?: string;
+  consoleUrl?: string;
+}) {
+  return {
+    getConfig: vi.fn(async () =>
+      create(GetAssistantConfigResponseSchema, { enabled: false, ...config }),
+    ),
+    mintToken: vi.fn(async () =>
+      create(MintAssistantTokenResponseSchema, {
+        accessToken: "platform-token-test",
+        expiresInSeconds: 900,
+      }),
+    ),
+  };
+}
+
 function fakeSessionKit(overrides?: Partial<SessionKit>): SessionKit {
   // Stable snapshot reference — useSyncExternalStore loops on a getState
   // that manufactures a new object per call (the same reason the real
@@ -89,8 +120,12 @@ export function renderScreen(
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       <SessionProvider kit={fakeSessionKit(options?.session)}>
-        <ApiClientsProvider clients={clients as ApiClients}>
-          <RouterProvider router={router} />
+        <ApiClientsProvider clients={{ assistant: fakeAssistant(), ...clients } as ApiClients}>
+          {/* The real app mounts this in AppShell; screens under test
+              render without the shell, so the harness provides it. */}
+          <AssistantProvider>
+            <RouterProvider router={router} />
+          </AssistantProvider>
         </ApiClientsProvider>
       </SessionProvider>
     </QueryClientProvider>,

@@ -15,6 +15,7 @@
 import { createClient, type Client, type Transport } from "@connectrpc/connect";
 import { createContext, useContext, type ReactNode } from "react";
 import type { FilesClient } from "./files.js";
+import { AssistantService } from "../gen/stigmer/law/assistant/v1/assistant_pb.js";
 import { AuditEntryService } from "../gen/stigmer/law/auditentry/v1/auditentry_pb.js";
 import { CaseService } from "../gen/stigmer/law/case/v1/case_pb.js";
 import { CaseMemberService } from "../gen/stigmer/law/casemember/v1/casemember_pb.js";
@@ -48,6 +49,8 @@ export interface ApiClients {
   readonly documents: Client<typeof DocumentService>;
   /** Account administration (DD-003 D4) — managing partner + operator only. */
   readonly users: Client<typeof UserService>;
+  /** The assistant access surface (T05 web leg): config + token mint. */
+  readonly assistant: Client<typeof AssistantService>;
   /** The byte routes (D7) — the one non-Connect member of the surface. */
   readonly files: FilesClient;
 }
@@ -69,6 +72,7 @@ export function createApiClients(transport: Transport, files: FilesClient): ApiC
     taskComments: createClient(TaskCommentService, transport),
     documents: createClient(DocumentService, transport),
     users: createClient(UserService, transport),
+    assistant: createClient(AssistantService, transport),
     files,
   };
 }

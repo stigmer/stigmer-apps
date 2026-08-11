@@ -27,6 +27,8 @@ import {
   PanelLeft,
   Users,
 } from "lucide-react";
+import { AskAiButton, AssistantHost } from "../assistant/AskAiButton.js";
+import { AssistantProvider } from "../assistant/assistant-context.js";
 import { useUnreadCount } from "../screens/inbox/queries.js";
 import { isPartnerRole, useMyRole } from "../session/use-firm-member.js";
 import { useCurrentUser, useSessionKit } from "../session/use-session.js";
@@ -68,6 +70,7 @@ export function AppShell() {
   }
 
   return (
+    <AssistantProvider>
     <div className="flex h-screen">
       {!open && (
         <button
@@ -154,6 +157,10 @@ export function AppShell() {
                 </span>
               )}
             </NavLink>
+            {/* The assistant entry sits with navigation (it goes
+                somewhere: the panel), rendered only when the deployment
+                has an assistant configured. */}
+            <AskAiButton />
           </nav>
 
           <div className="flex items-center gap-1 border-t border-sidebar-line p-2">
@@ -182,6 +189,11 @@ export function AppShell() {
           <Outlet />
         </div>
       </main>
+
+      {/* Mounted at the shell so the panel survives navigation; the
+          heavy chunk loads only on the first open (AssistantHost). */}
+      <AssistantHost />
     </div>
+    </AssistantProvider>
   );
 }

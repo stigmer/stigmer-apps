@@ -22,6 +22,7 @@
 import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ConnectError } from "@connectrpc/connect";
+import { AskAiAboutCaseButton } from "../../assistant/AskAiButton.js";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
 import { Badge } from "../../components/Badge.js";
 import { Button } from "../../components/Button.js";
@@ -202,7 +203,10 @@ export function CaseDetailScreen() {
 
   return (
     <section aria-label={spec.fileNumber}>
-      <h1 className="mb-4 text-lg font-semibold">{spec.fileNumber}</h1>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <h1 className="text-lg font-semibold">{spec.fileNumber}</h1>
+        <AskAiAboutCaseButton fileNumber={spec.fileNumber} />
+      </div>
 
       <DetailLayout
         railLabel="Matter facts"

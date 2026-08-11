@@ -1,0 +1,30 @@
+/*
+ * The assistant panel's theme bridge: the platform SDK reads --stgm-*
+ * tokens; the app's palette lives in --law-* (styles/app.css). Mapping
+ * the core tokens here — scoped to the panel container, never :root —
+ * makes the embedded conversation wear the app's paper, ink, and counsel
+ * blue while everything unmapped keeps the SDK's accessible defaults.
+ * (This file rides the lazily-loaded assistant chunk, so none of it —
+ * including the SDK stylesheet imported by AssistantPanel — weighs the
+ * app's core screens.)
+ */
+
+.law-assistant {
+  --stgm-font-sans: var(--font-sans);
+  --stgm-radius: var(--law-radius);
+
+  --stgm-background: var(--law-surface);
+  --stgm-foreground: var(--law-ink);
+  --stgm-card: var(--law-paper);
+  --stgm-card-foreground: var(--law-ink);
+  --stgm-border: var(--law-line);
+  --stgm-muted-foreground: var(--law-ink-muted);
+
+  --stgm-primary: var(--law-brand);
+  --stgm-primary-foreground: var(--law-on-brand);
+  --stgm-accent: var(--law-brand-surface);
+  --stgm-accent-foreground: var(--law-brand);
+
+  --stgm-destructive: var(--law-danger);
+  --stgm-warning: var(--law-warn);
+}
