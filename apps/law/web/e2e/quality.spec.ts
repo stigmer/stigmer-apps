@@ -54,6 +54,17 @@ test("the facts rail answers to the content's width, not the window's (container
   const wideTabs = await tabs.boundingBox();
   expect(wideRail && wideTabs && wideRail.x > wideTabs.x + wideTabs.width).toBe(true);
 
+  // The DISCRIMINATING width (DD-007 §5a): at 1050px with the sidebar
+  // pushing (lg+), the content container is ~762px — squarely in the
+  // band where the ORIGINAL 48rem threshold stacked but the amended
+  // 36rem one must NOT. This is the dock-open squeeze, simulated by
+  // window width; without this assertion a viewport-breakpoint
+  // regression would pass the wide and narrow checks identically.
+  await page.setViewportSize({ width: 1050, height: 720 });
+  const midRail = await rail.boundingBox();
+  const midTabs = await tabs.boundingBox();
+  expect(midRail && midTabs && midRail.x > midTabs.x + midTabs.width).toBe(true);
+
   // Narrow the window until the content area drops under the @xl
   // threshold: the rail wraps BELOW the column. The threshold is
   // deliberately LOW (DD-007 amendment): opening the Ask AI dock must
