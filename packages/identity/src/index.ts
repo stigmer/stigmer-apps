@@ -21,15 +21,20 @@ export {
 export type { CallerResolver } from "./transport.js";
 export { createCallerResolver } from "./transport.js";
 
-// Channel identity (T05): verified channel sender → user-kind principal.
-// A separate seam, deliberately NOT part of the authenticator chain —
-// consumed only behind a channel entrance's own gate (see the module doc).
+// Caller identity (T05): platform-asserted caller → user-kind principal
+// (whatsapp_phone by E.164, stigmer_user by email). A separate seam,
+// deliberately NOT part of the authenticator chain — consumed only
+// behind an MCP entrance's own gate (see the module doc).
 export type {
-  ChannelIdentity,
-  ChannelIdentityResolver,
-  ChannelResolution,
-} from "./channel-identity.js";
-export { createChannelIdentityResolver, WHATSAPP_PHONE_KIND } from "./channel-identity.js";
+  CallerIdentity,
+  CallerIdentityResolver,
+  CallerResolution,
+} from "./caller-identity.js";
+export {
+  createCallerIdentityResolver,
+  STIGMER_USER_KIND,
+  WHATSAPP_PHONE_KIND,
+} from "./caller-identity.js";
 
 // Tokens & keys
 export type { AccessTokenIssuer } from "./token.js";

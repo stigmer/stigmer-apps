@@ -29,7 +29,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { channelIdentityFromHeaders, identityLogToken } from "./identity.js";
+import { callerIdentityFromHeaders, identityLogToken } from "./identity.js";
 import { buildFirmMcpServer } from "./server.js";
 import type { ToolDeps } from "./tools/shared.js";
 
@@ -102,7 +102,7 @@ async function handle(
     return;
   }
 
-  const identity = channelIdentityFromHeaders(req);
+  const identity = callerIdentityFromHeaders(req);
   console.info(
     JSON.stringify({ msg: "mcp request", caller: identityLogToken(identity) }),
   );

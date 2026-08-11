@@ -24,7 +24,7 @@ identity provider" one authenticator away.
 | `createAccessTokenIssuer` / `loadSigningKeys` | RS256, `kid` = RFC 7638 thumbprint, verify-only previous key for rotation. Production loads configured keys and fails fast; dev/tests use `generateEphemeralSigningKeys()`. |
 | `userResource` | The shared `User` resource on the commons pipeline (`stigmer.identity.user.v1`, apiVersion `identity.stigmer.ai/v1`). |
 | `CredentialStore` / `RefreshTokenStore` | Ports; Postgres adapters under `@stigmer/identity/postgres`. Refresh tokens are opaque, hashed at rest, one-time-use with reuse detection. |
-| `createChannelIdentityResolver` | (T05) A channel-verified sender identity (`whatsapp_phone` wa_id) resolved to a user-kind principal by exact E.164 match. **Not part of the chain** — see the box below. |
+| `createCallerIdentityResolver` | (T05) A platform-asserted caller identity resolved to a user-kind principal: `whatsapp_phone` (wa_id) by exact E.164 match, `stigmer_user` by exact email match. **Not part of the chain** — see the box below. |
 
 ## The profile pattern (binding on every vertical)
 
@@ -94,27 +94,35 @@ Deploy note: the app's build must ship both migration directories beside
 the bundle (the deployed image carries no `node_modules`) — see the first
 consumer's `build.mjs`.
 
-## Channel identity is a separate seam, not a chain link
+## Caller identity is a separate seam, not a chain link
 
 An earlier revision of this README planned T05's channel binding as one
 more authenticator in the chain. **That plan was wrong for the topology
 that actually shipped, and following it would have been a security
 defect**: everything in the chain guards *every* request — web login
-included — so channel-identity headers in the chain would let anyone who
+included — so caller-identity headers in the chain would let anyone who
 can set two headers act as any user. The assumption only held for a
 separate MCP server process presenting a single exchanged credential;
-the first consumer mounts its channel entrance inside the app instead.
+the first consumer mounts its MCP entrance inside the app instead.
 
-So `createChannelIdentityResolver` is deliberately a distinct seam: the
-app consumes it ONLY behind its channel entrance's own shared-secret
-gate, never on the general request path. Rules (each a tested
-invariant): exact E.164 match with no normalization layer (`'+' + wa_id`
-— the proto's strict validation makes fuzz unnecessary by construction),
-exactly one match or refuse (ambiguity refuses, never guesses), and a
-store failure propagates as an outage rather than degrading to
-"unknown". The trust model — whoever holds the channel gate's secret can
-assert any identity — is the consuming app's design record (first
-consumer: stigmer-law DD-008).
+So `createCallerIdentityResolver` is deliberately a distinct seam: the
+app consumes it ONLY behind its MCP entrance's own shared-secret
+gate, never on the general request path. Two identity kinds, each with
+its own binding rule: `whatsapp_phone` by exact E.164 match with no
+normalization layer (`'+' + wa_id` — the proto's strict validation makes
+fuzz unnecessary by construction), and `stigmer_user` by exact lowercase
+email match through the natural key (a platform-authenticated user, the
+web-embed path). Shared rules (each a tested invariant): exactly one
+match or refuse (phone ambiguity refuses, never guesses; email is unique
+by construction), and a store failure propagates as an outage rather
+than degrading to "unknown". The trust model — whoever holds the MCP
+gate's secret can assert any identity — is the consuming app's design
+record (first consumer: stigmer-law DD-008).
+
+(The seam was named "channel identity" until the `stigmer_user` kind
+arrived: a platform-authenticated user is not a channel, and the
+platform's own name for the mechanism — and for its wire headers,
+`X-Stigmer-Caller-Kind`/`-Value` — is caller identity.)
 
 ## Growth path (each waits for a real consumer)
 
@@ -123,8 +131,8 @@ consumer: stigmer-law DD-008).
   the enterprise-SSO answer; it plugs into the chain without app changes.
 - **API-key authenticator** — platform-precedented (`stk_`), when a
   machine consumer exists.
-- **Further channel kinds** (Slack user id, email) — new branches in the
-  channel resolver, each with its own binding rule.
+- **Further caller-identity kinds** (Slack user id, email) — new
+  branches in the caller resolver, each with its own binding rule.
 
 ## Invariants (tested)
 

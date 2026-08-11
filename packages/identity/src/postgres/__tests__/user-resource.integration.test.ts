@@ -18,9 +18,9 @@ import {
   operatorKeyAuthenticator,
 } from "../../authenticator.js";
 import {
-  createChannelIdentityResolver,
+  createCallerIdentityResolver,
   WHATSAPP_PHONE_KIND,
-} from "../../channel-identity.js";
+} from "../../caller-identity.js";
 import { UserSchema, UserService } from "../../gen/stigmer/identity/user/v1/user_pb.js";
 import { generateEphemeralSigningKeys } from "../../keys.js";
 import { generateOperatorKey } from "../../operator-key.js";
@@ -304,10 +304,10 @@ describe("User on the commons pipeline (identity edition)", () => {
       );
     });
 
-    it("the channel resolver follows the write: a phone set by update resolves, a phone omitted un-resolves", async () => {
+    it("the caller resolver follows the write: a phone set by update resolves, a phone omitted un-resolves", async () => {
       // The reason Update exists at all (T05): the resolver reads the
       // GENERATED phone column, so an update IS a channel re-binding.
-      const resolve = createChannelIdentityResolver(
+      const resolve = createCallerIdentityResolver(
         new PostgresResourceStore(pool, identityStoreKinds()),
       );
       const created = await client.create(

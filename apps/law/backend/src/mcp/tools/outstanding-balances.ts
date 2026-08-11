@@ -9,7 +9,7 @@
 
 import { create } from "@bufbuild/protobuf";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ChannelIdentity } from "@stigmer/identity";
+import type { CallerIdentity } from "@stigmer/identity";
 import { z } from "zod";
 import { SearchClientsRequestSchema } from "../../gen/stigmer/law/client/v1/client_pb.js";
 import { ListOutstandingRequestSchema } from "../../gen/stigmer/law/ledgerentry/v1/ledgerentry_pb.js";
@@ -21,7 +21,7 @@ const NAME = "outstanding_balances";
 
 export function registerOutstandingBalances(
   server: McpServer,
-  identity: ChannelIdentity | undefined,
+  identity: CallerIdentity | undefined,
   deps: ToolDeps,
 ): string {
   server.registerTool(
@@ -40,7 +40,7 @@ export function registerOutstandingBalances(
       },
       annotations: { readOnlyHint: true },
     },
-    gated(NAME, identity, deps.resolveChannelIdentity, async (args, caller) => {
+    gated(NAME, identity, deps.resolveCallerIdentity, async (args, caller) => {
       let clientId: string | undefined;
       let clientName: string | undefined;
       if (args.client) {

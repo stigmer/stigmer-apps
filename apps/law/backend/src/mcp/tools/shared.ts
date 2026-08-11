@@ -16,7 +16,7 @@
  */
 
 import { create } from "@bufbuild/protobuf";
-import type { ChannelIdentityResolver } from "@stigmer/identity";
+import type { CallerIdentityResolver } from "@stigmer/identity";
 import type { CallerPrincipal, ResourceStore } from "@stigmer/resource-api";
 import type { Case } from "../../gen/stigmer/law/case/v1/case_pb.js";
 import { GetCaseRequestSchema } from "../../gen/stigmer/law/case/v1/case_pb.js";
@@ -30,7 +30,7 @@ import { formatDate, formatOutcome, formatState } from "../format.js";
 
 export interface ToolDeps {
   readonly resources: AppResources;
-  readonly resolveChannelIdentity: ChannelIdentityResolver;
+  readonly resolveCallerIdentity: CallerIdentityResolver;
   /**
    * The one shared store — for page-shaped DISPLAY lookups only (file
    * numbers for lines the caller already received through authorized

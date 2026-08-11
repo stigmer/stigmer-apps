@@ -8,7 +8,7 @@
 
 import { create } from "@bufbuild/protobuf";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ChannelIdentity } from "@stigmer/identity";
+import type { CallerIdentity } from "@stigmer/identity";
 import { z } from "zod";
 import { CaseNoteSchema } from "../../gen/stigmer/law/casenote/v1/casenote_pb.js";
 import { gated, textResult } from "../gate.js";
@@ -18,7 +18,7 @@ const NAME = "add_case_note";
 
 export function registerAddCaseNote(
   server: McpServer,
-  identity: ChannelIdentity | undefined,
+  identity: CallerIdentity | undefined,
   deps: ToolDeps,
 ): string {
   server.registerTool(
@@ -43,7 +43,7 @@ export function registerAddCaseNote(
       // untrue hint would approval-gate this tool into a silent skip on
       // the unattended WhatsApp surface.
     },
-    gated(NAME, identity, deps.resolveChannelIdentity, async (args, caller) => {
+    gated(NAME, identity, deps.resolveCallerIdentity, async (args, caller) => {
       const matter = await caseByFileNumber(deps.resources, caller.principal, args.file_number);
       const saved = await deps.resources.caseNotes.invoke.create(
         create(CaseNoteSchema, {

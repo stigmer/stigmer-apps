@@ -5,7 +5,7 @@ import type { InProcessEventDispatcher, ResourceStore } from "@stigmer/resource-
 import type { AuthorizationEngine } from "@stigmer/authorization";
 import {
   authService,
-  createChannelIdentityResolver,
+  createCallerIdentityResolver,
   type ActivationCodeStore,
   type CredentialStore,
   type RefreshTokenStore,
@@ -89,9 +89,9 @@ export function createFirmServers(
       { sharedSecret: mcp.sharedSecret },
       {
         resources: app.resources,
-        // The channel resolver reads the SAME store the pipelines use;
+        // The caller resolver reads the SAME store the pipelines use;
         // deliberately not in the authenticator chain (identity README).
-        resolveChannelIdentity: createChannelIdentityResolver(deps.store),
+        resolveCallerIdentity: createCallerIdentityResolver(deps.store),
         store: deps.store,
       },
     ),

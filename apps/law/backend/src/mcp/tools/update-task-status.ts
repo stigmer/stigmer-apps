@@ -9,7 +9,7 @@
 
 import { create } from "@bufbuild/protobuf";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ChannelIdentity } from "@stigmer/identity";
+import type { CallerIdentity } from "@stigmer/identity";
 import { z } from "zod";
 import {
   TaskState,
@@ -30,7 +30,7 @@ const WIRE_STATE: Record<(typeof STATES)[number], TaskState> = {
 
 export function registerUpdateTaskStatus(
   server: McpServer,
-  identity: ChannelIdentity | undefined,
+  identity: CallerIdentity | undefined,
   deps: ToolDeps,
 ): string {
   server.registerTool(
@@ -51,7 +51,7 @@ export function registerUpdateTaskStatus(
       // status change, and an untrue hint would approval-gate this tool
       // into a silent skip on the unattended WhatsApp surface.
     },
-    gated(NAME, identity, deps.resolveChannelIdentity, async (args, caller) => {
+    gated(NAME, identity, deps.resolveCallerIdentity, async (args, caller) => {
       const saved = await deps.resources.tasks.invoke.updateStatus(
         create(UpdateTaskStatusRequestSchema, {
           id: args.task_id.trim(),

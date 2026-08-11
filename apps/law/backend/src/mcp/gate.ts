@@ -1,6 +1,6 @@
 /**
  * The one enforcement point every tool handler passes through. Its ONLY
- * job is "who is calling": resolve the channel identity to a real user
+ * job is "who is calling": resolve the caller identity to a real user
  * or refuse with the exact relayable sentence. It deliberately carries
  * NO tool-to-permission table — the reference implementation keeps one,
  * and copying it here would create a second definition of "what may
@@ -19,7 +19,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { Code, ConnectError } from "@connectrpc/connect";
 import type { CallerPrincipal } from "@stigmer/resource-api";
-import type { ChannelIdentity, ChannelIdentityResolver, User } from "@stigmer/identity";
+import type { CallerIdentity, CallerIdentityResolver, User } from "@stigmer/identity";
 import { identityLogToken } from "./identity.js";
 import {
   REFUSAL_AMBIGUOUS_CALLER,
@@ -63,8 +63,8 @@ const RELAYED_CODES = new Set<Code>([
 
 export function gated<Args>(
   tool: string,
-  identity: ChannelIdentity | undefined,
-  resolveChannelIdentity: ChannelIdentityResolver,
+  identity: CallerIdentity | undefined,
+  resolveCallerIdentity: CallerIdentityResolver,
   handler: (args: Args, caller: StaffCaller) => Promise<CallToolResult>,
 ): (args: Args) => Promise<CallToolResult> {
   return async (args) => {
@@ -87,7 +87,7 @@ export function gated<Args>(
 
     let caller: StaffCaller;
     try {
-      const resolution = await resolveChannelIdentity(identity);
+      const resolution = await resolveCallerIdentity(identity);
       if (resolution.outcome === "unknown") {
         logCall("refused:unknown");
         return errorResult(REFUSAL_UNKNOWN_CALLER);

@@ -9,7 +9,7 @@
 
 import { create } from "@bufbuild/protobuf";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ChannelIdentity } from "@stigmer/identity";
+import type { CallerIdentity } from "@stigmer/identity";
 import { addDaysToIsoDate, todayInFirmTimezone } from "../../domain/firm-clock.js";
 import { ListCasesRequestSchema } from "../../gen/stigmer/law/case/v1/case_pb.js";
 import { ListDeadlinesRequestSchema } from "../../gen/stigmer/law/deadline/v1/deadline_pb.js";
@@ -27,7 +27,7 @@ const NAME = "firm_overview";
 
 export function registerFirmOverview(
   server: McpServer,
-  identity: ChannelIdentity | undefined,
+  identity: CallerIdentity | undefined,
   deps: ToolDeps,
 ): string {
   server.registerTool(
@@ -41,7 +41,7 @@ export function registerFirmOverview(
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
-    gated(NAME, identity, deps.resolveChannelIdentity, async (_args, caller) => {
+    gated(NAME, identity, deps.resolveCallerIdentity, async (_args, caller) => {
       const today = todayInFirmTimezone();
       const probe = { pageSize: 1 };
       const [active, noNextDate, board, unrecorded, deadlines, overdue] = await Promise.all([

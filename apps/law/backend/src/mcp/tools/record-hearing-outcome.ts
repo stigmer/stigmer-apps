@@ -12,7 +12,7 @@
 
 import { create } from "@bufbuild/protobuf";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ChannelIdentity } from "@stigmer/identity";
+import type { CallerIdentity } from "@stigmer/identity";
 import { z } from "zod";
 import { todayInFirmTimezone } from "../../domain/firm-clock.js";
 import {
@@ -51,7 +51,7 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function registerRecordHearingOutcome(
   server: McpServer,
-  identity: ChannelIdentity | undefined,
+  identity: CallerIdentity | undefined,
   deps: ToolDeps,
 ): string {
   server.registerTool(
@@ -89,7 +89,7 @@ export function registerRecordHearingOutcome(
       },
       annotations: { readOnlyHint: false },
     },
-    gated(NAME, identity, deps.resolveChannelIdentity, async (args, caller) => {
+    gated(NAME, identity, deps.resolveCallerIdentity, async (args, caller) => {
       const theCase = await caseByFileNumber(deps.resources, caller.principal, args.file_number);
       const caseId = theCase.metadata?.id ?? "";
 

@@ -11,7 +11,7 @@
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ChannelIdentity } from "@stigmer/identity";
+import type { CallerIdentity } from "@stigmer/identity";
 import { registerAddCaseNote } from "./tools/add-case-note.js";
 import { registerCaseStory } from "./tools/case-story.js";
 import { registerFindTasks } from "./tools/find-tasks.js";
@@ -38,7 +38,7 @@ const SERVER_VERSION = "2.0.0";
  */
 export const FIRM_TOOL_REGISTRARS: readonly ((
   server: McpServer,
-  identity: ChannelIdentity | undefined,
+  identity: CallerIdentity | undefined,
   deps: ToolDeps,
 ) => string)[] = [
   registerMyDay,
@@ -63,7 +63,7 @@ export const FIRM_TOOL_REGISTRARS: readonly ((
  * cannot work.
  */
 export function buildFirmMcpServer(
-  identity: ChannelIdentity | undefined,
+  identity: CallerIdentity | undefined,
   deps: ToolDeps,
 ): McpServer {
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });

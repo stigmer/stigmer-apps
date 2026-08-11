@@ -7,7 +7,7 @@
 
 import { create } from "@bufbuild/protobuf";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ChannelIdentity } from "@stigmer/identity";
+import type { CallerIdentity } from "@stigmer/identity";
 import { z } from "zod";
 import {
   ListTasksRequestSchema,
@@ -35,7 +35,7 @@ const WIRE_FILTER: Record<(typeof FILTERS)[number], TaskListFilter> = {
 
 export function registerFindTasks(
   server: McpServer,
-  identity: ChannelIdentity | undefined,
+  identity: CallerIdentity | undefined,
   deps: ToolDeps,
 ): string {
   server.registerTool(
@@ -65,7 +65,7 @@ export function registerFindTasks(
       },
       annotations: { readOnlyHint: true },
     },
-    gated(NAME, identity, deps.resolveChannelIdentity, async (args, caller) => {
+    gated(NAME, identity, deps.resolveCallerIdentity, async (args, caller) => {
       let assigneeId: string | undefined;
       let assigneeName: string | undefined;
       if (args.assignee) {

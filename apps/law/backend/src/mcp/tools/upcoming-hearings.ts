@@ -7,7 +7,7 @@
 
 import { create } from "@bufbuild/protobuf";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ChannelIdentity } from "@stigmer/identity";
+import type { CallerIdentity } from "@stigmer/identity";
 import { z } from "zod";
 import { addDaysToIsoDate, todayInFirmTimezone } from "../../domain/firm-clock.js";
 import {
@@ -22,7 +22,7 @@ const NAME = "upcoming_hearings";
 
 export function registerUpcomingHearings(
   server: McpServer,
-  identity: ChannelIdentity | undefined,
+  identity: CallerIdentity | undefined,
   deps: ToolDeps,
 ): string {
   server.registerTool(
@@ -44,7 +44,7 @@ export function registerUpcomingHearings(
       },
       annotations: { readOnlyHint: true },
     },
-    gated(NAME, identity, deps.resolveChannelIdentity, async (args, caller) => {
+    gated(NAME, identity, deps.resolveCallerIdentity, async (args, caller) => {
       const today = todayInFirmTimezone();
       const days = args.within_days ?? 7;
       const page = await deps.resources.hearings.invoke.list(

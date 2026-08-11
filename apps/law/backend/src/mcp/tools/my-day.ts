@@ -9,7 +9,7 @@
 
 import { create } from "@bufbuild/protobuf";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ChannelIdentity } from "@stigmer/identity";
+import type { CallerIdentity } from "@stigmer/identity";
 import { addDaysToIsoDate, todayInFirmTimezone } from "../../domain/firm-clock.js";
 import {
   ListDeadlinesRequestSchema,
@@ -37,7 +37,7 @@ const NAME = "my_day";
 
 export function registerMyDay(
   server: McpServer,
-  identity: ChannelIdentity | undefined,
+  identity: CallerIdentity | undefined,
   deps: ToolDeps,
 ): string {
   server.registerTool(
@@ -51,7 +51,7 @@ export function registerMyDay(
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
-    gated(NAME, identity, deps.resolveChannelIdentity, async (_args, caller) => {
+    gated(NAME, identity, deps.resolveCallerIdentity, async (_args, caller) => {
       const today = todayInFirmTimezone();
       const [hearings, deadlines, tasks] = await Promise.all([
         deps.resources.hearings.invoke.list(

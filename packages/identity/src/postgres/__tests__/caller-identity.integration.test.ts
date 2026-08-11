@@ -1,9 +1,10 @@
 /**
- * The channel identity resolver against real Postgres and this package's
- * real migrations — proving the 0002 phone column, the kind-config
- * registration, and every resolution rule in one arrangement. Fixture
- * discipline: short fictional phones only (the consuming repo's
- * customer-data guard treats anything real-shaped as a failure).
+ * The caller identity resolver against real Postgres and this package's
+ * real migrations — proving the 0002 phone column, the email natural
+ * key, the kind-config registration, and every resolution rule in one
+ * arrangement. Fixture discipline: short fictional phones only (the
+ * consuming repo's customer-data guard treats anything real-shaped as a
+ * failure).
  */
 
 import { create } from "@bufbuild/protobuf";
@@ -11,10 +12,11 @@ import pg from "pg";
 import { PostgresResourceStore, runMigrations } from "@stigmer/resource-api/postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  createChannelIdentityResolver,
+  createCallerIdentityResolver,
+  STIGMER_USER_KIND,
   WHATSAPP_PHONE_KIND,
-  type ChannelIdentityResolver,
-} from "../../channel-identity.js";
+  type CallerIdentityResolver,
+} from "../../caller-identity.js";
 import { UserSchema } from "../../gen/stigmer/identity/user/v1/user_pb.js";
 import { identityStoreKinds } from "../kind-config.js";
 import { startTestDatabase, type TestDatabase } from "./testcontainers.js";
@@ -24,14 +26,14 @@ const MIGRATIONS_DIR = new URL("../../../migrations", import.meta.url).pathname;
 let db: TestDatabase;
 let pool: pg.Pool;
 let store: PostgresResourceStore;
-let resolve: ChannelIdentityResolver;
+let resolve: CallerIdentityResolver;
 
 beforeAll(async () => {
   db = await startTestDatabase();
   pool = await db.createIsolatedPool();
   await runMigrations(pool, [{ source: "identity", dir: MIGRATIONS_DIR }]);
   store = new PostgresResourceStore(pool, identityStoreKinds());
-  resolve = createChannelIdentityResolver(store);
+  resolve = createCallerIdentityResolver(store);
 
   // Seeded through the store directly: this suite tests resolution, not
   // the create pipeline (user-resource.integration.test.ts owns that).
@@ -62,7 +64,7 @@ async function seedUser(id: string, email: string, phone: string | undefined) {
   );
 }
 
-describe("channel identity resolution (T05)", () => {
+describe("caller identity resolution (T05) — whatsapp_phone", () => {
   it("resolves a wa_id to exactly the user whose E.164 phone matches", async () => {
     const result = await resolve({ kind: WHATSAPP_PHONE_KIND, value: "91123456" });
     expect(result.outcome).toBe("resolved");
@@ -82,12 +84,6 @@ describe("channel identity resolution (T05)", () => {
     expect((await resolve({ kind: WHATSAPP_PHONE_KIND, value: "91999999" })).outcome).toBe("unknown");
   });
 
-  it("a foreign identity kind is nobody (deny by default)", async () => {
-    expect((await resolve({ kind: "slack_user_id", value: "U0123" })).outcome).toBe("unknown");
-    expect((await resolve({ kind: "anonymous", value: "" })).outcome).toBe("unknown");
-    expect((await resolve({ kind: "", value: "91123456" })).outcome).toBe("unknown");
-  });
-
   it("a malformed value (non-digits, empty, plus-prefixed) is unknown, never an error", async () => {
     for (const value of ["", "+91123456", "91 123 456", "abc", "0123456"]) {
       expect((await resolve({ kind: WHATSAPP_PHONE_KIND, value })).outcome).toBe("unknown");
@@ -96,6 +92,43 @@ describe("channel identity resolution (T05)", () => {
 
   it("two users sharing a phone is AMBIGUOUS — refused, never guessed", async () => {
     expect((await resolve({ kind: WHATSAPP_PHONE_KIND, value: "91123999" })).outcome).toBe("ambiguous");
+  });
+});
+
+describe("caller identity resolution (T05) — stigmer_user", () => {
+  it("resolves an asserted email to exactly the user carrying it as natural key", async () => {
+    const result = await resolve({ kind: STIGMER_USER_KIND, value: "clerk@firm.example" });
+    expect(result.outcome).toBe("resolved");
+    if (result.outcome !== "resolved") return;
+    expect(result.principal).toEqual({ id: "user_nophone", kind: "user" });
+    expect(result.user.spec?.email).toBe("clerk@firm.example");
+  });
+
+  it("email comparison is case-insensitive and trimmed — stored emails are lowercase by pipeline", async () => {
+    const result = await resolve({ kind: " Stigmer_User ", value: "  Asha@Firm.Example " });
+    expect(result.outcome).toBe("resolved");
+    if (result.outcome !== "resolved") return;
+    expect(result.principal.id).toBe("user_lawyer1");
+  });
+
+  it("an unknown email is unknown — the stale-email failure mode (#377) fails closed here", async () => {
+    expect(
+      (await resolve({ kind: STIGMER_USER_KIND, value: "gone@firm.example" })).outcome,
+    ).toBe("unknown");
+  });
+
+  it("a non-email value (the platform's account-id fallback) is unknown without a lookup", async () => {
+    for (const value of ["", "ida_01abcdef", "asha", "   "]) {
+      expect((await resolve({ kind: STIGMER_USER_KIND, value })).outcome).toBe("unknown");
+    }
+  });
+});
+
+describe("caller identity resolution (T05) — shared rules", () => {
+  it("a foreign identity kind is nobody (deny by default)", async () => {
+    expect((await resolve({ kind: "slack_user_id", value: "U0123" })).outcome).toBe("unknown");
+    expect((await resolve({ kind: "anonymous", value: "" })).outcome).toBe("unknown");
+    expect((await resolve({ kind: "", value: "91123456" })).outcome).toBe("unknown");
   });
 
   it("a store failure PROPAGATES — it must never degrade to 'unknown'", async () => {
@@ -110,11 +143,14 @@ describe("channel identity resolution (T05)", () => {
     });
     deadPool.on("error", () => {});
     try {
-      const deadResolve = createChannelIdentityResolver(
+      const deadResolve = createCallerIdentityResolver(
         new PostgresResourceStore(deadPool, identityStoreKinds()),
       );
       await expect(
         deadResolve({ kind: WHATSAPP_PHONE_KIND, value: "91123456" }),
+      ).rejects.toThrowError();
+      await expect(
+        deadResolve({ kind: STIGMER_USER_KIND, value: "asha@firm.example" }),
       ).rejects.toThrowError();
     } finally {
       await deadPool.end();
