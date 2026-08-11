@@ -22,11 +22,13 @@ const CHART_VALUES =
   "apps/law/deploy/infra-charts/stigmer-law-firm-stack/values.yaml";
 const WORKFLOW = ".github/workflows/ci.yml";
 
-function chartImageRepo() {
+function chartImageRepo(paramName) {
   const lines = readFileSync(CHART_VALUES, "utf8").split("\n");
-  const nameIdx = lines.findIndex((l) => /^\s*-\s*name:\s*image_repo\s*$/.test(l));
+  const nameIdx = lines.findIndex((l) =>
+    new RegExp(`^\\s*-\\s*name:\\s*${paramName}\\s*$`).test(l),
+  );
   if (nameIdx === -1) {
-    console.error(`FAIL: no "- name: image_repo" entry found in ${CHART_VALUES}`);
+    console.error(`FAIL: no "- name: ${paramName}" entry found in ${CHART_VALUES}`);
     process.exit(1);
   }
   // The value: line belongs to this list item — stop at the next item.
@@ -34,22 +36,26 @@ function chartImageRepo() {
     const match = lines[i].match(/^\s*value:\s*(\S+)\s*$/);
     if (match) return match[1];
   }
-  console.error(`FAIL: image_repo in ${CHART_VALUES} has no value: line`);
+  console.error(`FAIL: ${paramName} in ${CHART_VALUES} has no value: line`);
   process.exit(1);
 }
 
-const imageRepo = chartImageRepo();
-
-if (!readFileSync(WORKFLOW, "utf8").includes(imageRepo)) {
-  console.error(
-    `Image-reference guard failed:\n` +
-      `  The chart default (${CHART_VALUES}) says the law backend image is\n` +
-      `    ${imageRepo}\n` +
-      `  but that literal does not appear in ${WORKFLOW}.\n` +
-      `  Every firm's private values file pins tags under the chart default;\n` +
-      `  if CI pushes somewhere else, firm installs break at pull time.\n` +
-      `  Fix whichever side is wrong — they must name the same repository.`,
-  );
-  process.exit(1);
+// Every image the chart pulls must be one CI pushes: the backend (per
+// commit) and the FGA engine wrapper (per engine version — DD-003).
+const workflow = readFileSync(WORKFLOW, "utf8");
+for (const paramName of ["image_repo", "openfga_image_repo"]) {
+  const imageRepo = chartImageRepo(paramName);
+  if (!workflow.includes(imageRepo)) {
+    console.error(
+      `Image-reference guard failed:\n` +
+        `  The chart default (${CHART_VALUES}, ${paramName}) says firms pull\n` +
+        `    ${imageRepo}\n` +
+        `  but that literal does not appear in ${WORKFLOW}.\n` +
+        `  Every firm's private values file pins tags under the chart default;\n` +
+        `  if CI pushes somewhere else, firm installs break at pull time.\n` +
+        `  Fix whichever side is wrong — they must name the same repository.`,
+    );
+    process.exit(1);
+  }
+  console.log(`Image-reference guard passed: CI pushes ${imageRepo}.`);
 }
-console.log(`Image-reference guard passed: CI pushes ${imageRepo}.`);

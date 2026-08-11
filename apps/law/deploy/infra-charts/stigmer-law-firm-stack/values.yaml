@@ -96,27 +96,33 @@ params:
     description: Backend container memory limit
     value: 512Mi
 
-  # ─── The FGA engine sidecar (DD-003; templates/deployment.yaml) ─────────────
-  # Pinned engine version — bump deliberately, alongside the commons test
-  # harness's pin (@stigmer/authorization testing).
+  # ─── The FGA engine (DD-003; templates/openfga.yaml) ────────────────────────
+  # The derived migrate-then-run image (images/openfga in this repo),
+  # pushed by CI. Content-versioned by ENGINE version: bump the tag
+  # deliberately, alongside the wrapper Dockerfile's upstream pin and
+  # the commons test harness's pin (@stigmer/authorization testing).
+  - name: openfga_image_repo
+    description: Container image repository for the FGA engine wrapper
+    value: ghcr.io/stigmer/stigmer-apps/law-openfga
+
   - name: openfga_image_tag
-    description: OpenFGA image tag for the engine sidecar and its migrate init container
+    description: FGA engine image tag (the wrapped OpenFGA version)
     value: v1.18.3
 
   - name: openfga_cpu_request
-    description: OpenFGA sidecar CPU request
+    description: FGA engine container CPU request
     value: 25m
 
   - name: openfga_cpu_limit
-    description: OpenFGA sidecar CPU limit
+    description: FGA engine container CPU limit
     value: 250m
 
   - name: openfga_memory_request
-    description: OpenFGA sidecar memory request
+    description: FGA engine container memory request
     value: 64Mi
 
   - name: openfga_memory_limit
-    description: OpenFGA sidecar memory limit
+    description: FGA engine container memory limit
     value: 256Mi
 
   # ─── Postgres (templates/postgres.yaml) ─────────────────────────────────────

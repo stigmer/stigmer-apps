@@ -175,3 +175,35 @@ jobs:
           docker tag law-backend:ci ghcr.io/stigmer/stigmer-apps/law-backend:${{ github.sha }}
           docker push ghcr.io/stigmer/stigmer-apps/law-backend:${{ github.sha }}
           echo "Pushed ghcr.io/stigmer/stigmer-apps/law-backend:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+
+      # ── The per-firm FGA engine image (project DD-003 D1): upstream
+      # OpenFGA + a baked migrate-then-run command (images/openfga has
+      # the full why — the live platform models no command/args and no
+      # init containers). Content-versioned by the ENGINE version, not
+      # the git sha: the tag only changes when the wrapper or the
+      # upstream pin does, and re-pushing identical content is a no-op.
+      # This package must stay PUBLIC, same as law-backend above.
+      - name: Build FGA engine image
+        run: |
+          docker build --platform linux/amd64 \
+            -f images/openfga/Dockerfile -t law-openfga:ci images/openfga
+
+      - name: FGA engine boot check
+        # With no environment the entrypoint must reach the real binary
+        # and fail fast on the missing datastore — proving the busybox
+        # shell wiring and the migrate-first sequencing survived a base
+        # image bump.
+        run: |
+          set +e
+          output=$(docker run --rm law-openfga:ci 2>&1)
+          set -e
+          echo "$output"
+          echo "$output" | grep -q "missing datastore engine type"
+
+      - name: Push the FGA engine image
+        if: github.event_name == 'push'
+        run: |
+          tag=$(grep -oE 'openfga/openfga:v[0-9.]+' images/openfga/Dockerfile | cut -d: -f2)
+          docker tag law-openfga:ci ghcr.io/stigmer/stigmer-apps/law-openfga:"$tag"
+          docker push ghcr.io/stigmer/stigmer-apps/law-openfga:"$tag"
+          echo "Pushed ghcr.io/stigmer/stigmer-apps/law-openfga:$tag" >> "$GITHUB_STEP_SUMMARY"

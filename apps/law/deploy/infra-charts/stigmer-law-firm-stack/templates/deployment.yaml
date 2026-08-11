@@ -44,17 +44,15 @@
 # The platform validates every reference exists at apply time, so the
 # secrets must be applied BEFORE this chart is installed (fail-closed).
 #
-# THE FGA ENGINE RIDES THIS POD (project DD-003 D1): OpenFGA is a
-# sidecar, its schema applied by an init container — the firm stays
-# exactly one deployment, and the engine is reachable on localhost with
-# NO service port (its ports are simply never declared below). The
-# preshared key still guards it (agent sandboxes share this cluster and
-# can reach pod IPs) — defense in depth, not the only wall. Ports are
-# offset (HTTP 8082, gRPC 8083) because the app owns 8080/8081 in the
-# shared pod network namespace. If the live module predates
-# sidecar/initContainer support, the recorded fallback is this same
-# container as a second KubernetesDeployment in the namespace — the
-# backend's FGA_API_URL is the only line that changes.
+# THE FGA ENGINE IS ITS OWN DEPLOYMENT (templates/openfga.yaml —
+# project DD-003 D1 as amended at rollout): the live platform's sidecar
+# type carries no command/args and models no init containers (verified
+# against a live install failure), so the engine runs as a second
+# KubernetesDeployment from a derived image that bakes migrate-then-run
+# (images/openfga in this repo). The backend reaches it through the
+# namespace-local service below; the preshared key is the wall (agent
+# sandboxes share this cluster), enforced by the engine and presented
+# by the backend from the same auth-keys secret.
 apiVersion: kubernetes.project-planton.org/v1
 kind: KubernetesDeployment
 metadata:
@@ -78,6 +76,11 @@ metadata:
       type: depends_on
     - kind: CloudflareR2Bucket
       name: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}-documents-r2-bucket
+      type: depends_on
+    # The engine deploys first: the backend's boot bootstraps the FGA
+    # store/model (bounded retry, but the happy path is no crash-loop).
+    - kind: KubernetesDeployment
+      name: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}-openfga
       type: depends_on
 spec:
   namespace:
@@ -131,10 +134,11 @@ spec:
             value: https://{{ values.cloudflare_account_id }}.r2.cloudflarestorage.com
           - name: OBJECT_STORE_BUCKET
             value: {{ values.org }}-law-{{ values.firm }}-documents-{{ values.env }}
-          # ── The FGA engine (DD-003): the sidecar below, same pod, so
-          # localhost — no service hop, no cluster exposure.
+          # ── The FGA engine (DD-003): its own deployment in this
+          # namespace (templates/openfga.yaml), reached through its
+          # ClusterIP service — cluster-internal, never ingress.
           - name: FGA_API_URL
-            value: http://localhost:8082
+            value: http://{{ values.org }}-{{ values.env }}-law-{{ values.firm }}-openfga.{{ values.org }}-{{ values.env }}-law-{{ values.firm }}.svc.cluster.local:8080
           {% if values.auth_jwt_previous_public_key %}
           # Rotation overlap (DD-005): the PREVIOUS keypair's public key,
           # present only during a key rotation window so ~1h-old access
@@ -220,80 +224,6 @@ spec:
           servicePort: 8081
           containerPort: 8081
           isIngressPort: false
-    # ── The FGA engine sidecar (DD-003 D1). Its ports are deliberately
-    # NOT declared: nothing lands on the ClusterIP service — the app
-    # reaches it on localhost, and the preshared key guards the pod IP.
-    sidecars:
-      - name: openfga
-        image:
-          repo: openfga/openfga
-          tag: "{{ values.openfga_image_tag }}"
-        args: ["run"]
-        env:
-          variables:
-            - name: OPENFGA_DATASTORE_ENGINE
-              value: postgres
-            # Credentials ride the discrete username/password variables,
-            # never the URI (whole-value secret resolution — the same
-            # reasoning as the app's PG* form above). sslmode=require:
-            # the operator's pg_hba rejects unencrypted clients.
-            - name: OPENFGA_DATASTORE_URI
-              value: postgres://db-{{ values.org }}-{{ values.env }}-law-{{ values.firm }}-postgres.{{ values.org }}-{{ values.env }}-law-{{ values.firm }}.svc.cluster.local:5432/openfga?sslmode=require
-            - name: OPENFGA_DATASTORE_USERNAME
-              value: openfga
-            - name: OPENFGA_AUTHN_METHOD
-              value: preshared
-            # Offset from the app's 8080/8081 — one pod network namespace.
-            - name: OPENFGA_HTTP_ADDR
-              value: 0.0.0.0:8082
-            - name: OPENFGA_GRPC_ADDR
-              value: 0.0.0.0:8083
-            - name: OPENFGA_PLAYGROUND_ENABLED
-              value: "false"
-          secrets:
-            - name: OPENFGA_DATASTORE_PASSWORD
-              value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-openfga-postgres-credentials
-            - name: OPENFGA_AUTHN_PRESHARED_KEYS
-              value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-auth-keys/fga-preshared-key
-        resources:
-          limits:
-            cpu: {{ values.openfga_cpu_limit }}
-            memory: {{ values.openfga_memory_limit }}
-          requests:
-            cpu: {{ values.openfga_cpu_request }}
-            memory: {{ values.openfga_memory_request }}
-        # /healthz answers before authn — the readiness signal even with
-        # the preshared key on.
-        readinessProbe:
-          httpGet:
-            path: /healthz
-            portNumber: 8082
-          initialDelaySeconds: 2
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 3
-  pod:
-    initContainers:
-      # OpenFGA's schema migrations run to completion BEFORE the pod's
-      # main containers start (`openfga migrate` is idempotent and
-      # advisory-locked server-side) — the sidecar never races its own
-      # schema, mirroring the app's migrate-before-listen discipline.
-      - name: openfga-migrate
-        image:
-          repo: openfga/openfga
-          tag: "{{ values.openfga_image_tag }}"
-        args: ["migrate"]
-        env:
-          variables:
-            - name: OPENFGA_DATASTORE_ENGINE
-              value: postgres
-            - name: OPENFGA_DATASTORE_URI
-              value: postgres://db-{{ values.org }}-{{ values.env }}-law-{{ values.firm }}-postgres.{{ values.org }}-{{ values.env }}-law-{{ values.firm }}.svc.cluster.local:5432/openfga?sslmode=require
-            - name: OPENFGA_DATASTORE_USERNAME
-              value: openfga
-          secrets:
-            - name: OPENFGA_DATASTORE_PASSWORD
-              value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-openfga-postgres-credentials
   ingress:
     enabled: true
     # Single label under the platform domain: the certificate issuer is

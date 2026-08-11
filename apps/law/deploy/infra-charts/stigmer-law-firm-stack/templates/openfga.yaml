@@ -1,0 +1,139 @@
+---
+# The firm's FGA engine (project DD-003 D1, amended at rollout): its own
+# KubernetesDeployment in the firm's namespace, running the derived
+# migrate-then-run image (images/openfga in this repo) against the
+# firm's own Postgres (the `openfga` database beside `law`).
+#
+# WHY NOT the shapes that look simpler:
+# - A sidecar on the backend pod: the live platform's sidecar container
+#   type carries no command/args (the upstream image has no default
+#   CMD) and models no init containers for the schema migration —
+#   verified against a live install failure.
+# - The platform's KubernetesOpenFga kind: its deployed version models
+#   NO authentication, and an open authorization API is forbidden here
+#   — agent sandboxes share this cluster (the same reasoning that keeps
+#   the MCP port ingress-free), so the preshared key is a hard
+#   invariant (DD-003 D1).
+#
+# The service this deployment renders is cluster-internal only (no
+# ingress port); the backend reaches it at
+# http://<this-deployment>.<namespace>.svc.cluster.local:8080 with the
+# preshared key from the shared auth-keys secret. The engine holds only
+# a rebuildable projection of the firm's rows — the backend reconciles
+# tuples on boot and on a schedule, so this deployment carries no state
+# that cannot be regenerated (the openfga database is durability, not
+# truth).
+apiVersion: kubernetes.project-planton.org/v1
+kind: KubernetesDeployment
+metadata:
+  name: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}-openfga
+  slug: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}-openfga
+  org: {{ values.org }}
+  env: {{ values.env }}
+  labels:
+    project-planton.org/provisioner: pulumi
+    pulumi.project-planton.org/organization: {{ values.pulumi_organization }}
+    pulumi.project-planton.org/project: {{ values.pulumi_project }}
+    pulumi.project-planton.org/stack.name: {{ values.env }}.KubernetesDeployment.{{ values.org }}-{{ values.env }}-law-{{ values.firm }}-openfga
+  annotations:
+    planton.dev/container-registry: {{ values.container_registry }}
+  relationships:
+    - kind: KubernetesNamespace
+      name: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}
+      type: depends_on
+    - kind: KubernetesPostgres
+      name: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}-postgres
+      type: depends_on
+spec:
+  namespace:
+    value: {{ values.org }}-{{ values.env }}-law-{{ values.firm }}
+  version: main
+  container:
+    app:
+      # Content-versioned by ENGINE version (not git sha): the tag moves
+      # only when the wrapper or the upstream OpenFGA pin does. Pushed
+      # by CI's image job behind the full suite; the package must stay
+      # PUBLIC (firm pulls are unauthenticated — the law-backend rule).
+      image:
+        repo: {{ values.openfga_image_repo }}
+        tag: "{{ values.openfga_image_tag }}"
+      resources:
+        limits:
+          cpu: {{ values.openfga_cpu_limit }}
+          memory: {{ values.openfga_memory_limit }}
+        requests:
+          cpu: {{ values.openfga_cpu_request }}
+          memory: {{ values.openfga_memory_request }}
+      env:
+        variables:
+          - name: OPENFGA_DATASTORE_ENGINE
+            value: postgres
+          # Credentials ride the discrete username/password variables,
+          # never the URI (whole-value secret resolution — the same
+          # reasoning as the backend's PG* form). sslmode=require: the
+          # operator's pg_hba rejects unencrypted clients.
+          - name: OPENFGA_DATASTORE_URI
+            value: postgres://db-{{ values.org }}-{{ values.env }}-law-{{ values.firm }}-postgres.{{ values.org }}-{{ values.env }}-law-{{ values.firm }}.svc.cluster.local:5432/openfga?sslmode=require
+          - name: OPENFGA_DATASTORE_USERNAME
+            value: openfga
+          # The wall (DD-003 D1): sandboxes share the cluster, so the
+          # engine never runs open. The backend presents the same key
+          # from the same secret (FGA_API_TOKEN in deployment.yaml).
+          - name: OPENFGA_AUTHN_METHOD
+            value: preshared
+          - name: OPENFGA_PLAYGROUND_ENABLED
+            value: "false"
+        secrets:
+          - name: OPENFGA_DATASTORE_PASSWORD
+            value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-openfga-postgres-credentials
+          - name: OPENFGA_AUTHN_PRESHARED_KEYS
+            value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-auth-keys/fga-preshared-key
+      # /healthz answers before authn — the readiness signal even with
+      # the preshared key on. Startup covers the first boot's schema
+      # migration (seconds; idempotent and lock-serialized upstream).
+      readinessProbe:
+        httpGet:
+          path: /healthz
+          portNumber: 8080
+        initialDelaySeconds: 2
+        periodSeconds: 5
+        timeoutSeconds: 3
+        failureThreshold: 3
+      livenessProbe:
+        httpGet:
+          path: /healthz
+          portNumber: 8080
+        initialDelaySeconds: 10
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 3
+      startupProbe:
+        httpGet:
+          path: /healthz
+          portNumber: 8080
+        initialDelaySeconds: 0
+        periodSeconds: 2
+        timeoutSeconds: 3
+        failureThreshold: 30
+      ports:
+        # Cluster-internal ONLY — the engine's whole audience is the
+        # backend one service away; the preshared key guards everything
+        # that can reach the ClusterIP regardless.
+        - name: http
+          appProtocol: http
+          networkProtocol: TCP
+          servicePort: 8080
+          containerPort: 8080
+          isIngressPort: false
+  ingress:
+    enabled: false
+  availability:
+    minReplicas: 1
+    horizontalPodAutoscaling:
+      isEnabled: false
+    deploymentStrategy:
+      maxUnavailable: "0"
+      maxSurge: "1"
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: "1"
