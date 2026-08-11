@@ -1,0 +1,37 @@
+# The web assistant's shared instance — TEMPLATE (T05 web leg).
+#
+# WHY THIS EXISTS: the web app's sessions are minted-user sessions (the
+# PlatformClient path), and that path is a "fifth session origin" — no
+# connection resource carries environment_refs for it (the way the
+# WhatsApp channel's own manifest does). Without this instance, every
+# web execution fails a precondition: the MCP server requires
+# LAW_MCP_SHARED_SECRET and nothing delivers it. The law backend hands
+# this instance's id to the browser (STIGMER_AGENT_INSTANCE_ID), and
+# the session bootstrap passes it as session_spec.agent_instance_id —
+# the platform's runtime resolution then reads the environment refs
+# server-side (resource-gated, not principal-gated: the lawyer never
+# sees the secret; verified live before this design was adopted).
+#
+# visibility_org is LOAD-BEARING for the same reason it is on
+# environment.yaml: a minted lawyer must be able to REFERENCE the
+# instance (blueprint-access gate) without owning it.
+#
+# agent_id is the firm's applied Agent's id (agt_…): look it up with
+# `stigmer get agent <firm>-law-assistant` after applying agent.yaml.
+apiVersion: agentic.stigmer.ai/v1
+kind: AgentInstance
+metadata:
+  name: <firm>-law-assistant-web
+  org: <stigmer-org>
+  visibility: visibility_org
+spec:
+  agent_id: <agent-id>
+  description: >-
+    The <firm> law assistant as the firm's web app drives it: binds the
+    MCP-credentials environment so web conversations reach the firm's
+    case system. Created at onboarding; the law backend's
+    STIGMER_AGENT_INSTANCE_ID points here.
+  environment_refs:
+    - kind: environment
+      org: <stigmer-org>
+      slug: <firm>-law-mcp-credentials

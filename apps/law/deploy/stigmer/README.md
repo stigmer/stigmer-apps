@@ -1,22 +1,25 @@
-# Stigmer manifests — the firm's WhatsApp assistant (templates)
+# Stigmer manifests — the firm's assistant (templates)
 
-The four resources that put a law firm's assistant on WhatsApp, as
-generic templates. Per-firm concretions (real org, firm slug, channel
-app) live in the PRIVATE ops repo under
-`stigmer-cloud _ops/planton/clients/law/<client>/stigmer/` — this repo
-is public and carries no customer strings (DD-A10). The design record
-is the project's DD-008.
+The resources that put a law firm's assistant on WhatsApp AND inside
+the firm's web app ("Ask AI"), as generic templates. Per-firm
+concretions (real org, firm slug, channel app) live in the PRIVATE ops
+repo under `stigmer-cloud _ops/planton/clients/law/<client>/stigmer/` —
+this repo is public and carries no customer strings (DD-A10). The
+design record is the project's DD-008 (WhatsApp) and the T05 web leg.
 
 ## How the identity flows (why these files look the way they do)
 
 ```
-WhatsApp sender
-  → Meta verifies the number (wa_id)
-  → the platform carries it on the session, NEVER through the model
+WhatsApp sender                        Web app user
+  → Meta verifies the number (wa_id)     → the firm backend verifies the
+  → the platform carries it on the         login session and mints a
+    session, NEVER through the model       platform token for THAT user
+                                           (id + email) — MintToken RPC
   → the runner injects STIGMER_CALLER_IDENTITY_* into THIS server's
     env map (because mcp-server.yaml declares those keys)
   → the headers reach the firm backend's MCP entrance
-  → the backend resolves phone → User and runs the call as that lawyer
+  → the backend resolves phone → User (whatsapp_phone) or
+    email → User (stigmer_user) and runs the call as that lawyer
 ```
 
 The shared secret is the entire authorization boundary for those
@@ -44,6 +47,42 @@ start without one.
    console supplies the secret into their PERSONAL environment when
    prompted — that path does not read the org environment.
 
+## The web assistant ("Ask AI") — additional onboarding
+
+The web app drives the SAME agent through PlatformClient-minted user
+tokens. Two more platform resources, then the backend's config:
+
+6. **PlatformClient — a Console step, and the settings are one-way.**
+   The kind is not manifest-appliable (it is absent from the CLI's verb
+   matrix); create it in the platform console (IAM → Platform Clients)
+   with:
+   - `auto_provision_accounts: true`, `auto_grant_on_org: true`, and
+     **`auto_grant_role: member` FROM THE FIRST APPLY** — `viewer` (the
+     default) cannot start executions, and role edits never reach
+     already-provisioned users (stigmer/stigmer#380): a wrong first
+     value is manual IAM surgery per lawyer, not a settings fix.
+   - `allowed_origins` = the firm's web origin. Declared-but-unenforced
+     today (stigmer/stigmer#375) — set it anyway so enforcement, when
+     it lands, finds the right value.
+   The client id + secret go into the firm's config-manager secrets;
+   the secret never enters either repo or the browser.
+7. **AgentInstance** (`agent-instance.yaml`): fill `agent_id` with the
+   applied agent's RESOURCE ID (agt_… — from
+   `stigmer get agent <firm>-law-assistant`) and apply. VERIFY the
+   applied instance is org-visible (a private instance refuses every
+   lawyer's session bootstrap). This instance is what carries the MCP
+   secret to web sessions; without it every web create fails a
+   precondition (the minted-user path has no environment carrier of
+   its own).
+8. **Backend config** (the chart's values): the all-or-nothing
+   STIGMER_* group — `STIGMER_API_BASE_URL`,
+   `STIGMER_PLATFORM_CLIENT_ID`, `STIGMER_PLATFORM_CLIENT_SECRET`,
+   `STIGMER_ORG`, `STIGMER_AGENT_INSTANCE_ID` (the applied instance's
+   ain_… id) — all five or none (a partial group refuses boot);
+   optional `STIGMER_CONSOLE_URL` for self-hosted consoles. No
+   variables set = the web app simply has no Ask AI (the open-source
+   posture).
+
 ## The traps, so nobody re-learns them
 
 - **Approval overrides cover EVERY tool, reads included.** On WhatsApp
@@ -62,3 +101,18 @@ start without one.
 - **Moving orgs later is a recreate, not a move**: manifests re-apply
   cheaply, but conversation history and the WhatsApp number install do
   not carry over.
+- **A corrected email goes stale platform-side** (stigmer/stigmer#377):
+  the platform freezes a JIT-provisioned user's email at FIRST mint, so
+  after an email fix in the law app the web assistant presents the OLD
+  email to the MCP entrance — the resolver refuses (fail-closed) and
+  Ask AI goes dark for that one person. The minted JWT's email claim
+  looks correct anyway (it echoes the request): diagnose from the MCP
+  entrance's refusal, not the token.
+- **The web session's engine is pinned in the web app** (cursor — the
+  WhatsApp channel's engine). The platform default is a different
+  engine with different tools/billing; the pin lives in the law web
+  bootstrap, not in any manifest — do not "fix" a manifest to change it.
+- **Ask AI JIT-provisions each signing-in user into the platform org as
+  a MEMBER.** In a shared org that puts them inside every org-visible
+  resource boundary there — re-check the org-boundary decision (project
+  DD-006) before the first real user signs in.

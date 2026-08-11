@@ -46,7 +46,14 @@ export function NewConversationView(props: {
         // The engine pin (see the module doc). A session's engine is
         // immutable after its first turn, so HERE is the only chance.
         harness: "cursor",
-        ...(props.seed?.context ? { sessionContext: props.seed.context } : {}),
+        // EVERY web conversation says so — the agent's instructions
+        // condition their answer shape on this note's presence (its
+        // WhatsApp twin is the platform's sender-identity block), so
+        // the signal must be positive on both surfaces, never inferred
+        // from absence. Contextual entries append where they began.
+        sessionContext: ["This conversation is from the firm's web app.", props.seed?.context]
+          .filter(Boolean)
+          .join(" "),
       },
     });
     props.onConversationStarted(result.sessionId);

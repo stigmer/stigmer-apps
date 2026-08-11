@@ -145,6 +145,7 @@ describe("The panel", () => {
           // WhatsApp's (and currently broken in production).
           harness: "cursor",
           sessionContext:
+            "This conversation is from the firm's web app. " +
             "This conversation was started from the web page of case CS/2026/041.",
         },
       }),
