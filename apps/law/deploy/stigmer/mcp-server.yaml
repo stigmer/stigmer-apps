@@ -27,11 +27,12 @@ metadata:
   org: <stigmer-org>
 spec:
   description: >-
-    Case-management tools for the <firm> law firm: the caller's own
-    tasks, firm-wide task search, case lookup, upcoming hearings, the
-    firm overview, task status updates, and case notes. Caller-identity
-    authorized: the verified WhatsApp sender resolves to a firm member,
-    and every call runs that member's permissions.
+    Case-management tools for the <firm> law firm: the caller's day
+    board and deadlines, firm-wide task search, matter stories, upcoming
+    hearings, the firm overview, hearing-outcome recording, task status
+    updates, case notes, and partner-only outstanding balances.
+    Caller-identity authorized: the verified WhatsApp sender resolves to
+    a firm member, and every call runs that member's permissions.
   http:
     url: "http://<org>-<env>-law-<firm>-backend.<org>-<env>-law-<firm>.svc.cluster.local:8081/mcp"
     headers:

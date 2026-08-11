@@ -1,6 +1,6 @@
 /**
  * Manifest drift: every tool the MCP server registers MUST carry a
- * `requires_approval: false` override in the deployed agent manifest.
+ * `requires_approval: false` override in the agent manifest TEMPLATE.
  *
  * Why this is a test and not a comment: WhatsApp is an unattended
  * surface. The platform's connect-time classifier approval-gates any
@@ -10,6 +10,18 @@
  * tool to the server without adding it to the manifest ships a verb
  * that cannot run, and the failure is invisible until a person in a
  * corridor needs it.
+ *
+ * SCOPE — what this test can and cannot see: it guards ONLY the
+ * template in this repo (deploy/stigmer/agent.yaml). The per-firm
+ * concretions live in the private ops repo (DD-A10: no customer
+ * strings here), and the resource a firm's assistant actually runs on
+ * is the APPLIED agent, which drifts independently of every committed
+ * file — a rename here once left a firm's applied overrides sixteen
+ * hours stale while this test stayed green. The deployed reality is
+ * guarded where it is observable: the ops repo's
+ * review-agent-tool-drift check compares the applied agent's overrides
+ * against the running backend's live tools/list at cutover and on
+ * demand.
  *
  * The manifest is parsed with a narrow regex rather than a YAML
  * dependency: `- tool_name: <name>` is the only shape this block has
@@ -49,7 +61,7 @@ function manifestApprovalOverrides(): string[] {
   return [...yaml.matchAll(/^\s*-\s*tool_name:\s*(\S+)\s*$/gm)].map((m) => m[1] as string);
 }
 
-describe("the deployed agent manifest and the MCP surface agree", () => {
+describe("the agent manifest template and the MCP surface agree", () => {
   it("declares an approval override for EVERY registered tool", () => {
     const registered = registeredToolNames().sort();
     const declared = manifestApprovalOverrides().sort();

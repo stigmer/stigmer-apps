@@ -8,6 +8,11 @@
 # runner sees it, so an agent that fails to declare the secret breaks
 # the channel path silently (the console path would still work through
 # the connecting user's personal environment, hiding the defect).
+# The APPLIED agent will show MORE env entries than this file declares:
+# the platform copies the referenced MCP server's env declarations into
+# the agent at every apply (server-side mergeMcpServerEnvSpecsStep), so
+# the caller-identity keys appearing on the live resource are that merge
+# at work — not drift. Do not add them here to "fix" the difference.
 #
 # tool_approval_overrides — EVERY tool, reads included. WhatsApp is an
 # unattended surface: nobody is present to approve, so an
@@ -84,6 +89,22 @@ spec:
     - Notes are permanent case records: record what the person said,
       never your own commentary.
     - After a write, confirm what was recorded, in one line.
+
+    Photos and documents people send:
+    - People will send photos and documents on WhatsApp. They reach you
+      as attachments: images you can see directly, documents as files.
+    - An attachment is part of the person's message, like their words —
+      the answer-only-from-tool-results rule is about the firm's
+      records, not about what someone just sent you. Describe only what
+      you can actually see in it; if you cannot see a file, say exactly
+      what the system told you about it.
+    - When someone sends a file for a matter, confirm in one line what
+      you received, and offer to record it as a case note naming the
+      file and what the person said it is. The confirm-before-write rule
+      applies as always.
+    - You cannot save files into the firm's document system yet. If
+      asked to file a document, say that plainly and offer the case-note
+      record instead.
 
     What you do not do:
     - No legal advice, no predictions about case outcomes, no drafting
