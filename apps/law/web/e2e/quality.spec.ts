@@ -54,13 +54,12 @@ test("the facts rail answers to the content's width, not the window's (container
   const wideTabs = await tabs.boundingBox();
   expect(wideRail && wideTabs && wideRail.x > wideTabs.x + wideTabs.width).toBe(true);
 
-  // Narrow the window until the content area drops under the threshold:
-  // the rail wraps BELOW the column — the same mechanism that makes room
-  // for the assistant dock, driven by content width rather than viewport.
-  // (700px, not 900: below lg the sidebar overlays instead of pushing,
-  // so a 900px window still gives the content ~868px — deliberately MORE
-  // side-by-side room than the old viewport breakpoint allowed.)
-  await page.setViewportSize({ width: 700, height: 720 });
+  // Narrow the window until the content area drops under the @xl
+  // threshold: the rail wraps BELOW the column. The threshold is
+  // deliberately LOW (DD-007 amendment): opening the Ask AI dock must
+  // not reflow the page — both columns just get narrower — so stacking
+  // is reserved for widths where two columns stop being legible.
+  await page.setViewportSize({ width: 500, height: 720 });
   const narrowRail = await rail.boundingBox();
   const narrowTabs = await tabs.boundingBox();
   expect(narrowRail && narrowTabs && narrowRail.y > narrowTabs.y).toBe(true);

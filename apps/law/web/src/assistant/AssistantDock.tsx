@@ -27,8 +27,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Loading } from "../components/async.js";
 import { useMediaQuery } from "../lib/use-media-query.js";
 import {
-  ASSISTANT_MAX_WIDTH,
   ASSISTANT_MIN_WIDTH,
+  assistantMaxWidth,
   useAssistant,
 } from "./assistant-context.js";
 import { useAssistantConfig } from "./queries.js";
@@ -136,7 +136,7 @@ export function AssistantDock() {
               aria-label="Resize the Ask AI panel"
               aria-valuenow={width}
               aria-valuemin={ASSISTANT_MIN_WIDTH}
-              aria-valuemax={ASSISTANT_MAX_WIDTH}
+              aria-valuemax={assistantMaxWidth()}
               tabIndex={0}
               onPointerDown={(e) => {
                 e.currentTarget.setPointerCapture(e.pointerId);

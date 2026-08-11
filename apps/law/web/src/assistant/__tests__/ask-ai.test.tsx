@@ -225,9 +225,10 @@ describe("The dock (desktop: expanded panel or collapsed strip — never gone)",
     expect(handle).toHaveAttribute("aria-valuenow", "464");
     expect(window.localStorage.getItem("law.assistant.width")).toBe("464");
 
-    // Clamped: it can never take more than half the window (jsdom: 1024).
+    // Clamped: the work area keeps its 480px floor — the panel may take
+    // everything else (jsdom window: 1024, so the ceiling is 544).
     for (let i = 0; i < 10; i++) await user.keyboard("{ArrowLeft}");
-    expect(Number(handle.getAttribute("aria-valuenow"))).toBeLessThanOrEqual(512);
+    expect(Number(handle.getAttribute("aria-valuenow"))).toBeLessThanOrEqual(544);
   });
 
   it("a remembered width is applied on the next open", async () => {

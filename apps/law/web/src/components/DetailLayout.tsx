@@ -7,23 +7,25 @@
  * is dead space with a border around it.
  *
  * The two-column split is a CONTAINER query, not a viewport one: the
- * shell's content wrapper is the @container, so the rail sits beside
- * the story whenever the content area itself is wide enough — and wraps
- * below it when a narrow window OR the docked Ask AI panel genuinely
- * squeezes the room. A viewport breakpoint cannot know about the dock.
- * Threshold: at 48rem the reading column keeps ≥ ~27rem beside the
- * 20rem rail — below that, side-by-side helps neither column.
+ * shell's content wrapper is the @container, so the layout answers to
+ * the width the content actually has — including when the docked Ask AI
+ * panel takes its share. The owner's rule (DD-007 amendment): opening
+ * the panel must NOT reflow the page into a different design — both
+ * columns simply get narrower and the text wraps. So the rail FLEXES
+ * (13–20rem) and the columns stack only under @xl (36rem), a width
+ * where two columns physically stop being legible — in practice only
+ * the small-screen sheet case, which overlays instead of squeezing.
  *
  * The rail is an <aside> landmark so assistive tech can jump between
- * the story and the facts. When the columns stack, rail follows main —
- * the facts are one swipe away, never lost.
+ * the story and the facts. When the columns do stack, rail follows
+ * main — the facts are one swipe away, never lost.
  */
 
 import type { ReactNode } from "react";
 
 export function DetailLayout(props: { children: ReactNode; rail: ReactNode; railLabel: string }) {
   return (
-    <div className="grid grid-cols-1 items-start gap-4 @3xl:grid-cols-[minmax(0,1fr)_20rem]">
+    <div className="grid grid-cols-1 items-start gap-4 @xl:grid-cols-[minmax(0,1fr)_minmax(13rem,20rem)]">
       <div className="min-w-0">{props.children}</div>
       <aside aria-label={props.railLabel} className="flex min-w-0 flex-col gap-4">
         {props.rail}

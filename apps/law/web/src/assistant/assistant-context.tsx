@@ -41,18 +41,25 @@ export type AssistantView =
 
 /** Narrower and the SDK composer's toolbar starts wrapping badly. */
 export const ASSISTANT_MIN_WIDTH = 320;
-/** Wider and the panel stops being a companion and becomes the page. */
-export const ASSISTANT_MAX_WIDTH = 640;
 export const ASSISTANT_DEFAULT_WIDTH = 448;
+
+/**
+ * What the panel may never take: a 30rem floor for the work area
+ * (sidebar + content). No fixed upper cap beyond that — the owner's
+ * rule (DD-007 amendment): the person dragging decides how much space
+ * the assistant deserves; the app only guarantees the case stays
+ * usable beside it.
+ */
+const WORK_AREA_FLOOR = 480;
+
+export function assistantMaxWidth(): number {
+  return Math.max(ASSISTANT_MIN_WIDTH, window.innerWidth - WORK_AREA_FLOOR);
+}
 
 const WIDTH_STORAGE_KEY = "law.assistant.width";
 
-/** The panel may never take more than half the window from the work. */
 function clampWidth(px: number): number {
-  const halfWindow = Math.floor(window.innerWidth / 2);
-  return Math.round(
-    Math.min(Math.max(px, ASSISTANT_MIN_WIDTH), Math.max(ASSISTANT_MIN_WIDTH, Math.min(ASSISTANT_MAX_WIDTH, halfWindow))),
-  );
+  return Math.round(Math.min(Math.max(px, ASSISTANT_MIN_WIDTH), assistantMaxWidth()));
 }
 
 function readStoredWidth(): number {
