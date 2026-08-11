@@ -22,10 +22,12 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # Manifests first so the dependency layer caches across source changes.
 # npm ci needs EVERY workspace manifest (the lockfile spans the whole
-# workspace).
+# workspace) — a workspace missing here fails the in-image build with
+# "No workspaces found" even though every local build passes (run #22).
 COPY package.json package-lock.json ./
 COPY packages/resource-api/package.json packages/resource-api/
 COPY packages/identity/package.json packages/identity/
+COPY packages/authorization/package.json packages/authorization/
 COPY apps/law/backend/package.json apps/law/backend/
 COPY apps/law/web/package.json apps/law/web/
 RUN npm ci
@@ -35,6 +37,7 @@ RUN npm ci
 COPY tsconfig.base.json ./
 COPY packages/resource-api/ packages/resource-api/
 COPY packages/identity/ packages/identity/
+COPY packages/authorization/ packages/authorization/
 COPY apps/law/web/ apps/law/web/
 COPY apps/law/backend/ apps/law/backend/
 
