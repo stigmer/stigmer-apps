@@ -381,6 +381,15 @@ export interface CreateOperationOptions<R extends ResourceMessage> {
    * use most). ctx.newState is set.
    */
   readonly beforePersist?: readonly PipelineStep<WriteContext<R>>[];
+  /**
+   * Steps between persist and publish — for same-request side effects
+   * that must not ride the best-effort event bus (the projected
+   * authorization-tuple sync is the motivating consumer). The row is
+   * already persisted when these run: a step that throws fails the
+   * REQUEST but not the write, so steps whose effect is best-effort by
+   * design must contain their own failures and log instead.
+   */
+  readonly afterPersist?: readonly PipelineStep<WriteContext<R>>[];
 }
 
 function buildCreateExecutor<R extends ResourceMessage>(
@@ -425,6 +434,7 @@ function buildCreateExecutor<R extends ResourceMessage>(
         await persist(runtime, ctx.newState as R);
       },
     },
+    ...(options.afterPersist ?? []),
     {
       name: "publish",
       async execute(ctx) {
@@ -463,6 +473,8 @@ export function createOperation<R extends ResourceMessage>(
 
 export interface UpdateOperationOptions<R extends ResourceMessage> {
   readonly beforePersist?: readonly PipelineStep<WriteContext<R>>[];
+  /** See CreateOperationOptions.afterPersist — identical contract. */
+  readonly afterPersist?: readonly PipelineStep<WriteContext<R>>[];
 }
 
 function buildUpdateExecutor<R extends ResourceMessage>(
@@ -526,6 +538,7 @@ function buildUpdateExecutor<R extends ResourceMessage>(
         await persist(runtime, ctx.newState as R);
       },
     },
+    ...(options.afterPersist ?? []),
     {
       name: "publish",
       async execute(ctx) {
