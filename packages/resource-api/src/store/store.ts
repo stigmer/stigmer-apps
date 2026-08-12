@@ -254,11 +254,20 @@ export interface ResourceStore {
    * whitespace, so register structured fields only where the searched
    * content is scalar text inside them (names) — the contract suite
    * pins name-matching, not punctuation.
+   *
+   * The optional filter narrows which rows are searched, with the same
+   * closed vocabulary and AND semantics as list — forced by the first
+   * visibility-scoped search consumer (document content search inside
+   * the caller's visible case set). The filter MUST run inside the
+   * query, before the limit: a post-filtered search whose first `limit`
+   * hits are all out of scope silently starves out the in-scope ones —
+   * a correctness bug, not a performance choice.
    */
   searchText(
     kind: string,
     field: string,
     query: string,
     limit: number,
+    filter?: Readonly<Record<string, FilterValue>>,
   ): Promise<readonly ResourceMessage[]>;
 }

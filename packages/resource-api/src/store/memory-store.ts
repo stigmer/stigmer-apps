@@ -218,6 +218,7 @@ export class MemoryResourceStore implements ResourceStore {
     field: string,
     query: string,
     limit: number,
+    filter?: Readonly<Record<string, FilterValue>>,
   ): Promise<readonly ResourceMessage[]> {
     this.#config(kind);
     const path = this.#fieldPath(kind, field);
@@ -226,7 +227,9 @@ export class MemoryResourceStore implements ResourceStore {
     }
     const needle = query.toLowerCase();
     const hits: { rendered: string; row: ResourceMessage }[] = [];
-    for (const row of this.#table(kind).values()) {
+    // Filter BEFORE the limit (the port contract): out-of-scope rows
+    // must never occupy result slots.
+    for (const row of this.#filteredRows(kind, filter)) {
       const rendered = this.#searchValue(kind, row, path);
       if (rendered !== undefined && rendered.toLowerCase().includes(needle)) {
         hits.push({ rendered, row });

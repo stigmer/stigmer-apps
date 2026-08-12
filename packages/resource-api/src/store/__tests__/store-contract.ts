@@ -612,6 +612,66 @@ export function runStoreContractTests(
       });
     });
 
+    it("search narrows by a filter with list's vocabulary — eq and in", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_a", serialNumber: "S1", name: "annual report", ownerId: "own_1" }));
+        await store.save("Widget", makeWidget({ id: "wdg_b", serialNumber: "S2", name: "annual audit", ownerId: "own_2" }));
+        await store.save("Widget", makeWidget({ id: "wdg_c", serialNumber: "S3", name: "annual note", ownerId: "own_3" }));
+
+        const eq = (await store.searchText("Widget", "name", "annual", 10, {
+          ownerId: "own_2",
+        })) as Widget[];
+        expect(eq.map((w) => w.metadata?.id)).toEqual(["wdg_b"]);
+
+        const within = (await store.searchText("Widget", "name", "annual", 10, {
+          ownerId: { in: ["own_1", "own_3"] },
+        })) as Widget[];
+        expect(within.map((w) => w.metadata?.id)).toEqual(["wdg_c", "wdg_a"]);
+      });
+    });
+
+    it("an empty in-filter searches nothing — never everything", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_1", serialNumber: "S1", name: "findable", ownerId: "own_1" }));
+        const hits = await store.searchText("Widget", "name", "findable", 10, {
+          ownerId: { in: [] },
+        });
+        expect(hits.length).toBe(0);
+      });
+    });
+
+    it("the filter runs BEFORE the limit — out-of-scope rows never occupy result slots", async () => {
+      await withStore(async (store) => {
+        // Ten out-of-scope matches that sort AHEAD of the one in-scope
+        // match: a post-filtered implementation would fetch the first
+        // `limit` hits, filter them all away, and starve out the real
+        // one — the exact bug the parameter exists to prevent.
+        for (let i = 0; i < 10; i++) {
+          await store.save(
+            "Widget",
+            makeWidget({ id: `wdg_out_${i}`, serialNumber: `SO${i}`, name: `aaa shared term ${i}`, ownerId: "other" }),
+          );
+        }
+        await store.save(
+          "Widget",
+          makeWidget({ id: "wdg_mine", serialNumber: "SM", name: "zzz shared term", ownerId: "mine" }),
+        );
+
+        const hits = (await store.searchText("Widget", "name", "shared term", 5, {
+          ownerId: "mine",
+        })) as Widget[];
+        expect(hits.map((w) => w.metadata?.id)).toEqual(["wdg_mine"]);
+      });
+    });
+
+    it("rejects a search filter on an unregistered field loudly", async () => {
+      await withStore(async (store) => {
+        await expect(
+          store.searchText("Widget", "name", "x", 10, { noSuchField: "v" }),
+        ).rejects.toThrowError(/noSuchField/);
+      });
+    });
+
     it("equal order keys page deterministically by id across both adapters", async () => {
       await withStore(async (store) => {
         // Inserted deliberately out of id order so the memory adapter's

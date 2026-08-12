@@ -256,6 +256,7 @@ export class PostgresResourceStore implements ResourceStore {
     field: string,
     query: string,
     limit: number,
+    filter?: Readonly<Record<string, FilterValue>>,
   ): Promise<readonly ResourceMessage[]> {
     const config = this.#config(kind);
     const column = this.#column(kind, config, field);
@@ -266,12 +267,20 @@ export class PostgresResourceStore implements ResourceStore {
     // user input is a character, not a match-anything (the memory
     // adapter's substring semantics never had wildcards to begin with).
     const escaped = query.replace(/[\\%_]/g, (c) => `\\${c}`);
+    const params: unknown[] = [`%${escaped}%`];
+    // Filter conditions join the WHERE — inside the query, BEFORE the
+    // limit (the port contract's starvation rule).
+    const where = [
+      `${column} ILIKE $1 ESCAPE '\\'`,
+      ...this.#filterConditions(kind, config, filter, params),
+    ];
+    params.push(Math.max(0, limit));
     const res = await this.#pool.query(
       `SELECT resource FROM ${config.table}
-        WHERE ${column} ILIKE $1 ESCAPE '\\'
+        WHERE ${where.join(" AND ")}
         ORDER BY ${column} ASC, id ASC
-        LIMIT $2`,
-      [`%${escaped}%`, Math.max(0, limit)],
+        LIMIT $${params.length}`,
+      params,
     );
     return res.rows.map((r) => this.#toMessage(config, r.resource));
   }
