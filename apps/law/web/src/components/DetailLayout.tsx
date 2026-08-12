@@ -16,11 +16,6 @@
  * where two columns physically stop being legible — in practice only
  * the small-screen sheet case, which overlays instead of squeezing.
  *
- * The column rule lives in app.css as `.law-detail-columns`, NOT as
- * Tailwind's grid-cols utilities: the SDK's lazily-loaded stylesheet
- * re-declares those utility names unscoped and would flip this exact
- * base+variant pair the moment Ask AI first opens (see app.css).
- *
  * The rail is an <aside> landmark so assistive tech can jump between
  * the story and the facts. When the columns do stack, rail follows
  * main — the facts are one swipe away, never lost.
@@ -30,7 +25,7 @@ import type { ReactNode } from "react";
 
 export function DetailLayout(props: { children: ReactNode; rail: ReactNode; railLabel: string }) {
   return (
-    <div className="law-detail-columns grid items-start gap-4">
+    <div className="grid grid-cols-1 items-start gap-4 @xl:grid-cols-[minmax(0,1fr)_minmax(13rem,20rem)]">
       <div className="min-w-0">{props.children}</div>
       <aside aria-label={props.railLabel} className="flex min-w-0 flex-col gap-4">
         {props.rail}

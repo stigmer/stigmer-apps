@@ -123,13 +123,9 @@ export function AssistantDock() {
           style={desktop && expanded ? { width } : undefined}
           onKeyDown={desktop ? undefined : onSheetKeyDown}
           className={
-            // law-assistant-frame owns POSITION (relative when docked,
-            // fixed for the sheet) — the SDK stylesheet re-declares the
-            // `.relative` utility unscoped, which would beat a
-            // `max-lg:fixed` variant once the chunk loads (see app.css).
             expanded
-              ? "law-assistant law-assistant-frame flex shrink-0 flex-col border-l border-line bg-surface outline-none " +
-                "max-lg:inset-y-0 max-lg:right-0 max-lg:z-50 max-lg:w-full max-lg:max-w-xl max-lg:shadow-lg"
+              ? "law-assistant relative flex shrink-0 flex-col border-l border-line bg-surface outline-none " +
+                "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-50 max-lg:w-full max-lg:max-w-xl max-lg:shadow-lg"
               : "hidden"
           }
         >
