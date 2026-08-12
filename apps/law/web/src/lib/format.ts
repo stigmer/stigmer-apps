@@ -14,6 +14,7 @@
 import { CaseLifecycle, ClientRole, ForumKind } from "../gen/stigmer/law/case/v1/case_pb.js";
 import { ClientKind } from "../gen/stigmer/law/client/v1/client_pb.js";
 import { DeadlineState } from "../gen/stigmer/law/deadline/v1/deadline_pb.js";
+import { DocumentCategory } from "../gen/stigmer/law/document/v1/document_pb.js";
 import { FeeKind } from "../gen/stigmer/law/feearrangement/v1/feearrangement_pb.js";
 import { FirmRole } from "../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
 import { OutcomeKind } from "../gen/stigmer/law/hearing/v1/hearing_pb.js";
@@ -199,6 +200,24 @@ const LEDGER_ENTRY_KIND_LABELS: Record<LedgerEntryKind, string> = {
 
 export function ledgerEntryKindLabel(kind: LedgerEntryKind): string {
   return LEDGER_ENTRY_KIND_LABELS[kind] ?? "Entry";
+}
+
+// UNSPECIFIED renders as "Other" by the proto's own instruction
+// (uploads predating the category land there honestly).
+const DOCUMENT_CATEGORY_LABELS: Record<DocumentCategory, string> = {
+  [DocumentCategory.UNSPECIFIED]: "Other",
+  [DocumentCategory.PLEADING]: "Pleading",
+  [DocumentCategory.APPLICATION]: "Application",
+  [DocumentCategory.EVIDENCE]: "Evidence",
+  [DocumentCategory.ORDER_JUDGMENT]: "Order / judgment",
+  [DocumentCategory.CORRESPONDENCE]: "Correspondence",
+  [DocumentCategory.VAKALATNAMA]: "Vakalatnama",
+  [DocumentCategory.JUDGMENT]: "Judgment",
+  [DocumentCategory.OTHER]: "Other",
+};
+
+export function documentCategoryLabel(category: DocumentCategory): string {
+  return DOCUMENT_CATEGORY_LABELS[category] ?? "Other";
 }
 
 const CLIENT_KIND_LABELS: Record<ClientKind, string> = {

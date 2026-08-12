@@ -135,6 +135,29 @@ export function useCaseDocuments(caseId: string, page: number) {
   });
 }
 
+/** The viewer's metadata read. Get authorizes case membership, so a
+ * foreign or invented id fails closed with the server's sentence. */
+export function useDocument(id: string) {
+  const { documents } = useApiClients();
+  return useQuery({
+    queryKey: ["cases", "documents", "byId", id],
+    queryFn: () => documents.get({ id }),
+  });
+}
+
+/** The viewer's bytes, through the SAME bearer-carrying byte route as
+ * Download (a bare URL would reach the server with no identity). A
+ * filed document is immutable — no update RPC exists — so the blob
+ * never goes stale and reopening re-reads cache, not network. */
+export function useDocumentBytes(id: string) {
+  const { files } = useApiClients();
+  return useQuery({
+    queryKey: ["cases", "documents", "bytes", id],
+    queryFn: () => files.downloadDocument(id),
+    staleTime: Infinity,
+  });
+}
+
 /** Multi-file upload = repeated create (FR-CASE-005 AC10), sequential. */
 export function useUploadDocuments(caseId: string) {
   const { files } = useApiClients();

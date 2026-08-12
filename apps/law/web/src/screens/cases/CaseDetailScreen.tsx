@@ -13,6 +13,8 @@
  * link to a partner tab renders the Diary, and the real tab appears
  * the moment the role confirms. The server refuses non-partners
  * regardless; the URL merely selects among tabs the caller may see.
+ * An open document (?doc=…, T09.2) rides the same contract and swaps
+ * the whole frame for the in-app reading view (DocumentViewer).
  *
  * Editing facts is full-spec replacement through CaseForm; the
  * lifecycle moves ONLY through its own control (a spec edit cannot
@@ -46,6 +48,7 @@ import { useClient } from "../clients/queries.js";
 import { CaseDeadlines } from "./CaseDeadlines.js";
 import { CaseDiary } from "./CaseDiary.js";
 import { CaseDocuments } from "./CaseDocuments.js";
+import { DocumentViewer } from "./DocumentViewer.js";
 import { CaseForm } from "./CaseForm.js";
 import { CaseHistory } from "./CaseHistory.js";
 import { CaseMembersSection } from "./CaseMembersSection.js";
@@ -158,11 +161,35 @@ export function CaseDetailScreen() {
   const requested = searchParams.get("tab");
   const tab: Tab = tabs.find((name) => name === requested) ?? "Diary";
 
+  // The open document, derived the same way (T09.2). The id is not
+  // validated here — DocumentService.Get authorizes membership, so a
+  // foreign or invented id fails closed with the server's sentence
+  // inside the reading frame.
+  const viewedDocumentId = searchParams.get("doc");
+  const requestedPage = Number(searchParams.get("page"));
+  const documentPage =
+    Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : undefined;
+
   function onSelectTab(name: Tab) {
     setSearchParams(
       (params) => {
         if (name === "Diary") params.delete("tab");
         else params.set("tab", name);
+        return params;
+      },
+      { replace: true },
+    );
+  }
+
+  function onCloseDocument() {
+    // Replace, not push: opening PUSHED, so open→close leaves history
+    // exactly where it started; landing on the Documents tab keeps a
+    // deep-linked close from dropping the reader onto the Diary.
+    setSearchParams(
+      (params) => {
+        params.delete("doc");
+        params.delete("page");
+        params.set("tab", "Documents");
         return params;
       },
       { replace: true },
@@ -181,6 +208,19 @@ export function CaseDetailScreen() {
   const parties = spec.opposingParties.map((p) =>
     p.counselName ? `${p.name} (counsel: ${p.counselName})` : p.name,
   );
+
+  // The reading frame swaps the WHOLE detail frame (the edit-mode
+  // precedent) — a court order deserves the full content width, not a
+  // column beside the rail.
+  if (viewedDocumentId) {
+    return (
+      <DocumentViewer
+        documentId={viewedDocumentId}
+        page={documentPage}
+        onClose={onCloseDocument}
+      />
+    );
+  }
 
   if (editing) {
     return (

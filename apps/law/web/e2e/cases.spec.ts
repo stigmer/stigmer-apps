@@ -106,11 +106,31 @@ test("intake → diary → recorded outcome auto-schedules → notes → documen
   await pdfRow.getByRole("button", { name: "Download" }).click();
   expect((await downloadEvent).suggestedFilename()).toBe("vakalatnama.pdf");
 
+  // View opens the IN-APP reading frame (T09.2) — same window, the URL
+  // carrying ?doc=. Headless Chromium renders no PDF plugin, so the PDF
+  // assertion is the frame + blob src; the PNG below proves rendering.
+  await pdfRow.getByRole("button", { name: "View" }).click();
+  await expect(page.locator('iframe[title="vakalatnama.pdf"]')).toHaveAttribute(
+    "src",
+    /^blob:/,
+  );
+  expect(page.url()).toContain("doc=");
+  // exact: the sidebar's "Close navigation" also answers to /Close/.
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(docs.getByText("vakalatnama.pdf")).toBeVisible();
+
   const pngRow = docs.getByRole("listitem").filter({ hasText: "order-sheet.png" });
-  const popupEvent = page.waitForEvent("popup");
   await pngRow.getByRole("button", { name: "View" }).click();
-  const popup = await popupEvent;
-  await popup.waitForURL(/^blob:/);
+  const image = page.getByRole("img", { name: "order-sheet.png" });
+  await expect(image).toBeVisible();
+  // Decoded pixels, not just an element: the byte route → blob → img
+  // path really delivered the image.
+  await expect
+    .poll(() => image.evaluate((el) => (el as HTMLImageElement).naturalWidth))
+    .toBeGreaterThan(0);
+  // Opening PUSHED history, so Back is "close the document".
+  await page.goBack();
+  await expect(docs.getByText("order-sheet.png")).toBeVisible();
 });
 
 test("the conflict check fires DURING intake when the name is on the other side", async ({ page }) => {

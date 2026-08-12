@@ -12,6 +12,14 @@ import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { ASHA, SEED_CASE } from "./fixtures.js";
 
+// A 1×1 PNG for the reading-frame scan: axe cannot inject into a PDF
+// plugin frame, so the scanned document is an image (cases.spec makes
+// the same choice for the same reason).
+const PNG_BYTES = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
 async function signIn(page: Page) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(ASHA.email);
@@ -101,6 +109,20 @@ test("accessibility: no serious or critical axe violations on any screen", async
   await page.getByRole("link", { name: new RegExp(SEED_CASE.fileNumber.replaceAll("/", "\\/")) }).click();
   await expect(page.getByRole("heading", { name: SEED_CASE.fileNumber })).toBeVisible();
   await scan("case detail");
+
+  // The document reading frame (T09.2): upload a fixture and open it —
+  // the viewer chrome faces the same gate as every screen.
+  await page.getByRole("button", { name: "Documents" }).click();
+  await page
+    .locator("#document-upload")
+    .setInputFiles([{ name: "axe-fixture.png", mimeType: "image/png", buffer: PNG_BYTES }]);
+  await page
+    .getByRole("listitem")
+    .filter({ hasText: "axe-fixture.png" })
+    .getByRole("button", { name: "View" })
+    .click();
+  await expect(page.getByRole("img", { name: "axe-fixture.png" })).toBeVisible();
+  await scan("document viewer");
 
   await page.goto("/clients");
   await scan("clients");

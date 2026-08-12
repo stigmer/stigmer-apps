@@ -1,13 +1,14 @@
 /**
  * Case documents (FR-CASE-005, FR-INTEG-001): upload through the byte
  * route (multi-file = repeated create, AC10), list newest first, and the
- * two read actions — View (object URL in a new tab; the route's
- * attachment disposition doesn't apply to object URLs) and Download
- * (triggered save). Both fetch WITH the bearer — a bare link would
- * arrive at the server with no identity.
+ * two read actions — View (the in-app reading frame: writing ?doc=<id>
+ * swaps the detail frame for DocumentViewer, T09.2) and Download
+ * (bearer fetch → triggered save; a bare link would arrive at the
+ * server with no identity).
  */
 
 import { useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ConnectError } from "@connectrpc/connect";
 import { useApiClients } from "../../api/clients.js";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
@@ -31,6 +32,7 @@ export function CaseDocuments(props: { caseId: string }) {
   const { files } = useApiClients();
   const fileInput = useRef<HTMLInputElement>(null);
   const [actionError, setActionError] = useState<string | undefined>();
+  const [, setSearchParams] = useSearchParams();
 
   async function onPicked(picked: FileList | null) {
     if (!picked || picked.length === 0) return;
@@ -46,38 +48,30 @@ export function CaseDocuments(props: { caseId: string }) {
     }
   }
 
-  async function withBlobUrl(doc: Document, use: (url: string) => void) {
+  function onView(doc: Document) {
+    // A PUSH, not replace: browser Back from the reading frame is
+    // "close the document" (the tab param itself keeps replace
+    // semantics — see CaseDetailScreen).
+    setSearchParams((params) => {
+      params.set("doc", doc.metadata?.id ?? "");
+      return params;
+    });
+  }
+
+  async function onDownload(doc: Document) {
     setActionError(undefined);
     try {
       const blob = await files.downloadDocument(doc.metadata?.id ?? "");
       const url = URL.createObjectURL(blob);
-      use(url);
-      // Long enough for the tab/save to take the bytes; then release.
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (err) {
-      setActionError(ConnectError.from(err).rawMessage);
-    }
-  }
-
-  function onView(doc: Document) {
-    // An anchor, not window.open: Chromium blocks top-frame blob
-    // navigation from a noopener window.open, leaving a blank tab.
-    void withBlobUrl(doc, (url) => {
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.target = "_blank";
-      anchor.rel = "noopener";
-      anchor.click();
-    });
-  }
-
-  function onDownload(doc: Document) {
-    void withBlobUrl(doc, (url) => {
       const anchor = document.createElement("a");
       anchor.href = url;
       anchor.download = doc.spec?.fileName ?? "document";
       anchor.click();
-    });
+      // Long enough for the save to take the bytes; then release.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      setActionError(ConnectError.from(err).rawMessage);
+    }
   }
 
   return (
@@ -125,7 +119,7 @@ export function CaseDocuments(props: { caseId: string }) {
                   {formatSize(doc.spec?.sizeBytes ?? 0n)}
                 </span>
                 <Button onClick={() => onView(doc)}>View</Button>
-                <Button onClick={() => onDownload(doc)}>Download</Button>
+                <Button onClick={() => void onDownload(doc)}>Download</Button>
               </li>
             ))}
           </ul>
