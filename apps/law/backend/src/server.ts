@@ -15,6 +15,7 @@ import type { AuthKit } from "./auth/auth.js";
 import { registerAuditSubscriber } from "./domain/audit/audit-subscriber.js";
 import { registerLeadMembershipHandler } from "./domain/case/lead-membership-handler.js";
 import { registerNextHearingRefreshHandler } from "./domain/case/next-hearing-refresh-handler.js";
+import { startExtractionSweep } from "./domain/document/extraction-sweep.js";
 import { registerDeactivationHandler } from "./domain/firmmember/deactivation-handler.js";
 import { registerTaskAssignmentHandler } from "./domain/notification/task-assignment-handler.js";
 import { startReminderSweep } from "./domain/reminders/sweep.js";
@@ -56,6 +57,12 @@ export interface BackendDeps {
    * dedup key absorbs concurrent sweeps.
    */
   readonly reminderIntervalMs?: number;
+  /**
+   * Extraction sweep tick (FR-DOC-003); 0/absent disables the loop
+   * (tests drive runExtractionSweepOnce directly). Multi-replica safe:
+   * DocumentPage's composed natural key absorbs concurrent sweeps.
+   */
+  readonly extractionIntervalMs?: number;
   /**
    * The assistant integration (T05 web leg): config + platform token
    * minter, present together. Absent means the deployment has no
@@ -169,6 +176,22 @@ function assembleApp(deps: BackendDeps): App {
         >,
       },
       deps.reminderIntervalMs,
+    );
+  }
+
+  if (deps.extractionIntervalMs && deps.extractionIntervalMs > 0) {
+    // The document text-layer writer (FR-DOC-003) — covers fresh
+    // uploads, the backfill, and retry through one idempotent loop.
+    startExtractionSweep(
+      {
+        store: deps.store,
+        objectStore: deps.objectStore,
+        createDocumentPage: app.resources.documentPages.invoke.create as NonNullable<
+          typeof app.resources.documentPages.invoke.create
+        >,
+        recordExtraction: app.resources.documents.invoke.recordExtraction,
+      },
+      deps.extractionIntervalMs,
     );
   }
   return app;

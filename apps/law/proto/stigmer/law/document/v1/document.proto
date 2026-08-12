@@ -26,6 +26,37 @@ message Document {
   // System-managed; created_by/created_at are the uploader and time.
   stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
   DocumentSpec spec = 4 [(buf.validate.field).required = true];
+  DocumentStatus status = 5;
+}
+
+// System-owned extraction record (FR-DOC-003): written ONLY by the
+// extraction sweep through the system update operation — no wire path
+// can set it. The spec (the record) stays immutable; this block is the
+// machinery's honest report of what it could read.
+message DocumentStatus {
+  ExtractionState extraction = 1;
+  // Pages extracted (DocumentPage rows); 0 unless EXTRACTED.
+  int32 page_count = 2;
+}
+
+enum ExtractionState {
+  // Rows predating extraction (and fresh uploads before their first
+  // sweep): treated as PENDING by the sweep, which is what makes the
+  // backfill automatic — no migration touches existing rows.
+  EXTRACTION_STATE_UNSPECIFIED = 0;
+  EXTRACTION_STATE_PENDING = 1;
+  // The text layer is in DocumentPage rows, searchable and readable.
+  EXTRACTION_STATE_EXTRACTED = 2;
+  // Parsed fine but carries no usable text — a scan, a photo, or an
+  // image-only PDF. The honest state the assistant reports as "a scan
+  // I can't read yet"; flips only when OCR lands (DD-008 gate).
+  EXTRACTION_STATE_NO_TEXT_LAYER = 3;
+  // The parser rejected the bytes (corrupt or encrypted file).
+  // Terminal: a deterministic failure would fail identically on every
+  // sweep, so retrying would be a poison-pill loop. Transient failures
+  // (bucket or store unreachable) never reach this state — the sweep
+  // leaves them PENDING and the next tick is the retry.
+  EXTRACTION_STATE_FAILED = 4;
 }
 
 message DocumentSpec {
@@ -89,6 +120,21 @@ message GetDocumentRequest {
   string id = 1 [(buf.validate.field).string.min_len = 1];
 }
 
+// The extraction sweep's status report (FR-DOC-003). Status is
+// system-owned, and the generic update pipeline enforces that by
+// KEEPING stored status (commons buildUpdateState) — so this write is
+// a named custom operation instead, the Case.UpdateStatus arrangement.
+// Every wire caller is refused by policy; only the in-process system
+// principal passes.
+message RecordDocumentExtractionRequest {
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+  ExtractionState extraction = 2 [(buf.validate.field).enum = {
+    defined_only: true,
+    not_in: [0]  // UNSPECIFIED means "never swept" — never written back
+  }];
+  int32 page_count = 3 [(buf.validate.field).int32.gte = 0];
+}
+
 message ListDocumentsRequest {
   // The case whose documents are asked for. Required unless category is
   // JUDGMENT — the one firm-wide document view (FR-DOC-002: the
@@ -119,4 +165,7 @@ service DocumentService {
   rpc Get(GetDocumentRequest) returns (Document);
   // List a case's documents, newest first.
   rpc List(ListDocumentsRequest) returns (ListDocumentsResponse);
+  // System-only (see RecordDocumentExtractionRequest): the wire refuses
+  // every caller; the extraction sweep reaches it through invoke.
+  rpc RecordExtraction(RecordDocumentExtractionRequest) returns (Document);
 }

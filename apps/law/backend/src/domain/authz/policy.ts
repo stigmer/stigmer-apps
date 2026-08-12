@@ -73,6 +73,8 @@ const CASE_REF: Readonly<
   Task: (r) => r.spec?.caseId,
   CaseNote: (r) => r.spec?.caseId,
   Document: (r) => r.spec?.caseId,
+  // Denormalized from the immutable Document at extraction time.
+  DocumentPage: (r) => r.spec?.caseId,
 };
 
 export interface FirmPolicy {
@@ -333,6 +335,12 @@ export function createFirmPolicy(
         // Case content, clerk included (the clerk records hearings —
         // DD-001's division of labour). Creates carry their membership
         // check in the guard; loaded-resource operations check here.
+        if (kind === "Document" && operation === "recordExtraction") {
+          // The sweep's status report — a person can never write it,
+          // membership notwithstanding (the fall-through below would
+          // otherwise allow any case member).
+          return deny("Extraction status is system-written");
+        }
         if (operation === "create") {
           return (await onFirm(member, "case_workers"))
             ? ALLOW
@@ -357,6 +365,25 @@ export function createFirmPolicy(
         return (await canTouchCaseContent(member, caseId))
           ? ALLOW
           : deny("Only case members and partners may work this matter");
+      }
+
+      case "DocumentPage": {
+        // A page is its document's content, written only by the
+        // extraction sweep (FR-DOC-003). Reads follow the Document's
+        // case-content rule; the handlers' guards carry the scoping
+        // (pages are listed per document; search is visibility-filtered
+        // inside the store query).
+        if (operation === "list" || operation === "search") {
+          return (await onFirm(member, "case_workers"))
+            ? ALLOW
+            : deny("Office staff do not view case content");
+        }
+        if (operation === "get") {
+          return (await canTouchCaseContent(member, caseId))
+            ? ALLOW
+            : deny("Only case members and partners may view case content");
+        }
+        return deny("Document pages are system-written");
       }
 
       case "Deadline": {
@@ -465,6 +492,11 @@ export function createFirmPolicy(
     if (kind === "AuditEntry" && operation === "create") return ALLOW; // audit subscriber
     if (kind === "Case" && operation === "update") return ALLOW; // next-hearing refresh (Q6)
     if (kind === "CaseMember" && operation === "create") return ALLOW; // lead materialization
+    if (kind === "DocumentPage" && operation === "create") return ALLOW; // extraction sweep
+    // The sweep's status report — a named mutation that can only touch
+    // status (its handler never reads spec), so this allowance cannot
+    // widen into editing the record (FR-DOC-003).
+    if (kind === "Document" && operation === "recordExtraction") return ALLOW;
     return deny(`System automation may not ${operation} ${kind}`);
   }
 

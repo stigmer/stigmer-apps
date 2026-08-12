@@ -18,12 +18,22 @@ import {
   type Deadline,
 } from "../../gen/stigmer/law/deadline/v1/deadline_pb.js";
 import {
+  ListDocumentsRequestSchema,
+  type Document,
+} from "../../gen/stigmer/law/document/v1/document_pb.js";
+import {
   ListHearingsRequestSchema,
   type Hearing,
 } from "../../gen/stigmer/law/hearing/v1/hearing_pb.js";
 import { countNoun, formatDate } from "../format.js";
 import { gated, textResult } from "../gate.js";
-import { caseByFileNumber, deadlineLine, hearingLine, type ToolDeps } from "./shared.js";
+import {
+  caseByFileNumber,
+  deadlineLine,
+  documentLine,
+  hearingLine,
+  type ToolDeps,
+} from "./shared.js";
 
 const NAME = "case_story";
 
@@ -64,7 +74,7 @@ export function registerCaseStory(
       const theCase = await caseByFileNumber(deps.resources, caller.principal, args.file_number);
       const caseId = theCase.metadata?.id ?? "";
 
-      const [hearings, deadlines, notes] = await Promise.all([
+      const [hearings, deadlines, notes, documents] = await Promise.all([
         deps.resources.hearings.invoke.list(
           create(ListHearingsRequestSchema, { caseId, pageSize: 100 }),
           caller.principal,
@@ -75,6 +85,10 @@ export function registerCaseStory(
         ),
         deps.resources.caseNotes.invoke.list(
           create(ListCaseNotesRequestSchema, { caseId, pageSize: 3 }),
+          caller.principal,
+        ),
+        deps.resources.documents.invoke.list(
+          create(ListDocumentsRequestSchema, { caseId, pageSize: 5 }),
           caller.principal,
         ),
       ]);
@@ -110,12 +124,19 @@ export function registerCaseStory(
         .map((n) => `- ${formatDate(isoDateOf(n))}: ${n.spec?.content ?? ""}`)
         .join("\n");
 
+      const documentLines = (documents.items as Document[])
+        .map((d, i) => `${i + 1}. ${documentLine(d)}`)
+        .join("\n");
+
       const sections = [
         header,
         diary ? `Recent hearings (newest first):\n${diary}` : "No hearings recorded yet.",
         deadlines.items.length > 0
           ? `Open deadlines (${countNoun(deadlines.totalCount, "deadline")}):\n${deadlineLines}`
           : "No open deadlines.",
+        documents.items.length > 0
+          ? `Documents on file (${countNoun(documents.totalCount, "document")}, newest first):\n${documentLines}`
+          : "No documents on file yet.",
         notes.items.length > 0 ? `Latest notes:\n${noteLines}` : "",
       ].filter(Boolean);
 

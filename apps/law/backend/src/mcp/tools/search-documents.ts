@@ -1,0 +1,137 @@
+/**
+ * search_documents — "where have we said this before?" (FR-DOC-004):
+ * literal text search over the extracted pages of the caller's visible
+ * documents, each hit cited the way a lawyer cites — file number,
+ * document, PAGE. The search itself is the DocumentPage pipeline's
+ * Search operation (visibility filtered inside the store query); this
+ * tool only windows snippets and renders lines.
+ *
+ * Honesty rules: matching is literal substring (no stemming — the
+ * description tells the model to try another word, not this tool
+ * again with the same one), and scans/images are not searchable until
+ * OCR lands — the description says so, so the assistant can say so.
+ */
+
+import { create } from "@bufbuild/protobuf";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallerIdentity } from "@stigmer/identity";
+import { z } from "zod";
+import type { Case } from "../../gen/stigmer/law/case/v1/case_pb.js";
+import type { Document } from "../../gen/stigmer/law/document/v1/document_pb.js";
+import {
+  type DocumentPage,
+  SearchDocumentPagesRequestSchema,
+} from "../../gen/stigmer/law/documentpage/v1/documentpage_pb.js";
+import { countNoun } from "../format.js";
+import { gated, textResult } from "../gate.js";
+import { caseByFileNumber, type ToolDeps } from "./shared.js";
+
+const NAME = "search_documents";
+
+/** Characters of context either side of the first match. */
+const SNIPPET_WINDOW = 120;
+
+export function registerSearchDocuments(
+  server: McpServer,
+  identity: CallerIdentity | undefined,
+  deps: ToolDeps,
+): string {
+  server.registerTool(
+    NAME,
+    {
+      description:
+        "Search the text of the firm's documents (the pages the system has " +
+        "extracted) for an exact word or phrase, across every case the " +
+        "caller can see or within one matter. Matching is literal — if a " +
+        "word finds nothing, try a synonym or a shorter root (e.g. " +
+        "'limitation' not 'time-barred'). Scanned documents and photos are " +
+        "not searchable yet. Each hit cites the matter, the document, and " +
+        "the page, and includes the document's id.",
+      inputSchema: {
+        query: z
+          .string()
+          .min(2)
+          .max(200)
+          .describe("The exact word or phrase to find, e.g. 'limitation' or 'arbitration agreement'."),
+        file_number: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("Narrow to one matter by its file number, e.g. 'CS/2026/041'."),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    gated(NAME, identity, deps.resolveCallerIdentity, async (args, caller) => {
+      let caseId = "";
+      if (args.file_number) {
+        // NOT_FOUND and the membership denial relay verbatim.
+        caseId = (await caseByFileNumber(deps.resources, caller.principal, args.file_number))
+          .metadata?.id ?? "";
+      }
+
+      const { items } = await deps.resources.documentPages.invoke.search(
+        create(SearchDocumentPagesRequestSchema, { query: args.query, caseId }),
+        caller.principal,
+      );
+      const pages = items as DocumentPage[];
+
+      const where = args.file_number
+        ? `on ${args.file_number.trim()}`
+        : "across your visible cases";
+      if (pages.length === 0) {
+        return textResult(
+          `No document pages match "${args.query}" ${where}. Matching is ` +
+            `exact — a different word may find it; scanned documents are not ` +
+            `searchable yet.`,
+        );
+      }
+
+      // One bulk lookup per referenced kind for the citation facts —
+      // never an N+1 (the shared-store display rule, DD-A4).
+      const documents = (await deps.store.getByIds("Document", [
+        ...new Set(pages.map((p) => p.spec?.documentId ?? "")),
+      ])) as Map<string, Document>;
+      const cases = (await deps.store.getByIds("Case", [
+        ...new Set(pages.map((p) => p.spec?.caseId ?? "")),
+      ])) as Map<string, Case>;
+
+      const hits = pages.map((page) => {
+        const document = documents.get(page.spec?.documentId ?? "");
+        const fileNumber = cases.get(page.spec?.caseId ?? "")?.spec?.fileNumber ?? "";
+        return {
+          snippet: snippetAround(page.spec?.text ?? "", args.query),
+          file_name: document?.spec?.fileName ?? "(unknown document)",
+          file_number: fileNumber,
+          page: page.spec?.page ?? 0,
+          document_id: page.spec?.documentId,
+        };
+      });
+
+      const lines = hits.map(
+        (h, i) =>
+          `${i + 1}. "${h.snippet}"\n   — ${h.file_name}, page ${h.page} · ${h.file_number} · id ${h.document_id}`,
+      );
+      return textResult(
+        `${countNoun(hits.length, "matching page")} ${where} (top matches):\n${lines.join("\n")}`,
+        { hits, query: args.query },
+      );
+    }),
+  );
+  return NAME;
+}
+
+/** The first match with context either side, single-line, ellipsized —
+ * the passage a person checks before opening the page. */
+function snippetAround(text: string, query: string): string {
+  const at = text.toLowerCase().indexOf(query.toLowerCase());
+  if (at < 0) {
+    // Defensive: the store matched, so this should not happen; show the
+    // page head rather than nothing.
+    return text.slice(0, SNIPPET_WINDOW * 2) + (text.length > SNIPPET_WINDOW * 2 ? "…" : "");
+  }
+  const start = Math.max(0, at - SNIPPET_WINDOW);
+  const end = Math.min(text.length, at + query.length + SNIPPET_WINDOW);
+  return (
+    (start > 0 ? "…" : "") + text.slice(start, end).trim() + (end < text.length ? "…" : "")
+  );
+}

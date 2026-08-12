@@ -133,6 +133,7 @@ async function main(): Promise<void> {
       dispatcher,
       webRoot,
       reminderIntervalMs: config.reminderIntervalMs,
+      extractionIntervalMs: config.extractionIntervalMs,
       ...(config.assistant
         ? {
             assistant: {

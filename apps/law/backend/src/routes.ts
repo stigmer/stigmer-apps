@@ -17,6 +17,7 @@ import { caseMemberResource } from "./domain/casemember/casemember-resource.js";
 import { caseNoteResource } from "./domain/casenote/casenote-resource.js";
 import { clientResource } from "./domain/client/client-resource.js";
 import { deadlineResource } from "./domain/deadline/deadline-resource.js";
+import { documentPageResource } from "./domain/document/document-page-resource.js";
 import { documentResource } from "./domain/document/document-resource.js";
 import { firmMemberResource } from "./domain/firmmember/firmmember-resource.js";
 import { hearingResource } from "./domain/hearing/hearing-resource.js";
@@ -88,6 +89,7 @@ export function createApp(deps: AppDeps) {
       caseNotes: caseNoteResource(guarded),
       taskComments: taskCommentResource(guarded),
       documents: documentResource(guarded),
+      documentPages: documentPageResource(guarded),
       auditEntries: auditEntryResource(shared),
     },
   };

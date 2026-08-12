@@ -255,6 +255,37 @@ describe("case content (FR-AUTHZ-002/003)", () => {
   });
 });
 
+describe("document intelligence (FR-DOC-003/004)", () => {
+  it("a document's pages are its case's content: non-members denied on the loaded page", async () => {
+    const page = { spec: { caseId: "case_a", documentId: "doc_x", page: 1 } };
+    expectDeny(await decide(callers.junior, "DocumentPage", "get", page), /case members and partners/);
+    expect((await decide(callers.associate, "DocumentPage", "get", page)).allow).toBe(true);
+  });
+
+  it("office staff neither list nor search document text", async () => {
+    expectDeny(await decide(callers.staff, "DocumentPage", "list"), /Office staff/);
+    expectDeny(await decide(callers.staff, "DocumentPage", "search"), /Office staff/);
+    // Case workers pass the role gate; the handlers' guards scope the rest.
+    expect((await decide(callers.clerk, "DocumentPage", "search")).allow).toBe(true);
+  });
+
+  it("extraction machinery is system-written: every PERSON is refused, the system passes its named seams only", async () => {
+    // Even the managing partner: membership must not fall through to
+    // the case-content allowance for these operations.
+    expectDeny(
+      await decide(callers.mp, "Document", "recordExtraction", { spec: { caseId: "case_a" } }),
+      /system-written/,
+    );
+    expectDeny(await decide(callers.mp, "DocumentPage", "create"), /system-written/);
+
+    expect((await decide(SYSTEM_PRINCIPAL, "DocumentPage", "create")).allow).toBe(true);
+    expect((await decide(SYSTEM_PRINCIPAL, "Document", "recordExtraction")).allow).toBe(true);
+    // The allowlist stays named seams, not a kind-wide grant.
+    expectDeny(await decide(SYSTEM_PRINCIPAL, "Document", "create"), /System automation/);
+    expectDeny(await decide(SYSTEM_PRINCIPAL, "DocumentPage", "search"), /System automation/);
+  });
+});
+
 describe("case management (FR-CASE-002/003)", () => {
   it("juniors and clerks cannot open new matters; office staff cannot either", async () => {
     for (const caller of [callers.junior, callers.clerk, callers.staff]) {

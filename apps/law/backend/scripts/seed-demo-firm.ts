@@ -25,10 +25,12 @@
  *
  * Idempotency: cases are keyed by their firm file number and clients by
  * an exact-name search, so re-running skips what exists. Hearings,
- * deadlines, money, tasks, notes, and the document have no natural key
- * — they are seeded ONLY when their case was created by this run, so a
- * re-run never duplicates them. To re-seed from scratch, reset the
- * firm's database first (the cutover runbook's wipe step).
+ * deadlines, money, tasks, and notes have no natural key — they are
+ * seeded ONLY when their case was created by this run, so a re-run
+ * never duplicates them. DOCUMENTS key by (case, file name) and seed
+ * onto existing cases too — the demo file room reaches firms whose
+ * cases predate document intelligence. To re-seed from scratch, reset
+ * the firm's database first (the cutover runbook's wipe step).
  */
 
 import { create } from "@bufbuild/protobuf";
@@ -53,6 +55,7 @@ import {
   DeadlineSchema,
   DeadlineService,
 } from "../src/gen/stigmer/law/deadline/v1/deadline_pb.js";
+import { DocumentService } from "../src/gen/stigmer/law/document/v1/document_pb.js";
 import {
   FeeArrangementSchema,
   FeeArrangementService,
@@ -113,6 +116,7 @@ const fees = createClient(FeeArrangementService, transport);
 const ledger = createClient(LedgerEntryService, transport);
 const tasks = createClient(TaskService, transport);
 const caseNotes = createClient(CaseNoteService, transport);
+const documents = createClient(DocumentService, transport);
 
 const asOperator = { headers: { authorization: `Bearer ${operatorKey}` } };
 
@@ -468,7 +472,7 @@ for (const seed of SEED_TASKS) {
   console.log(`task "${seed.title}" created (due ${seed.dueDate})`);
 }
 
-/* A note and a document on the deep case. */
+/* A note on the deep case. */
 if (createdCases.has("CS/2026/041")) {
   await caseNotes.create(
     create(CaseNoteSchema, {
@@ -481,39 +485,139 @@ if (createdCases.has("CS/2026/041")) {
     }),
     asPartner,
   );
+}
 
+/* Documents (FR-DOC-001/003): a small fictional file room with REAL
+ * text layers, so the document-intelligence demo beats work on seeded
+ * data — search finds the limitation argument by page, the judgment
+ * collection holds a citable award, and one deliberate "scan" (a
+ * no-text page) shows the honest we-cannot-read-scans-yet answer.
+ * The extraction sweep picks everything up within one tick of boot.
+ * Gated on created-run cases like every non-keyed record (idempotency
+ * note in the header). */
+const SEED_DOCUMENTS: readonly {
+  fileNumber: string;
+  fileName: string;
+  category: string;
+  pages: readonly string[];
+}[] = [
+  {
+    fileNumber: "CS/2026/041",
+    fileName: "survey-report.pdf",
+    category: "evidence",
+    pages: ["Survey Report - CS/2026/041 - fictional demo document"],
+  },
+  {
+    fileNumber: "CS/2026/041",
+    fileName: "written-statement.pdf",
+    category: "pleading",
+    pages: [
+      "WRITTEN STATEMENT of the defendant, fictional demo pleading. " +
+        "PRELIMINARY OBJECTIONS: 1. The suit is barred by limitation under " +
+        "Article 113 of the Limitation Act - the cause of action, if any, " +
+        "arose more than three years before institution. 2. The plaint " +
+        "discloses no cause of action against defendant no. 2.",
+      "3. Without prejudice, the agreement dated 1 June 2024 contains an " +
+        "arbitration clause covering every dispute raised in the plaint, and " +
+        "the suit is liable to be referred under Section 8 of the " +
+        "Arbitration and Conciliation Act. VERIFICATION: contents true to " +
+        "knowledge, fictional demo document.",
+    ],
+  },
+  {
+    fileNumber: "ARB/2026/012",
+    fileName: "meridian-v-silverline-award.pdf",
+    category: "judgment",
+    pages: [
+      "FINAL AWARD, fictional demo arbitration. HELD: the arbitration " +
+        "clause survives termination of the underlying contract; repudiation " +
+        "of the agreement does not repudiate the agreement to arbitrate.",
+      "On quantum: the claimant is awarded the invoiced sums with interest " +
+        "at 9 percent per annum from the date of demand. Costs follow the " +
+        "event. Fictional demo document.",
+    ],
+  },
+  {
+    fileNumber: "CRL/2026/107",
+    fileName: "bail-order.pdf",
+    category: "order_judgment",
+    pages: [
+      "ORDER on bail application, fictional demo order. Bail granted on a " +
+        "personal bond of rupees fifty thousand with two sureties; passport " +
+        "to be surrendered; the accused shall not contact prosecution " +
+        "witnesses.",
+    ],
+  },
+  {
+    // The honesty fixture: a page with no text layer — the assistant
+    // must say "a scan I can't read yet", never guess.
+    fileNumber: "CRL/2026/107",
+    fileName: "medical-records-scan.pdf",
+    category: "evidence",
+    pages: [""],
+  },
+];
+
+for (const doc of SEED_DOCUMENTS) {
+  // Documents seed onto EXISTING cases too — unlike the other
+  // non-keyed records, the file room must be able to reach a firm
+  // whose cases were seeded before document intelligence existed.
+  // Idempotency is (case, file name): a name already on the case's
+  // file skips.
+  let matterId: string;
+  try {
+    matterId = (await cases.get({ fileNumber: doc.fileNumber }, asPartner)).metadata
+      ?.id as string;
+  } catch (err) {
+    if (ConnectError.from(err).code === Code.NotFound) continue;
+    throw err;
+  }
+  const onFile = await documents.list({ caseId: matterId, pageSize: 100 }, asPartner);
+  if (onFile.items.some((d) => d.spec?.fileName === doc.fileName)) {
+    console.log(`document ${doc.fileName} exists on ${doc.fileNumber} — skipping`);
+    continue;
+  }
   // The byte route is the ONLY non-Connect surface — exercised here the
   // way the web app uploads (raw POST, x-file-name header). Category
   // rides a header the same way the file name does.
-  const pdf = tinyPdf("Survey Report - CS/2026/041 (fictional demo document)");
-  const res = await fetch(`${url}/files/cases/${caseId("CS/2026/041")}/documents`, {
+  const res = await fetch(`${url}/files/cases/${matterId}/documents`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${login.accessToken}`,
       "content-type": "application/pdf",
-      "x-file-name": encodeURIComponent("survey-report.pdf"),
-      "x-document-category": "evidence",
+      "x-file-name": encodeURIComponent(doc.fileName),
+      "x-document-category": doc.category,
     },
-    body: pdf,
+    body: demoPdf(doc.pages),
   });
   if (res.status !== 201) {
     throw new Error(`document upload failed: ${res.status} ${await res.text()}`);
   }
-  console.log("document survey-report.pdf uploaded to CS/2026/041");
+  console.log(`document ${doc.fileName} (${doc.category}) uploaded to ${doc.fileNumber}`);
 }
 
 console.log("seed complete");
 
-/** A minimal one-page PDF, generated inline — no binary fixture to carry. */
-function tinyPdf(text: string): Buffer {
-  const stream = `BT /F1 18 Tf 72 720 Td (${text}) Tj ET`;
+/** A minimal text-layer PDF, one text run per page, generated inline —
+ * no binary fixture to carry. An empty string yields a textless page
+ * (the "scan" fixture). */
+function demoPdf(pages: readonly string[]): Buffer {
+  const escape = (text: string) =>
+    text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  const kids = pages.map((_, i) => `${4 + 2 * i} 0 R`).join(" ");
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    `<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>`,
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
   ];
+  for (const [i, text] of pages.entries()) {
+    const stream = text ? `BT /F1 12 Tf 72 720 Td (${escape(text)}) Tj ET` : "";
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] ` +
+        `/Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + 2 * i} 0 R >>`,
+      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    );
+  }
   let body = "%PDF-1.4\n";
   const offsets: number[] = [];
   objects.forEach((obj, i) => {

@@ -1,0 +1,114 @@
+// DocumentPage — one page of a document's extracted text layer
+// (FR-DOC-003). System-written by the extraction sweep; the page store
+// behind the assistant's content search and read verbs (FR-DOC-004),
+// and the ready-made chunk store the deferred precedent retrieval
+// embeds (DD-008 Level 3).
+//
+// Page-per-row is deliberate: page citations for lawyers ("written
+// statement, page 4"), small rows (a Document row never carries
+// megabytes of text into Get/List), and natural chunking. Rows are
+// immutable like the Document they belong to — re-extraction answers
+// ALREADY_EXISTS on the composed natural key, which is what makes the
+// sweep idempotent.
+syntax = "proto3";
+
+package stigmer.law.documentpage.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message DocumentPage {
+  string api_version = 1;
+  string kind = 2;
+  // System-managed; created_by is the system actor (extraction is
+  // machinery, not a legal act — this kind is deliberately absent from
+  // the audit allowlist).
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  DocumentPageSpec spec = 4 [(buf.validate.field).required = true];
+}
+
+message DocumentPageSpec {
+  // The document this page belongs to — existence enforced by the
+  // pipeline's reference check.
+  string document_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // Denormalized from the owning Document at extraction time — safe
+  // because documents are immutable (the case link can never change),
+  // and load-bearing: it is the column the visibility filter scopes
+  // content search by, INSIDE the store query (the searchText filter
+  // seam), so an out-of-scope page can never occupy a result slot.
+  string case_id = 2 [(buf.validate.field).string.min_len = 1];
+
+  // 1-based page number, as a lawyer cites it.
+  int32 page = 3 [(buf.validate.field).int32.gte = 1];
+
+  // The page's text layer as extracted — no cleanup beyond whitespace
+  // normalization, so a quoted passage is what the document says. May
+  // be empty for a blank page inside an otherwise-extracted document.
+  // The cap is a sanity bound (a real text layer is a few KB); the
+  // sweep truncates pathological layers to fit rather than failing the
+  // whole document.
+  string text = 4 [(buf.validate.field).string.max_len = 100000];
+}
+
+message ListDocumentPagesRequest {
+  // The document whose pages are asked for. Required: pages are read
+  // per document; content search across documents is the assistant's
+  // search verb, not a list shape.
+  string document_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // Defaults to 20, capped at 100. Pages order by page number.
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 100
+  }];
+  int32 page_offset = 3 [(buf.validate.field).int32.gte = 0];
+}
+
+message ListDocumentPagesResponse {
+  // Ascending page number.
+  repeated DocumentPage items = 1;
+  int64 total_count = 2;
+}
+
+message SearchDocumentPagesRequest {
+  // Case-insensitive LITERAL substring — % and _ are characters, and
+  // there is no stemming or ranking by design (FR-DOC-003: retrieval
+  // by meaning is the deferred Level 3; multi-word recall comes from
+  // the assistant searching more than once).
+  string query = 1 [(buf.validate.field).string = {
+    min_len: 2,
+    max_len: 200
+  }];
+
+  // Narrow to one matter. Empty means the caller's WHOLE visible case
+  // set — firm-wide for partners, member cases for everyone else; the
+  // scope filter runs INSIDE the store query, before the result limit
+  // (the searchText filter seam), so out-of-scope pages can never
+  // starve out visible hits.
+  string case_id = 2;
+
+  // Matches to return; defaults to 8, capped at 20. A suggestion list,
+  // not a report — there is deliberately no total count.
+  int32 limit = 3 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 20
+  }];
+}
+
+message SearchDocumentPagesResponse {
+  // Matching pages, whole rows — snippet windows are presentation and
+  // belong to the surface rendering them.
+  repeated DocumentPage items = 1;
+}
+
+service DocumentPageService {
+  // List a document's extracted pages, page order. Case content: only
+  // case members and partners (the policy's rule for the document
+  // itself, inherited verbatim).
+  rpc List(ListDocumentPagesRequest) returns (ListDocumentPagesResponse);
+  // Search extracted text across the caller's visible cases (or one
+  // matter). The content-search seam behind the assistant's
+  // search_documents verb (FR-DOC-004).
+  rpc Search(SearchDocumentPagesRequest) returns (SearchDocumentPagesResponse);
+}

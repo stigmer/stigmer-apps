@@ -111,6 +111,13 @@ export interface BackendConfig {
    */
   readonly reminderIntervalMs: number;
   /**
+   * The extraction sweep's tick interval in milliseconds (FR-DOC-003):
+   * fresh uploads, the backfill, and retry through one loop. 0 disables
+   * (tests drive runExtractionSweepOnce directly). Search availability
+   * tolerates minutes of latency; the default is 5 minutes.
+   */
+  readonly extractionIntervalMs: number;
+  /**
    * The MCP channel entrance (T05, DD-008): a second listener serving
    * the agent platform's tool calls, guarded by a shared secret that is
    * THE authorization boundary for asserted channel identities — which
@@ -215,6 +222,15 @@ export function loadConfigFromEnv(
     );
   }
 
+  const extractionIntervalRaw = env.EXTRACTION_SWEEP_INTERVAL_SECONDS ?? "300";
+  const extractionIntervalSeconds = Number(extractionIntervalRaw);
+  if (!Number.isInteger(extractionIntervalSeconds) || extractionIntervalSeconds < 0) {
+    problems.push(
+      `EXTRACTION_SWEEP_INTERVAL_SECONDS must be a non-negative integer (0 disables), ` +
+        `got '${extractionIntervalRaw}'`,
+    );
+  }
+
   const fgaApiUrl = env.FGA_API_URL ?? "";
   if (!fgaApiUrl) {
     problems.push("FGA_API_URL is required (the firm's OpenFGA endpoint — DD-003)");
@@ -261,6 +277,7 @@ export function loadConfigFromEnv(
       operatorKeySha256Hex,
     },
     reminderIntervalMs: reminderIntervalSeconds * 1000,
+    extractionIntervalMs: extractionIntervalSeconds * 1000,
     mcp: {
       port: mcpPort,
       sharedSecret: mcpSharedSecret,

@@ -6,6 +6,7 @@
  * written as things a person would say, not as records.
  */
 
+import { DocumentCategory } from "../gen/stigmer/law/document/v1/document_pb.js";
 import { OutcomeKind } from "../gen/stigmer/law/hearing/v1/hearing_pb.js";
 import { TaskState } from "../gen/stigmer/law/task/v1/task_pb.js";
 
@@ -56,6 +57,22 @@ export function formatOutcome(kind: OutcomeKind): string {
     default:
       return "scheduled";
   }
+}
+
+/** The category vocabulary as filed papers are named. UNSPECIFIED is
+ * spoken as "uncategorized" — an honest state, not a missing one. */
+export function formatCategory(category: DocumentCategory): string {
+  if (category === DocumentCategory.UNSPECIFIED) return "uncategorized";
+  const name = DocumentCategory[category];
+  return name ? name.toLowerCase().replace(/_/g, " ") : "uncategorized";
+}
+
+/** Bytes → "312 KB" / "2.4 MB" — a size a person scans, not a count. */
+export function formatBytes(bytes: bigint | number): string {
+  const n = Number(bytes);
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /** Integer paise → "₹1,23,456.50" (Indian digit grouping). */

@@ -14,7 +14,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallerIdentity } from "@stigmer/identity";
 import { registerAddCaseNote } from "./tools/add-case-note.js";
 import { registerCaseStory } from "./tools/case-story.js";
+import { registerFindDocuments } from "./tools/find-documents.js";
 import { registerFindTasks } from "./tools/find-tasks.js";
+import { registerReadDocument } from "./tools/read-document.js";
+import { registerSearchDocuments } from "./tools/search-documents.js";
 import { registerFirmOverview } from "./tools/firm-overview.js";
 import { registerMyDay } from "./tools/my-day.js";
 import { registerMyDeadlines } from "./tools/my-deadlines.js";
@@ -26,7 +29,8 @@ import type { ToolDeps } from "./tools/shared.js";
 
 /** Domain-shaped, never branded (DD-A2): the vertical is law, firm #N agnostic. */
 const SERVER_NAME = "law-firm";
-const SERVER_VERSION = "2.0.0";
+// 2.1: the document intelligence verbs (FR-DOC-004) — find, search, read.
+const SERVER_VERSION = "2.1.0";
 
 /**
  * Every tool registrar, in one list — the surface's single source of
@@ -45,6 +49,9 @@ export const FIRM_TOOL_REGISTRARS: readonly ((
   registerMyDeadlines,
   registerFindTasks,
   registerCaseStory,
+  registerFindDocuments,
+  registerSearchDocuments,
+  registerReadDocument,
   registerUpcomingHearings,
   registerRecordHearingOutcome,
   registerFirmOverview,

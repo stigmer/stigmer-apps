@@ -27,6 +27,7 @@ import { CaseNoteSchema } from "./gen/stigmer/law/casenote/v1/casenote_pb.js";
 import { ClientSchema } from "./gen/stigmer/law/client/v1/client_pb.js";
 import { DeadlineSchema } from "./gen/stigmer/law/deadline/v1/deadline_pb.js";
 import { DocumentSchema } from "./gen/stigmer/law/document/v1/document_pb.js";
+import { DocumentPageSchema } from "./gen/stigmer/law/documentpage/v1/documentpage_pb.js";
 import { FeeArrangementSchema } from "./gen/stigmer/law/feearrangement/v1/feearrangement_pb.js";
 import { FirmMemberSchema } from "./gen/stigmer/law/firmmember/v1/firmmember_pb.js";
 import { HearingSchema } from "./gen/stigmer/law/hearing/v1/hearing_pb.js";
@@ -167,6 +168,23 @@ export function createResourceStore(pool: pg.Pool): ResourceStore {
         caseId: "case_id",
         category: "category",
         hearingId: "hearing_id",
+        createdAt: "created_at",
+        // The extraction sweep's work-queue predicate (absent | PENDING).
+        extraction: "extraction",
+      },
+    },
+    DocumentPage: {
+      schema: DocumentPageSchema,
+      table: "document_pages",
+      // The composed page key — the definition's naturalKey.get builds
+      // the same `{documentId}:{page}` string this column stores.
+      naturalKey: { column: "page_key", jsonField: "documentId" },
+      columns: {
+        documentId: "document_id",
+        caseId: "case_id",
+        page: "page",
+        // The content-search seam (searchText with the case_id filter).
+        text: "text",
         createdAt: "created_at",
       },
     },

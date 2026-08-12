@@ -57,6 +57,10 @@ describe("loadConfigFromEnv", () => {
       // The sweep default: 15 minutes (calendar reminders tolerate
       // minutes of latency by nature).
       reminderIntervalMs: 900_000,
+      // The extraction default: 5 minutes — an upload is usually
+      // searchable within one tick, and the read verb's honest
+      // "try again shortly" leans on that promise.
+      extractionIntervalMs: 300_000,
       mcp: {
         port: 8081,
         sharedSecret: MCP_SECRET,

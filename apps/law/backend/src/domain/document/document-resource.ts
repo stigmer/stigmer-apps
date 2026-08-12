@@ -12,7 +12,7 @@
  * the caller's case visibility via query scoping.
  */
 
-import { create } from "@bufbuild/protobuf";
+import { clone, create } from "@bufbuild/protobuf";
 import type {
   AuthorizationPolicy,
   CallerExtractor,
@@ -33,10 +33,12 @@ import {
   DocumentCategory,
   DocumentSchema,
   DocumentService,
+  DocumentStatusSchema,
   type GetDocumentRequest,
   type ListDocumentsRequest,
   type ListDocumentsResponse,
   ListDocumentsResponseSchema,
+  type RecordDocumentExtractionRequest,
 } from "../../gen/stigmer/law/document/v1/document_pb.js";
 import type { PolicyGuards } from "../authz/policy.js";
 
@@ -66,6 +68,27 @@ export function documentResource(deps: {
     operations: {
       get: getOperation<Document, GetDocumentRequest>({
         ref: (req) => ({ id: req.id }),
+      }),
+      // The extraction sweep's status report. NOT the update flavor:
+      // the generic update pipeline KEEPS stored status by design
+      // (status is system-owned — commons buildUpdateState), so a
+      // status write must be a named mutation, the Case.updateStatus
+      // arrangement. The policy allows ONLY the system principal in;
+      // every wire caller gets the refusal — and the spec is untouched
+      // by construction, the record stays immutable (FR-DOC-001).
+      recordExtraction: customOperation<Document, RecordDocumentExtractionRequest, Document>({
+        async handler(ctx) {
+          // load() authorizes "recordExtraction" — system only.
+          const document = await ctx.load({ id: ctx.input.id });
+          const previous = clone(DocumentSchema, document);
+          document.status = create(DocumentStatusSchema, {
+            extraction: ctx.input.extraction,
+            pageCount: ctx.input.pageCount,
+          });
+          const saved = await ctx.save(document);
+          await ctx.publish("updated", saved, previous);
+          return saved;
+        },
       }),
       list: customOperation<Document, ListDocumentsRequest, ListDocumentsResponse>({
         async handler(ctx) {

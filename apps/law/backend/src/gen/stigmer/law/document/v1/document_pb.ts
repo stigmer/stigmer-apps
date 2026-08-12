@@ -30,7 +30,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file stigmer/law/document/v1/document.proto.
  */
 export const file_stigmer_law_document_v1_document: GenFile = /*@__PURE__*/
-  fileDesc("CiZzdGlnbWVyL2xhdy9kb2N1bWVudC92MS9kb2N1bWVudC5wcm90bxIXc3RpZ21lci5sYXcuZG9jdW1lbnQudjEipgEKCERvY3VtZW50EhMKC2FwaV92ZXJzaW9uGAEgASgJEgwKBGtpbmQYAiABKAkSOgoIbWV0YWRhdGEYAyABKAsyKC5zdGlnbWVyLnJlc291cmNlYXBpLnYxLlJlc291cmNlTWV0YWRhdGESOwoEc3BlYxgEIAEoCzIlLnN0aWdtZXIubGF3LmRvY3VtZW50LnYxLkRvY3VtZW50U3BlY0IGukgDyAEBIrcCCgxEb2N1bWVudFNwZWMSGAoHY2FzZV9pZBgBIAEoCUIHukgEcgIQARIdCglmaWxlX25hbWUYAiABKAlCCrpIB3IFEAEY/wESQAoJbWltZV90eXBlGAMgASgJQi26SCpyKFIPYXBwbGljYXRpb24vcGRmUglpbWFnZS9wbmdSCmltYWdlL2pwZWcSIAoKc2l6ZV9ieXRlcxgEIAEoA0IMukgJIgcYgIDADCAAEhsKCm9iamVjdF9rZXkYBSABKAlCB7pIBHICEAESRQoIY2F0ZWdvcnkYBiABKA4yKS5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5Eb2N1bWVudENhdGVnb3J5Qgi6SAWCAQIQARIXCgpoZWFyaW5nX2lkGAcgASgJSACIAQFCDQoLX2hlYXJpbmdfaWQiKQoSR2V0RG9jdW1lbnRSZXF1ZXN0EhMKAmlkGAEgASgJQge6SARyAhABIqoBChRMaXN0RG9jdW1lbnRzUmVxdWVzdBIPCgdjYXNlX2lkGAEgASgJEhwKCXBhZ2Vfc2l6ZRgCIAEoBUIJukgGGgQYZCgAEhwKC3BhZ2Vfb2Zmc2V0GAMgASgFQge6SAQaAigAEkUKCGNhdGVnb3J5GAQgASgOMikuc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuRG9jdW1lbnRDYXRlZ29yeUIIukgFggECEAEiXgoVTGlzdERvY3VtZW50c1Jlc3BvbnNlEjAKBWl0ZW1zGAEgAygLMiEuc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuRG9jdW1lbnQSEwoLdG90YWxfY291bnQYAiABKAMqxAIKEERvY3VtZW50Q2F0ZWdvcnkSIQodRE9DVU1FTlRfQ0FURUdPUllfVU5TUEVDSUZJRUQQABIeChpET0NVTUVOVF9DQVRFR09SWV9QTEVBRElORxABEiEKHURPQ1VNRU5UX0NBVEVHT1JZX0FQUExJQ0FUSU9OEAISHgoaRE9DVU1FTlRfQ0FURUdPUllfRVZJREVOQ0UQAxIkCiBET0NVTUVOVF9DQVRFR09SWV9PUkRFUl9KVURHTUVOVBAEEiQKIERPQ1VNRU5UX0NBVEVHT1JZX0NPUlJFU1BPTkRFTkNFEAUSIQodRE9DVU1FTlRfQ0FURUdPUllfVkFLQUxBVE5BTUEQBhIeChpET0NVTUVOVF9DQVRFR09SWV9KVURHTUVOVBAHEhsKF0RPQ1VNRU5UX0NBVEVHT1JZX09USEVSEAgyzwEKD0RvY3VtZW50U2VydmljZRJVCgNHZXQSKy5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5HZXREb2N1bWVudFJlcXVlc3QaIS5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5Eb2N1bWVudBJlCgRMaXN0Ei0uc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuTGlzdERvY3VtZW50c1JlcXVlc3QaLi5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5MaXN0RG9jdW1lbnRzUmVzcG9uc2ViBnByb3RvMw", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
+  fileDesc("CiZzdGlnbWVyL2xhdy9kb2N1bWVudC92MS9kb2N1bWVudC5wcm90bxIXc3RpZ21lci5sYXcuZG9jdW1lbnQudjEi3wEKCERvY3VtZW50EhMKC2FwaV92ZXJzaW9uGAEgASgJEgwKBGtpbmQYAiABKAkSOgoIbWV0YWRhdGEYAyABKAsyKC5zdGlnbWVyLnJlc291cmNlYXBpLnYxLlJlc291cmNlTWV0YWRhdGESOwoEc3BlYxgEIAEoCzIlLnN0aWdtZXIubGF3LmRvY3VtZW50LnYxLkRvY3VtZW50U3BlY0IGukgDyAEBEjcKBnN0YXR1cxgFIAEoCzInLnN0aWdtZXIubGF3LmRvY3VtZW50LnYxLkRvY3VtZW50U3RhdHVzImIKDkRvY3VtZW50U3RhdHVzEjwKCmV4dHJhY3Rpb24YASABKA4yKC5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5FeHRyYWN0aW9uU3RhdGUSEgoKcGFnZV9jb3VudBgCIAEoBSK3AgoMRG9jdW1lbnRTcGVjEhgKB2Nhc2VfaWQYASABKAlCB7pIBHICEAESHQoJZmlsZV9uYW1lGAIgASgJQgq6SAdyBRABGP8BEkAKCW1pbWVfdHlwZRgDIAEoCUItukgqcihSD2FwcGxpY2F0aW9uL3BkZlIJaW1hZ2UvcG5nUgppbWFnZS9qcGVnEiAKCnNpemVfYnl0ZXMYBCABKANCDLpICSIHGICAwAwgABIbCgpvYmplY3Rfa2V5GAUgASgJQge6SARyAhABEkUKCGNhdGVnb3J5GAYgASgOMikuc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuRG9jdW1lbnRDYXRlZ29yeUIIukgFggECEAESFwoKaGVhcmluZ19pZBgHIAEoCUgAiAEBQg0KC19oZWFyaW5nX2lkIikKEkdldERvY3VtZW50UmVxdWVzdBITCgJpZBgBIAEoCUIHukgEcgIQASKdAQofUmVjb3JkRG9jdW1lbnRFeHRyYWN0aW9uUmVxdWVzdBITCgJpZBgBIAEoCUIHukgEcgIQARJICgpleHRyYWN0aW9uGAIgASgOMiguc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuRXh0cmFjdGlvblN0YXRlQgq6SAeCAQQQASAAEhsKCnBhZ2VfY291bnQYAyABKAVCB7pIBBoCKAAiqgEKFExpc3REb2N1bWVudHNSZXF1ZXN0Eg8KB2Nhc2VfaWQYASABKAkSHAoJcGFnZV9zaXplGAIgASgFQgm6SAYaBBhkKAASHAoLcGFnZV9vZmZzZXQYAyABKAVCB7pIBBoCKAASRQoIY2F0ZWdvcnkYBCABKA4yKS5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5Eb2N1bWVudENhdGVnb3J5Qgi6SAWCAQIQASJeChVMaXN0RG9jdW1lbnRzUmVzcG9uc2USMAoFaXRlbXMYASADKAsyIS5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5Eb2N1bWVudBITCgt0b3RhbF9jb3VudBgCIAEoAyqyAQoPRXh0cmFjdGlvblN0YXRlEiAKHEVYVFJBQ1RJT05fU1RBVEVfVU5TUEVDSUZJRUQQABIcChhFWFRSQUNUSU9OX1NUQVRFX1BFTkRJTkcQARIeChpFWFRSQUNUSU9OX1NUQVRFX0VYVFJBQ1RFRBACEiIKHkVYVFJBQ1RJT05fU1RBVEVfTk9fVEVYVF9MQVlFUhADEhsKF0VYVFJBQ1RJT05fU1RBVEVfRkFJTEVEEAQqxAIKEERvY3VtZW50Q2F0ZWdvcnkSIQodRE9DVU1FTlRfQ0FURUdPUllfVU5TUEVDSUZJRUQQABIeChpET0NVTUVOVF9DQVRFR09SWV9QTEVBRElORxABEiEKHURPQ1VNRU5UX0NBVEVHT1JZX0FQUExJQ0FUSU9OEAISHgoaRE9DVU1FTlRfQ0FURUdPUllfRVZJREVOQ0UQAxIkCiBET0NVTUVOVF9DQVRFR09SWV9PUkRFUl9KVURHTUVOVBAEEiQKIERPQ1VNRU5UX0NBVEVHT1JZX0NPUlJFU1BPTkRFTkNFEAUSIQodRE9DVU1FTlRfQ0FURUdPUllfVkFLQUxBVE5BTUEQBhIeChpET0NVTUVOVF9DQVRFR09SWV9KVURHTUVOVBAHEhsKF0RPQ1VNRU5UX0NBVEVHT1JZX09USEVSEAgywAIKD0RvY3VtZW50U2VydmljZRJVCgNHZXQSKy5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5HZXREb2N1bWVudFJlcXVlc3QaIS5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5Eb2N1bWVudBJlCgRMaXN0Ei0uc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuTGlzdERvY3VtZW50c1JlcXVlc3QaLi5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5MaXN0RG9jdW1lbnRzUmVzcG9uc2USbwoQUmVjb3JkRXh0cmFjdGlvbhI4LnN0aWdtZXIubGF3LmRvY3VtZW50LnYxLlJlY29yZERvY3VtZW50RXh0cmFjdGlvblJlcXVlc3QaIS5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5Eb2N1bWVudGIGcHJvdG8z", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
 
 /**
  * @generated from message stigmer.law.document.v1.Document
@@ -57,6 +57,11 @@ export type Document = Message<"stigmer.law.document.v1.Document"> & {
    * @generated from field: stigmer.law.document.v1.DocumentSpec spec = 4;
    */
   spec?: DocumentSpec | undefined;
+
+  /**
+   * @generated from field: stigmer.law.document.v1.DocumentStatus status = 5;
+   */
+  status?: DocumentStatus | undefined;
 };
 
 /**
@@ -65,6 +70,35 @@ export type Document = Message<"stigmer.law.document.v1.Document"> & {
  */
 export const DocumentSchema: GenMessage<Document> = /*@__PURE__*/
   messageDesc(file_stigmer_law_document_v1_document, 0);
+
+/**
+ * System-owned extraction record (FR-DOC-003): written ONLY by the
+ * extraction sweep through the system update operation — no wire path
+ * can set it. The spec (the record) stays immutable; this block is the
+ * machinery's honest report of what it could read.
+ *
+ * @generated from message stigmer.law.document.v1.DocumentStatus
+ */
+export type DocumentStatus = Message<"stigmer.law.document.v1.DocumentStatus"> & {
+  /**
+   * @generated from field: stigmer.law.document.v1.ExtractionState extraction = 1;
+   */
+  extraction: ExtractionState;
+
+  /**
+   * Pages extracted (DocumentPage rows); 0 unless EXTRACTED.
+   *
+   * @generated from field: int32 page_count = 2;
+   */
+  pageCount: number;
+};
+
+/**
+ * Describes the message stigmer.law.document.v1.DocumentStatus.
+ * Use `create(DocumentStatusSchema)` to create a new message.
+ */
+export const DocumentStatusSchema: GenMessage<DocumentStatus> = /*@__PURE__*/
+  messageDesc(file_stigmer_law_document_v1_document, 1);
 
 /**
  * @generated from message stigmer.law.document.v1.DocumentSpec
@@ -137,7 +171,7 @@ export type DocumentSpec = Message<"stigmer.law.document.v1.DocumentSpec"> & {
  * Use `create(DocumentSpecSchema)` to create a new message.
  */
 export const DocumentSpecSchema: GenMessage<DocumentSpec> = /*@__PURE__*/
-  messageDesc(file_stigmer_law_document_v1_document, 1);
+  messageDesc(file_stigmer_law_document_v1_document, 2);
 
 /**
  * @generated from message stigmer.law.document.v1.GetDocumentRequest
@@ -154,7 +188,41 @@ export type GetDocumentRequest = Message<"stigmer.law.document.v1.GetDocumentReq
  * Use `create(GetDocumentRequestSchema)` to create a new message.
  */
 export const GetDocumentRequestSchema: GenMessage<GetDocumentRequest> = /*@__PURE__*/
-  messageDesc(file_stigmer_law_document_v1_document, 2);
+  messageDesc(file_stigmer_law_document_v1_document, 3);
+
+/**
+ * The extraction sweep's status report (FR-DOC-003). Status is
+ * system-owned, and the generic update pipeline enforces that by
+ * KEEPING stored status (commons buildUpdateState) — so this write is
+ * a named custom operation instead, the Case.UpdateStatus arrangement.
+ * Every wire caller is refused by policy; only the in-process system
+ * principal passes.
+ *
+ * @generated from message stigmer.law.document.v1.RecordDocumentExtractionRequest
+ */
+export type RecordDocumentExtractionRequest = Message<"stigmer.law.document.v1.RecordDocumentExtractionRequest"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: stigmer.law.document.v1.ExtractionState extraction = 2;
+   */
+  extraction: ExtractionState;
+
+  /**
+   * @generated from field: int32 page_count = 3;
+   */
+  pageCount: number;
+};
+
+/**
+ * Describes the message stigmer.law.document.v1.RecordDocumentExtractionRequest.
+ * Use `create(RecordDocumentExtractionRequestSchema)` to create a new message.
+ */
+export const RecordDocumentExtractionRequestSchema: GenMessage<RecordDocumentExtractionRequest> = /*@__PURE__*/
+  messageDesc(file_stigmer_law_document_v1_document, 4);
 
 /**
  * @generated from message stigmer.law.document.v1.ListDocumentsRequest
@@ -195,7 +263,7 @@ export type ListDocumentsRequest = Message<"stigmer.law.document.v1.ListDocument
  * Use `create(ListDocumentsRequestSchema)` to create a new message.
  */
 export const ListDocumentsRequestSchema: GenMessage<ListDocumentsRequest> = /*@__PURE__*/
-  messageDesc(file_stigmer_law_document_v1_document, 3);
+  messageDesc(file_stigmer_law_document_v1_document, 5);
 
 /**
  * @generated from message stigmer.law.document.v1.ListDocumentsResponse
@@ -219,7 +287,59 @@ export type ListDocumentsResponse = Message<"stigmer.law.document.v1.ListDocumen
  * Use `create(ListDocumentsResponseSchema)` to create a new message.
  */
 export const ListDocumentsResponseSchema: GenMessage<ListDocumentsResponse> = /*@__PURE__*/
-  messageDesc(file_stigmer_law_document_v1_document, 4);
+  messageDesc(file_stigmer_law_document_v1_document, 6);
+
+/**
+ * @generated from enum stigmer.law.document.v1.ExtractionState
+ */
+export enum ExtractionState {
+  /**
+   * Rows predating extraction (and fresh uploads before their first
+   * sweep): treated as PENDING by the sweep, which is what makes the
+   * backfill automatic — no migration touches existing rows.
+   *
+   * @generated from enum value: EXTRACTION_STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: EXTRACTION_STATE_PENDING = 1;
+   */
+  PENDING = 1,
+
+  /**
+   * The text layer is in DocumentPage rows, searchable and readable.
+   *
+   * @generated from enum value: EXTRACTION_STATE_EXTRACTED = 2;
+   */
+  EXTRACTED = 2,
+
+  /**
+   * Parsed fine but carries no usable text — a scan, a photo, or an
+   * image-only PDF. The honest state the assistant reports as "a scan
+   * I can't read yet"; flips only when OCR lands (DD-008 gate).
+   *
+   * @generated from enum value: EXTRACTION_STATE_NO_TEXT_LAYER = 3;
+   */
+  NO_TEXT_LAYER = 3,
+
+  /**
+   * The parser rejected the bytes (corrupt or encrypted file).
+   * Terminal: a deterministic failure would fail identically on every
+   * sweep, so retrying would be a poison-pill loop. Transient failures
+   * (bucket or store unreachable) never reach this state — the sweep
+   * leaves them PENDING and the next tick is the retry.
+   *
+   * @generated from enum value: EXTRACTION_STATE_FAILED = 4;
+   */
+  FAILED = 4,
+}
+
+/**
+ * Describes the enum stigmer.law.document.v1.ExtractionState.
+ */
+export const ExtractionStateSchema: GenEnum<ExtractionState> = /*@__PURE__*/
+  enumDesc(file_stigmer_law_document_v1_document, 0);
 
 /**
  * @generated from enum stigmer.law.document.v1.DocumentCategory
@@ -278,7 +398,7 @@ export enum DocumentCategory {
  * Describes the enum stigmer.law.document.v1.DocumentCategory.
  */
 export const DocumentCategorySchema: GenEnum<DocumentCategory> = /*@__PURE__*/
-  enumDesc(file_stigmer_law_document_v1_document, 0);
+  enumDesc(file_stigmer_law_document_v1_document, 1);
 
 /**
  * @generated from service stigmer.law.document.v1.DocumentService
@@ -304,6 +424,17 @@ export const DocumentService: GenService<{
     methodKind: "unary";
     input: typeof ListDocumentsRequestSchema;
     output: typeof ListDocumentsResponseSchema;
+  },
+  /**
+   * System-only (see RecordDocumentExtractionRequest): the wire refuses
+   * every caller; the extraction sweep reaches it through invoke.
+   *
+   * @generated from rpc stigmer.law.document.v1.DocumentService.RecordExtraction
+   */
+  recordExtraction: {
+    methodKind: "unary";
+    input: typeof RecordDocumentExtractionRequestSchema;
+    output: typeof DocumentSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_stigmer_law_document_v1_document, 0);

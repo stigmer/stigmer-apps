@@ -21,12 +21,13 @@ import type { CallerPrincipal, ResourceStore } from "@stigmer/resource-api";
 import type { Case } from "../../gen/stigmer/law/case/v1/case_pb.js";
 import { GetCaseRequestSchema } from "../../gen/stigmer/law/case/v1/case_pb.js";
 import type { Deadline } from "../../gen/stigmer/law/deadline/v1/deadline_pb.js";
+import type { Document } from "../../gen/stigmer/law/document/v1/document_pb.js";
 import type { FirmMember } from "../../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
 import { ListFirmMembersRequestSchema } from "../../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
 import type { Hearing } from "../../gen/stigmer/law/hearing/v1/hearing_pb.js";
 import type { Task } from "../../gen/stigmer/law/task/v1/task_pb.js";
 import type { AppResources } from "../../routes.js";
-import { formatDate, formatOutcome, formatState } from "../format.js";
+import { formatBytes, formatCategory, formatDate, formatOutcome, formatState } from "../format.js";
 
 export interface ToolDeps {
   readonly resources: AppResources;
@@ -158,4 +159,31 @@ export function deadlineLine(deadline: Deadline, fileNumber?: string): string {
   const overdue = deadline.status?.overdue ? " (OVERDUE)" : "";
   const caseRef = fileNumber ? ` · ${fileNumber}` : "";
   return `${deadline.spec?.title} — due ${formatDate(deadline.spec?.dueDate)}${overdue}${caseRef} · id ${deadline.metadata?.id}`;
+}
+
+/** One document as a register line: what the paper is, then the record
+ * facts. The upload day comes from metadata (documents are immutable —
+ * created IS the only date they have). */
+export function documentLine(document: Document, fileNumber?: string): string {
+  const caseRef = fileNumber ? `${fileNumber} — ` : "";
+  const uploaded = document.metadata?.createdAt?.seconds;
+  const day = uploaded
+    ? formatDate(new Date(Number(uploaded) * 1000).toISOString().slice(0, 10))
+    : "unknown date";
+  return (
+    `${caseRef}${document.spec?.fileName} — ${formatCategory(document.spec?.category ?? 0)}, ` +
+    `uploaded ${day} (${formatBytes(document.spec?.sizeBytes ?? 0n)}) · id ${document.metadata?.id}`
+  );
+}
+
+/** One document as structured content. */
+export function documentRecord(document: Document, fileNumber?: string): Record<string, unknown> {
+  return {
+    id: document.metadata?.id,
+    file_name: document.spec?.fileName,
+    category: formatCategory(document.spec?.category ?? 0),
+    file_number: fileNumber,
+    size_bytes: Number(document.spec?.sizeBytes ?? 0n),
+    hearing_id: document.spec?.hearingId || undefined,
+  };
 }
