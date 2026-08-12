@@ -162,7 +162,9 @@ export function AppShell() {
             </NavLink>
             {/* The assistant entry sits with navigation (it goes
                 somewhere: the panel), rendered only when the deployment
-                has an assistant configured. */}
+                has an assistant configured — and only below lg, where
+                the dock's right-edge strip does not exist (the button
+                owns that rule; see AskAiButton). */}
             <AskAiButton />
           </nav>
 

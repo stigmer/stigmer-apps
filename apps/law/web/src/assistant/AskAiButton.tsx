@@ -16,10 +16,15 @@ export function AskAiButton() {
   const { openAssistant } = useAssistant();
   if (!config.data?.enabled) return null;
   return (
+    // lg:hidden — one entry point per width, never two: from lg up the
+    // dock's own right-edge strip is on every screen (AssistantDock),
+    // so a sidebar twin would be noise; below lg the strip does not
+    // render and THIS is the way in. Same 64rem line as the dock's
+    // desktop query, so no width has both or neither.
     <button
       type="button"
       onClick={() => openAssistant()}
-      className="flex h-8 items-center gap-2 rounded-card px-2 text-sm font-medium text-brand hover:bg-brand-surface"
+      className="flex h-8 items-center gap-2 rounded-card px-2 text-sm font-medium text-brand hover:bg-brand-surface lg:hidden"
     >
       <Sparkles className="size-4" aria-hidden="true" />
       Ask AI
