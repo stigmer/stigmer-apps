@@ -16,6 +16,21 @@
  * on :root — the app's own screens must not inherit SDK tokens.
  */
 
+/*
+ * The SDK's fixed-height embedding opt-in (its DD-019 contract,
+ * stigmer/stigmer#260): StigmerProvider's in-tree container ships
+ * UNSIZED by design — a host that wants a bounded panel must say so
+ * from its own CSS, on the stable `data-stgm-root` marker. Without
+ * this, the container is auto-height, the SDK's internal chat scroller
+ * never activates, and a long conversation pushes the panel past the
+ * viewport — scrolling the whole document instead of the thread.
+ * Scoped to the panel: only the dock embeds a fixed-height surface.
+ */
+.law-assistant [data-stgm-root] {
+  height: 100%;
+  min-height: 0;
+}
+
 .law-assistant,
 [data-stgm-portal] {
   --stgm-font-sans: var(--font-sans);
