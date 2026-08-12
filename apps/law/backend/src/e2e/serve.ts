@@ -38,6 +38,7 @@ import { startTestAuthz } from "../__tests__/test-authz.js";
 import { testMigrationSources } from "../__tests__/test-migrations.js";
 import { createTestPool } from "../__tests__/test-pool.js";
 import { memoryObjectStore } from "../__tests__/memory-object-store.js";
+import type { AssistantRuntime } from "../assistant/assistant-service.js";
 import { createFirmServers } from "../server.js";
 import { createResourceStore } from "../storage.js";
 
@@ -45,6 +46,30 @@ const PORT = Number(process.env.E2E_PORT ?? 8799);
 const MCP_PORT = Number(process.env.E2E_MCP_PORT ?? 8798);
 /** Dev-only, obviously fictional; printed below for the smoke script. */
 const MCP_SECRET = "e2e-dev-mcp-shared-secret-0123456789";
+
+/**
+ * The fake-assistant mode (E2E_FAKE_ASSISTANT=1): a fictional
+ * AssistantRuntime so the REAL dock, the REAL lazy chunk, and the REAL
+ * SDK stylesheet load in the browser — the layout class of defect
+ * (stigmer/stigmer#454: a second stylesheet flipping the app's rules;
+ * the DD-019 unbounded-height leak) is structurally invisible to the
+ * assistant-disabled suite. No agent platform is dialed: the base URL
+ * is a closed local port, so every SDK data call refuses immediately
+ * and the layout under test is what a lawyer sees while the platform
+ * is reachable — the panel frame, the composer, the stylesheet.
+ */
+const FAKE_ASSISTANT = process.env.E2E_FAKE_ASSISTANT === "1";
+const fakeAssistantRuntime = (): AssistantRuntime => ({
+  config: {
+    apiBaseUrl: "http://127.0.0.1:9",
+    clientId: "stgm_cid_e2e_fake",
+    clientSecret: "stgm_cs_e2e_fake",
+    org: "e2e-fake-org",
+    agentInstanceId: "ain_e2e_fake",
+    consoleUrl: "http://127.0.0.1:9",
+  },
+  minter: async () => ({ accessToken: "e2e-fake-platform-token", expiresInSeconds: 900 }),
+});
 
 /** Must match apps/law/web/e2e/fixtures.ts. Roles matter now: the
  * matrix (FR-AUTHZ-*) makes a partner's and an associate's screens
@@ -88,6 +113,7 @@ const { web: server, mcp } = createFirmServers(
     objectStore: memoryObjectStore(),
     dispatcher: new InProcessEventDispatcher(),
     webRoot: fileURLToPath(new URL("../../../web/dist", import.meta.url)),
+    ...(FAKE_ASSISTANT ? { assistant: fakeAssistantRuntime() } : {}),
   },
   { sharedSecret: MCP_SECRET },
 );
@@ -147,7 +173,8 @@ await cases.create(
 );
 
 console.log(
-  `e2e backend ready on :${PORT} (seeded ${SEED_USERS.length} users with firm profiles, 1 client, 1 case)`,
+  `e2e backend ready on :${PORT} (seeded ${SEED_USERS.length} users with firm profiles, 1 client, 1 case` +
+    `${FAKE_ASSISTANT ? ", fake assistant enabled" : ""})`,
 );
 console.log(
   `mcp entrance on :${MCP_PORT} — smoke it with: npx tsx scripts/mcp-smoke.ts ` +
