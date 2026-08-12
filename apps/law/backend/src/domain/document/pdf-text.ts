@@ -13,6 +13,9 @@
  * error and propagates as such.
  */
 
+// Order matters: the polyfill must be evaluated before pdfjs, whose
+// module scope constructs a DOMMatrix (pdf-polyfill.ts has the story).
+import "./pdf-polyfill.js";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 /** The parser rejected the bytes — identical on every retry. */
