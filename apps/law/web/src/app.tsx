@@ -15,6 +15,7 @@ import { CaseListScreen } from "./screens/cases/CaseListScreen.js";
 import { ClientCreateScreen } from "./screens/clients/ClientCreateScreen.js";
 import { ClientDetailScreen } from "./screens/clients/ClientDetailScreen.js";
 import { ClientListScreen } from "./screens/clients/ClientListScreen.js";
+import { GuideScreen } from "./screens/guide/GuideScreen.js";
 import { InboxScreen } from "./screens/inbox/InboxScreen.js";
 import { RosterScreen } from "./screens/members/RosterScreen.js";
 import { MoneyScreen } from "./screens/money/MoneyScreen.js";
@@ -71,6 +72,7 @@ export function createAppRouter() {
             { path: "/money", element: <MoneyScreen /> },
             { path: "/members", element: <RosterScreen /> },
             { path: "/inbox", element: <InboxScreen /> },
+            { path: "/guide", element: <GuideScreen /> },
             { path: "/profile", element: <ProfileScreen /> },
             { path: "*", element: <NotFoundScreen /> },
           ],

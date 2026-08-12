@@ -19,6 +19,7 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
+  BookOpen,
   Briefcase,
   Building2,
   House,
@@ -160,6 +161,13 @@ export function AppShell() {
                 </span>
               )}
             </NavLink>
+            {/* Every role gets the Guide: it EXPLAINS the boundaries
+                (why a clerk's sidebar has no Money entry), so hiding
+                it from anyone would defeat it. */}
+            <NavLink to="/guide" className={navClass} onClick={onNavigate}>
+              <BookOpen className="size-4" aria-hidden="true" />
+              Guide
+            </NavLink>
             {/* The assistant entry sits with navigation (it goes
                 somewhere: the panel), rendered only when the deployment
                 has an assistant configured — and only below lg, where
@@ -189,7 +197,11 @@ export function AppShell() {
         </div>
       </div>
 
-      <main className="min-w-0 flex-1 overflow-y-auto">
+      {/* tabIndex: main IS the scroll container, and a screen made of
+          pure prose (the Guide) has no focusable children — without a
+          tab stop a keyboard user cannot scroll it at all
+          (axe: scrollable-region-focusable). */}
+      <main tabIndex={0} aria-label="Content" className="min-w-0 flex-1 overflow-y-auto">
         {/* @container: screens size themselves by the width the content
             ACTUALLY has (the assistant dock takes its share from this
             column), never by the window — see DetailLayout. */}

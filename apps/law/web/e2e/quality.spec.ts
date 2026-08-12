@@ -117,6 +117,9 @@ test("accessibility: no serious or critical axe violations on any screen", async
   await page.goto("/inbox");
   await scan("inbox");
 
+  await page.goto("/guide");
+  await scan("guide");
+
   await page.goto("/profile");
   await scan("profile");
 });
