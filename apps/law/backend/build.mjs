@@ -35,6 +35,19 @@ if (existsSync("../web/dist/index.html")) {
   await cp("../web/dist", "dist/public", { recursive: true });
 }
 
+// pdfjs's "fake worker" (the workerless mode text extraction runs in)
+// dynamically imports pdf.worker.mjs BESIDE the importing module at
+// runtime — a computed path esbuild cannot inline, and the dev tree's
+// node_modules masks its absence from every source-level test. The
+// worker module rides beside the bundle like the migrations do; the
+// bundle suite asserts it shipped. (Found live: the image extracted
+// nothing, and the miss was misclassified as unreadable documents.)
+const pdfjsBuild = path.join(
+  path.dirname(require.resolve("pdfjs-dist/package.json")),
+  "legacy/build",
+);
+await cp(path.join(pdfjsBuild, "pdf.worker.mjs"), "dist/pdf.worker.mjs");
+
 await build({
   entryPoints: ["src/main.ts"],
   outfile: "dist/main.js",

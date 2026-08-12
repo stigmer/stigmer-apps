@@ -28,6 +28,7 @@
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
+import { existsSync } from "node:fs";
 import net from "node:net";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
@@ -151,6 +152,17 @@ describe("the bundled artifact", () => {
     expect(applied[0]).toBe("identity/0001_users.sql");
     expect(applied).toContain("app/0003_cases.sql");
     expect(applied).toContain("app/0014_audit_entries.sql");
+  });
+
+  it("ships pdfjs's worker module beside the bundle — extraction cannot run without it", () => {
+    // pdfjs's fake worker dynamically imports pdf.worker.mjs at
+    // runtime, a computed path esbuild cannot inline; the dev tree's
+    // node_modules masks its absence (found live: the image extracted
+    // nothing). This suite runs the ARTIFACT, so the copy is asserted
+    // here, beside the migrations it travels with.
+    expect(existsSync(fileURLToPath(new URL("../../dist/pdf.worker.mjs", import.meta.url)))).toBe(
+      true,
+    );
   });
 
   it("serves /healthz before auth", async () => {

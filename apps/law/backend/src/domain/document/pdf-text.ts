@@ -16,7 +16,11 @@
 // Order matters: the polyfill must be evaluated before pdfjs, whose
 // module scope constructs a DOMMatrix (pdf-polyfill.ts has the story).
 import "./pdf-polyfill.js";
-import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import {
+  getDocument,
+  InvalidPDFException,
+  PasswordException,
+} from "pdfjs-dist/legacy/build/pdf.mjs";
 
 /** The parser rejected the bytes — identical on every retry. */
 export class PdfNotReadableError extends Error {
@@ -64,7 +68,18 @@ export async function extractPdfText(
   try {
     doc = await loadingTask.promise;
   } catch (err) {
-    throw new PdfNotReadableError(err instanceof Error ? err.message : String(err));
+    // ONLY the parser's verdicts about the BYTES are deterministic
+    // (corrupt data, encryption) — those become PdfNotReadableError
+    // and the sweep records terminal FAILED. Anything else here is the
+    // ENVIRONMENT failing (found live: the image shipped without
+    // pdf.worker.mjs, and the resulting setup error was misclassified
+    // as unreadable documents — a wrong PERMANENT verdict on healthy
+    // bytes). Environmental errors propagate raw; the sweep leaves the
+    // document pending and the next tick retries.
+    if (err instanceof InvalidPDFException || err instanceof PasswordException) {
+      throw new PdfNotReadableError(err.message);
+    }
+    throw err;
   }
 
   try {
