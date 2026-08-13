@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { makeTextPdf } from "../../../__tests__/test-pdf.js";
+import { makeNulGlyphPdf, makeTextPdf } from "../../../__tests__/test-pdf.js";
 import { extractPdfText, PdfNotReadableError } from "../pdf-text.js";
 
 const CAPS = { maxPages: 200, maxPageChars: 100_000 };
@@ -44,6 +44,23 @@ describe("extractPdfText", () => {
     await expect(
       extractPdfText(new TextEncoder().encode("not a pdf at all"), CAPS),
     ).rejects.toThrowError(PdfNotReadableError);
+  });
+
+  it("strips U+0000 from extracted text — Postgres jsonb can never store it, and one NUL page wedged the sweep forever (live 2026-08-13)", async () => {
+    // The fixture's ToUnicode map turns every '#' into a REAL U+0000,
+    // the exact glyph shape a Chrome print-to-pdf ToUnicode gap
+    // produces (makeNulGlyphPdf has the story). Without the strip
+    // this page's persist fails on jsonb's hard \u0000 rule and the
+    // untyped error retries eternally.
+    const out = await extractPdfText(
+      makeNulGlyphPdf("Rent for the # premises is payable # monthly in advance."),
+      CAPS,
+    );
+    expect(out.pages[0]).not.toContain("\u0000");
+    // The strip runs BEFORE the whitespace collapse, so a NUL between
+    // spaces leaves single-spaced text, not a double gap.
+    expect(out.pages[0]).toBe("Rent for the premises is payable monthly in advance.");
+    expect(out.noTextLayer).toBe(false);
   });
 
   it("classifies stray-glyph documents as no text layer — never 'extracted' noise", async () => {

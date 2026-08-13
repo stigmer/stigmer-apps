@@ -381,7 +381,13 @@ async function ocrOne(
               documentId: id,
               caseId: spec.caseId,
               page,
-              text: (result?.text ?? "").slice(0, MAX_PAGE_CHARS),
+              // U+0000 stripped before persist — defense in depth
+              // with extractPdfText's strip (pdf-text.ts has the full
+              // story): Postgres jsonb can never store \u0000, and an
+              // unstorable page would wedge this sweep in an eternal
+              // retry. Document AI shouldn't emit NUL, but the store
+              // contract is the same for both producers.
+              text: (result?.text ?? "").replace(/\u0000/g, "").slice(0, MAX_PAGE_CHARS),
               source: TextSource.OCR,
               language: result?.language ?? "",
               confidence: result?.confidence ?? 0,

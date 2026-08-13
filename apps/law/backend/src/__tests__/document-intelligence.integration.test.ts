@@ -85,7 +85,7 @@ import { createTestAuth, type TestAuth } from "./test-auth.js";
 import { startTestAuthz, type TestAuthz } from "./test-authz.js";
 import { testMigrationSources } from "./test-migrations.js";
 import { createTestPool } from "./test-pool.js";
-import { makeTextPdf } from "./test-pdf.js";
+import { makeNulGlyphPdf, makeTextPdf } from "./test-pdf.js";
 
 const BUCKET = "doc-intel-test-documents";
 
@@ -546,6 +546,37 @@ describe("document intelligence, end to end", () => {
     const swept = await documentById(scan.json.metadata?.id ?? "");
     expect(swept.status?.extraction).toBe(ExtractionState.NO_TEXT_LAYER);
     expect(swept.status?.pageCount).toBe(0);
+  });
+
+  it("a broken-ToUnicode PDF (U+0000 glyphs) persists STRIPPED and reaches EXTRACTED — the live poison pill cannot wedge the sweep", async () => {
+    // The live shape (2026-08-13): a Chrome print-to-pdf ToUnicode gap
+    // yields real U+0000 from pdfjs; Postgres jsonb REJECTS \u0000, the
+    // untyped persist error classified as transient, and the document
+    // retried every tick forever — documents are immutable, so the
+    // poison pill could not even be deleted. This test runs the REAL
+    // pipeline into REAL Postgres: without the strip the persist
+    // throws and the document never leaves the queue.
+    const poisoned = await upload(
+      people.lead.email,
+      caseAId,
+      "chrome-broken-tounicode.pdf",
+      "correspondence",
+      makeNulGlyphPdf("Notice served on the # tenant demanding vacant possession."),
+    );
+    const id = poisoned.json.metadata?.id ?? "";
+    await runExtractionSweepOnce(extractionSweepDeps());
+
+    const swept = await documentById(id);
+    expect(swept.status?.extraction).toBe(ExtractionState.EXTRACTED);
+    expect(swept.status?.pageCount).toBe(1);
+
+    const pages = await toolDeps.resources.documentPages.invoke.list(
+      create(ListDocumentPagesRequestSchema, { documentId: id, pageSize: 10 }),
+      { id: people.lead.userId, kind: "user" },
+    );
+    const text = (pages.items[0] as DocumentPage).spec?.text ?? "";
+    expect(text).not.toContain("\u0000");
+    expect(text).toBe("Notice served on the tenant demanding vacant possession.");
   });
 
   it("page reads are case content: the outsider is refused a document's pages", async () => {

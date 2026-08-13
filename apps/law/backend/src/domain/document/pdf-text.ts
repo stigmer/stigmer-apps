@@ -131,9 +131,22 @@ export async function extractPdfText(
       // Items carry positioned runs; joining on spaces and collapsing
       // whitespace yields the quotable reading order for text-layer
       // documents (columns/tables are best-effort by nature).
+      //
+      // U+0000 is stripped BEFORE the whitespace collapse (so a NUL
+      // between spaces still collapses to one). Postgres jsonb can
+      // never store \u0000 — a hard engine rule ("unsupported Unicode
+      // escape sequence"), not a schema choice — and the sweep's
+      // untyped persist error reads as transient, so ONE such page
+      // wedges the document in an eternal per-tick retry (live-
+      // observed 2026-08-13: a Chrome print-to-pdf with a ToUnicode
+      // gap maps unmapped glyphs to U+0000, and documents are
+      // immutable so the poison pill could not even be deleted). A
+      // glyph the generator failed to map carries no text anyway;
+      // dropping it loses nothing quotable.
       const text = content.items
         .map((item) => ("str" in item ? item.str : ""))
         .join(" ")
+        .replace(/\u0000/g, "")
         .replace(/\s+/g, " ")
         .trim();
       pages.push(text.slice(0, opts.maxPageChars));

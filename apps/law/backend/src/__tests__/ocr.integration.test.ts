@@ -1129,6 +1129,44 @@ describe("the OCR sweep against a fake Document AI (DD-009)", () => {
     TEST_TIMEOUT_MS,
   );
 
+  /* ------------- 9b. U+0000 in provider text is stripped -------------- */
+
+  it(
+    "strips U+0000 from OCR text before persist — the jsonb poison pill cannot wedge the sweep from this producer either",
+    async () => {
+      // Defense in depth with extractPdfText's strip (pdf-text.ts has
+      // the live story): Document AI shouldn't emit NUL, but the store
+      // contract is the same — Postgres jsonb rejects \u0000 outright,
+      // and an unstorable page would retry forever. Real pipeline,
+      // real Postgres: without the sweep's strip this persist throws.
+      const docId = await upload("nul-in-ocr-text.pdf", "evidence", makeTextPdf(["", "t"]));
+      await classifyAsNoTextLayer(docId);
+
+      fake.respond((request) => ({
+        status: 200,
+        json: processSuccessBody(
+          selectorPages(request).map((page) => ({
+            page,
+            text: `Fictional page ${page} with a broken\u0000glyph inside.`,
+            languages: [{ languageCode: "en", confidence: 0.8 }],
+          })),
+        ),
+      }));
+      await runOcr();
+      fake.restoreDefault();
+
+      const swept = await documentById(docId);
+      expect(swept.status?.extraction).toBe(ExtractionState.EXTRACTED);
+      const pages = await pagesOf(docId);
+      expect(pages.length).toBe(2);
+      for (const page of pages) {
+        expect(page.spec?.text).not.toContain("\u0000");
+      }
+      expect(pages[0]?.spec?.text).toBe("Fictional page 1 with a brokenglyph inside.");
+    },
+    TEST_TIMEOUT_MS,
+  );
+
   /* ----------------- 10. honesty in both deployments ------------------ */
 
   it(
