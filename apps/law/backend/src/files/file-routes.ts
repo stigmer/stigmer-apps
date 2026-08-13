@@ -7,21 +7,18 @@
  * These routes are the second transport, not a second implementation:
  * identity comes from the same authenticator chain (auth/auth.ts, its
  * plain-HTTP binding), authorization from the same policy module, and the
- * row is created by the same pipeline through the in-process invoker. What is deliberately different
- * is the ORDER: the object is uploaded BEFORE the row is created, so the
- * only possible inconsistency is an invisible unreferenced object — a
- * persisted document can never 404 on download. On pipeline failure the
- * object is deleted best-effort; a missed cleanup is harmless (nothing
- * references it) and cheap.
+ * store choreography (object PUT before row create, orphan cleanup) is
+ * the shared domain core (domain/document/store-document.ts) — the same
+ * one implementation the assistant's attach_document verb composes.
+ * What lives HERE is only what is transport-shaped: header parsing, the
+ * streaming body cap, and HTTP status mapping.
  */
 
-import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { toJson } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import type {
   AuthorizationPolicy,
-  CallerPrincipal,
   ResourceStore,
 } from "@stigmer/resource-api";
 import type { CallerResolver } from "@stigmer/identity";
@@ -30,24 +27,21 @@ import {
   DocumentCategory,
   DocumentSchema,
 } from "../gen/stigmer/law/document/v1/document_pb.js";
-import { create } from "@bufbuild/protobuf";
-import type { ObjectStore } from "../objectstore/object-store.js";
-
-/** The contract's upload limit (T01 owner decision 4). */
-export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
-
-const ALLOWED_MIME_TYPES = new Set(["application/pdf", "image/png", "image/jpeg"]);
+import {
+  ALLOWED_MIME_TYPES,
+  MAX_DOCUMENT_BYTES,
+  storeCaseDocument,
+  type StoreCaseDocumentDeps,
+} from "../domain/document/store-document.js";
 
 const UPLOAD_PATH = /^\/files\/cases\/([A-Za-z0-9_-]+)\/documents$/;
 const DOWNLOAD_PATH = /^\/files\/documents\/([A-Za-z0-9_-]+)\/content$/;
 
-export interface FileRouteDeps {
+export interface FileRouteDeps extends StoreCaseDocumentDeps {
   readonly policy: AuthorizationPolicy;
   /** The identity chain's plain-HTTP binding — the same chain Connect uses. */
   readonly caller: CallerResolver["fromHttp"];
   readonly store: ResourceStore;
-  readonly objectStore: ObjectStore;
-  readonly createDocument: (input: Document, caller: CallerPrincipal) => Promise<Document>;
 }
 
 /**
@@ -141,38 +135,11 @@ async function handleUpload(
     throw new ConnectError("Document: the upload body is empty", Code.InvalidArgument);
   }
 
-  // Upload FIRST (see the header comment for why). The key follows the
-  // contract's cases/{case_id}/documents/… shape; the leaf is a fresh
-  // UUID rather than the row id, which does not exist until the pipeline
-  // creates it — uniqueness is the property that matters.
-  const objectKey = `cases/${caseId}/documents/${randomUUID()}`;
-  await deps.objectStore.put(objectKey, body, mimeType);
-
-  let document: Document;
-  try {
-    document = await deps.createDocument(
-      create(DocumentSchema, {
-        spec: {
-          caseId,
-          fileName,
-          mimeType,
-          sizeBytes: BigInt(body.byteLength),
-          objectKey,
-          category,
-          hearingId,
-        },
-      }),
-      caller,
-    );
-  } catch (err) {
-    // The row never existed; remove the just-uploaded object. Best
-    // effort: a missed cleanup is an invisible orphan, not a bug a user
-    // can see.
-    await deps.objectStore.delete(objectKey).catch((cleanupErr) => {
-      console.error(`orphan object cleanup failed (key=${objectKey}):`, cleanupErr);
-    });
-    throw err;
-  }
+  const document = await storeCaseDocument(
+    deps,
+    { caseId, fileName, mimeType, bytes: body, category, hearingId },
+    caller,
+  );
 
   res.writeHead(201, { "content-type": "application/json" });
   res.end(JSON.stringify(toJson(DocumentSchema, document)));
@@ -262,12 +229,12 @@ function readBodyCapped(req: IncomingMessage): Promise<Buffer> {
     let total = 0;
     const onData = (chunk: Buffer) => {
       total += chunk.byteLength;
-      if (total > MAX_UPLOAD_BYTES) {
+      if (total > MAX_DOCUMENT_BYTES) {
         req.off("data", onData);
         req.pause();
         reject(
           new ConnectError(
-            `Document: upload exceeds the ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB limit`,
+            `Document: upload exceeds the ${MAX_DOCUMENT_BYTES / (1024 * 1024)} MB limit`,
             Code.ResourceExhausted,
           ),
         );
