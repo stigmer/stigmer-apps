@@ -147,36 +147,47 @@ interface FakePageSpec {
 
 /** Proto3 JSON: int64 offsets are STRINGS, and a zero startIndex is
  * OMITTED — the exact shapes the adapter documents handling. */
-function anchorSegment(startByte: number, endByte: number): Record<string, string> {
+function anchorSegment(startChar: number, endChar: number): Record<string, string> {
   return {
-    ...(startByte === 0 ? {} : { startIndex: String(startByte) }),
-    endIndex: String(endByte),
+    ...(startChar === 0 ? {} : { startIndex: String(startChar) }),
+    endIndex: String(endChar),
   };
 }
 
+/** Code points, not UTF-16 units — the unit the real API's offsets
+ * count in. */
+function codePointCount(text: string): number {
+  return [...text].length;
+}
+
 /** Builds a `:process` success body: document.text is the concatenation
- * of the page texts, and each page's textAnchor carries UTF-8 BYTE
- * offsets into it (the adapter must slice bytes, not code units —
- * Telugu is the proof case). */
+ * of the page texts, and each page's textAnchor carries CHARACTER
+ * (code point) offsets into it — the semantics the real API was
+ * live-verified to use (2026-08-13, rc processor, Telugu/Hindi
+ * fixtures). This fake previously emitted UTF-8 BYTE offsets, the
+ * same wrong assumption the adapter carried — which is exactly why
+ * the suite stayed green while production truncated non-ASCII pages:
+ * a fake must model the REAL wire contract, never the code under
+ * test. */
 function processSuccessBody(pages: readonly FakePageSpec[]): unknown {
   let text = "";
+  let cursorChars = 0;
   const documentPages: unknown[] = [];
   for (const spec of pages) {
-    const startByte = Buffer.byteLength(text, "utf8");
+    const startChar = cursorChars;
     text += spec.text;
-    const endByte = Buffer.byteLength(text, "utf8");
+    cursorChars += codePointCount(spec.text);
+    const endChar = cursorChars;
     let segments: Record<string, string>[];
     if (spec.text.length === 0) {
       segments = [];
     } else if (spec.splitAnchor) {
-      // Split at a code-point boundary roughly mid-text — two segments
-      // that must concatenate byte-exactly.
-      const midByte =
-        startByte +
-        Buffer.byteLength(spec.text.slice(0, Math.ceil(spec.text.length / 2)), "utf8");
-      segments = [anchorSegment(startByte, midByte), anchorSegment(midByte, endByte)];
+      // Split roughly mid-text — two segments whose CHARACTER ranges
+      // must concatenate back to the exact page text.
+      const midChar = startChar + Math.ceil((endChar - startChar) / 2);
+      segments = [anchorSegment(startChar, midChar), anchorSegment(midChar, endChar)];
     } else {
-      segments = [anchorSegment(startByte, endByte)];
+      segments = [anchorSegment(startChar, endChar)];
     }
     documentPages.push({
       pageNumber: spec.page,
@@ -567,8 +578,8 @@ describe("the OCR sweep against a fake Document AI (DD-009)", () => {
                 { languageCode: "te", confidence: 0.93 },
                 { languageCode: "en", confidence: 0.31 },
               ],
-              // The multi-segment anchor: byte-sliced halves that must
-              // reassemble exactly.
+              // The multi-segment anchor: character-range halves that
+              // must reassemble exactly.
               splitAnchor: true,
             },
           ]),
@@ -601,10 +612,14 @@ describe("the OCR sweep against a fake Document AI (DD-009)", () => {
       expect(page1.spec?.text).toBe(ENGLISH_PAGE_TEXT);
       expect(page1.spec?.source).toBe(TextSource.OCR);
       expect(page1.spec?.language).toBe("en");
-      // Byte-identical round trip: the exact invented Telugu string,
-      // through UTF-8 anchor slicing, the pipeline, and Postgres.
+      // FULL-text round trip: the exact invented Telugu string,
+      // through character-offset anchor slicing, the pipeline, and
+      // Postgres. Exact equality is the whole point — the byte-offset
+      // bug this pins truncated Telugu to ~1/3 with a trailing U+FFFD
+      // (live 2026-08-13), and this line now fails on any shear.
       expect(page2.spec?.page).toBe(2);
       expect(page2.spec?.text).toBe(TELUGU_PAGE_TEXT);
+      expect(page2.spec?.text).not.toContain("\uFFFD");
       expect(page2.spec?.source).toBe(TextSource.OCR);
       expect(page2.spec?.language).toBe("te");
       expect(page2.spec?.confidence).toBeCloseTo(0.93, 2);

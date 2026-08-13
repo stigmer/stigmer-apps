@@ -3,8 +3,9 @@
  * shape carries the two documented traps (imagelessMode at TOP level;
  * per-page text anchored into document.text), one page window per
  * call (the SWEEP owns chunking — review F6; the adapter asserts the
- * ceiling), and byte-offset anchor slicing is what keeps non-ASCII
- * scripts intact (protobuf offsets index UTF-8, not UTF-16).
+ * ceiling), and CODE-POINT anchor slicing is what keeps non-ASCII
+ * scripts intact (textAnchor offsets count characters — live-verified
+ * 2026-08-13; sliceAnchoredText has the evidence).
  * Classification follows the port's three-way rule by HTTP status,
  * message-aware on 400 (review F3).
  *
@@ -14,7 +15,12 @@
 
 import { describe, expect, it } from "vitest";
 import type { TokenSource } from "../google-auth.js";
-import { createDocumentAiProvider, sliceAnchoredText, WINDOW_PAGES } from "../document-ai.js";
+import {
+  buildCodePointIndex,
+  createDocumentAiProvider,
+  sliceAnchoredText,
+  WINDOW_PAGES,
+} from "../document-ai.js";
 import { OcrBytesRejectedError, OcrConfigurationError } from "../provider.js";
 
 const PROCESSOR = "projects/000000/locations/asia-south1/processors/feedcafe";
@@ -227,45 +233,59 @@ describe("createDocumentAiProvider — response mapping", () => {
 });
 
 describe("sliceAnchoredText", () => {
-  // The signature takes the PRE-ENCODED bytes: mapDocument encodes
-  // document.text once per response, not once per page (review F10).
-  const utf8 = (text: string) => Buffer.from(text, "utf8");
+  // The signature takes the PRE-BUILT code-point index: mapDocument
+  // builds it once per response, not once per page (review F10).
+  const slice = (
+    text: string,
+    segments: readonly { startIndex?: string | number; endIndex?: string | number }[],
+  ) => sliceAnchoredText(text, buildCodePointIndex(text), segments);
 
-  it("slices by UTF-8 BYTE offsets, returning intact non-ASCII graphemes", () => {
+  it("slices by CHARACTER (code point) offsets, returning intact non-ASCII graphemes", () => {
     // Invented Telugu text (fictional by construction): "sample page
-    // text" / "second part". Telugu characters are 3 UTF-8 bytes each,
-    // so code-unit slicing at these offsets would shear characters.
+    // text" / "second part". Offsets are computed in CHARACTERS — the
+    // semantics the 2026-08-13 live run proved (each Telugu character
+    // is 3 UTF-8 bytes, so byte offsets here would over-reach ~3x and
+    // truncate; sliceAnchoredText's comment has the evidence).
     const first = "నమూనా పేజీ పాఠ్యం";
     const second = "రెండవ భాగం";
     const text = `${first}${second}`;
-    const firstBytes = Buffer.byteLength(first, "utf8");
-    expect(firstBytes).toBeGreaterThan(first.length); // the trap being tested
+    const firstChars = [...first].length;
+    expect(Buffer.byteLength(first, "utf8")).toBeGreaterThan(firstChars); // the trap being tested
 
-    expect(sliceAnchoredText(utf8(text), [{ endIndex: String(firstBytes) }])).toBe(first);
+    expect(slice(text, [{ endIndex: String(firstChars) }])).toBe(first);
     expect(
-      sliceAnchoredText(utf8(text), [
-        { startIndex: String(firstBytes), endIndex: String(Buffer.byteLength(text, "utf8")) },
-      ]),
+      slice(text, [{ startIndex: String(firstChars), endIndex: String([...text].length) }]),
     ).toBe(second);
   });
 
+  it("counts astral code points as ONE character each — naive UTF-16 slicing would shear the surrogate pair", () => {
+    // The emoji is 1 code point but 2 UTF-16 units: a naive
+    // text.slice(1, 4) answers "\uDE00ab" (a lone low surrogate).
+    // Telugu/Hindi are BMP so the live run could not catch this case —
+    // the code-point index must, or the next astral document would.
+    const text = "😀abc";
+    expect(slice(text, [{ startIndex: 1, endIndex: 4 }])).toBe("abc");
+    expect(slice(text, [{ endIndex: 1 }])).toBe("😀");
+    expect(text.slice(1, 4)).not.toBe("abc"); // the naive slice IS wrong
+  });
+
   it("accepts numeric offsets, treats omitted indices as zero, and answers empty for no segments", () => {
-    expect(sliceAnchoredText(utf8("abcdef"), [{ startIndex: 2, endIndex: 4 }])).toBe("cd");
+    expect(slice("abcdef", [{ startIndex: 2, endIndex: 4 }])).toBe("cd");
     // Both omitted → the empty [0, 0) slice, not the whole text.
-    expect(sliceAnchoredText(utf8("abcdef"), [{}])).toBe("");
-    expect(sliceAnchoredText(utf8("abcdef"), [])).toBe("");
+    expect(slice("abcdef", [{}])).toBe("");
+    expect(slice("abcdef", [])).toBe("");
   });
 
   it("throws a plain Error naming the offending index on a non-safe-integer offset (review F11)", () => {
     // A corrupted int64 string past 2^53 would silently lose
     // precision through Number(); the guard makes it loud instead.
     const huge = "9007199254740993"; // 2^53 + 1
-    expect(() => sliceAnchoredText(utf8("abcdef"), [{ startIndex: "0", endIndex: huge }])).toThrow(
+    expect(() => slice("abcdef", [{ startIndex: "0", endIndex: huge }])).toThrow(
       /endIndex=9007199254740993/,
     );
-    expect(() =>
-      sliceAnchoredText(utf8("abcdef"), [{ startIndex: "not-a-number", endIndex: "4" }]),
-    ).toThrow(/startIndex=not-a-number/);
+    expect(() => slice("abcdef", [{ startIndex: "not-a-number", endIndex: "4" }])).toThrow(
+      /startIndex=not-a-number/,
+    );
   });
 });
 

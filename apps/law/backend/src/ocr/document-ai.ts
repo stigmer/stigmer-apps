@@ -253,9 +253,10 @@ function extractServerMessage(raw: string): string {
  */
 function mapDocument(body: ProcessResponse): OcrPage[] {
   const text = body.document?.text ?? "";
-  // Encoded ONCE per response, not per page (review F10): anchors
-  // index the same document.text for every page in the window.
-  const textBytes = Buffer.from(text, "utf8");
+  // Built ONCE per response, not per page (review F10): anchors index
+  // the same document.text for every page in the window, and the
+  // code-point walk is O(text length).
+  const codePointIndex = buildCodePointIndex(text);
   const pages: OcrPage[] = [];
   for (const page of body.document?.pages ?? []) {
     const pageNumber = page.pageNumber;
@@ -280,7 +281,7 @@ function mapDocument(body: ProcessResponse): OcrPage[] {
     }
     pages.push({
       page: pageNumber,
-      text: sliceAnchoredText(textBytes, page.layout?.textAnchor?.textSegments ?? []),
+      text: sliceAnchoredText(text, codePointIndex, page.layout?.textAnchor?.textSegments ?? []),
       language,
       confidence,
     });
@@ -289,37 +290,80 @@ function mapDocument(body: ProcessResponse): OcrPage[] {
 }
 
 /**
- * Slices a page's text out of the UTF-8 encoding of the top-level
- * document.text (pre-encoded by the caller — once per response, not
- * per page) through its textAnchor segments. Protobuf string offsets
- * index the UTF-8 ENCODING, not UTF-16 code units — slicing must
- * happen over the byte encoding or any non-ASCII document (Telugu
- * court papers are the proof case) shears mid-character. JSON int64
- * arrives as strings, and startIndex is OMITTED when 0 (proto3 JSON
- * drops zero values). Unit-tested with non-ASCII below; to be
- * re-verified on real multilingual output at the T11 validation.
+ * Maps code-point offsets to UTF-16 indices of `text`: entry N is the
+ * UTF-16 index where code point N begins, plus one final entry at
+ * text.length so any half-open [start, end) pair of code-point
+ * offsets becomes a String.prototype.slice call. Built once per
+ * RESPONSE (mapDocument), never per page: every page in a window
+ * anchors into the same document.text, and rebuilding a
+ * megabyte-scale index 15 times over would be pure waste (the same
+ * economy review F10 demanded of the old byte encoding).
+ */
+export function buildCodePointIndex(text: string): Uint32Array {
+  // Sized for the worst case (every code point one UTF-16 unit) and
+  // trimmed once; astral code points consume two units, so the count
+  // can only come in at or under text.length.
+  const index = new Uint32Array(text.length + 1);
+  let codePoints = 0;
+  let utf16 = 0;
+  while (utf16 < text.length) {
+    index[codePoints] = utf16;
+    codePoints += 1;
+    const code = text.codePointAt(utf16);
+    utf16 += code !== undefined && code > 0xffff ? 2 : 1;
+  }
+  index[codePoints] = text.length;
+  return index.subarray(0, codePoints + 1);
+}
+
+/**
+ * Slices a page's text out of the top-level document.text through its
+ * textAnchor segments. The offsets count CHARACTERS (Unicode code
+ * points), NOT bytes: live-verified 2026-08-13 against the rc
+ * processor (pretrained-ocr-v2.1.1, REST JSON) with Telugu/Hindi
+ * fixtures — three pages' stored byte-lengths matched their ORIGINAL
+ * character counts (340 bytes vs 339 chars; 281 vs ~280; 201 vs 198),
+ * which only character offsets explain; ASCII pages had masked the
+ * difference (bytes == chars there). This function previously sliced
+ * the UTF-8 ENCODING with these offsets, truncating every non-ASCII
+ * page to ~1/3 with a trailing U+FFFD shear — and that byte
+ * assumption survived unit AND integration tests precisely because
+ * the test fake ENCODED THE SAME ASSUMPTION; only the live
+ * multilingual run could falsify it. JS strings are UTF-16, so
+ * String.prototype.slice cannot take these offsets directly either
+ * (an astral code point spans two UTF-16 units); callers pass the
+ * code-point→UTF-16 map built once per response by
+ * buildCodePointIndex. JSON int64 arrives as strings, and startIndex
+ * is OMITTED when 0 (proto3 JSON drops zero values).
  */
 export function sliceAnchoredText(
-  textBytes: Buffer,
+  text: string,
+  codePointIndex: Uint32Array,
   segments: readonly { startIndex?: string | number; endIndex?: string | number }[],
 ): string {
-  const parts: Buffer[] = [];
+  const codePointCount = codePointIndex.length - 1;
+  const parts: string[] = [];
   for (const segment of segments) {
     const start = segment.startIndex === undefined ? 0 : Number(segment.startIndex);
     const end = segment.endIndex === undefined ? 0 : Number(segment.endIndex);
     // Guard the parsed offsets: Number() of a corrupted int64 string
-    // silently loses precision past 2^53, and Buffer.subarray would
-    // clamp NaN to 0 — both would shear text without a trace. A real
-    // document cannot reach the guard honestly: 2^53 bytes is ~9
-    // petabytes of recognized text, while the inline-bytes request
-    // ceiling alone caps a response's text megabytes short of that.
+    // silently loses precision past 2^53 — that would shear text
+    // without a trace. A real document cannot reach the guard
+    // honestly: 2^53 characters is petabyte-scale recognized text,
+    // while the inline-bytes request ceiling alone caps a response's
+    // text megabytes short of that.
     if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)) {
       throw new Error(
         `textAnchor segment carries a non-safe-integer offset ` +
           `(startIndex=${String(segment.startIndex)}, endIndex=${String(segment.endIndex)})`,
       );
     }
-    parts.push(textBytes.subarray(start, end));
+    // Clamped into [0, codePointCount] — the same silent tolerance
+    // Buffer.subarray gave out-of-range offsets before; the ?? arms
+    // are unreachable after the clamp (noUncheckedIndexedAccess).
+    const from = Math.min(Math.max(start, 0), codePointCount);
+    const to = Math.min(Math.max(end, 0), codePointCount);
+    parts.push(text.slice(codePointIndex[from] ?? 0, codePointIndex[to] ?? 0));
   }
-  return Buffer.concat(parts).toString("utf8");
+  return parts.join("");
 }
