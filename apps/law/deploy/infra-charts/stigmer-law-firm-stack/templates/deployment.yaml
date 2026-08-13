@@ -43,7 +43,10 @@
 #                                            scripts/generate-auth-secrets.mjs
 #                                            — plus platform-client-secret
 #                                            when the firm has the web
-#                                            assistant, T05 web leg)
+#                                            assistant, T05 web leg — plus
+#                                            gcp-docai-credentials (the
+#                                            law-ocr service-account key
+#                                            JSON) when the firm has OCR)
 # The platform validates every reference exists at apply time, so the
 # secrets must be applied BEFORE this chart is installed (fail-closed).
 #
@@ -168,6 +171,16 @@ spec:
           - name: STIGMER_CONSOLE_URL
             value: {{ values.assistant_console_url }}
           {% endif %}
+          {% if values.ocr_docai_processor %}
+          # ── OCR (Document AI): rendered only when the firm has OCR
+          # configured. The interval is the feature gate (0 = staged but
+          # disabled); OCR_PAGES_PER_TICK stays a code default, like the
+          # sweep intervals this chart already omits.
+          - name: OCR_DOCAI_PROCESSOR
+            value: {{ values.ocr_docai_processor }}
+          - name: OCR_SWEEP_INTERVAL_SECONDS
+            value: "{{ values.ocr_sweep_interval_seconds }}"
+          {% endif %}
         secrets:
           - name: PGPASSWORD
             value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-postgres-credentials
@@ -196,6 +209,12 @@ spec:
           # Server-only by definition — the browser never sees it.
           - name: STIGMER_PLATFORM_CLIENT_SECRET
             value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-auth-keys/platform-client-secret
+          {% endif %}
+          {% if values.ocr_docai_processor %}
+          # The law-ocr service account's key JSON (OCR): presented to
+          # Document AI only; staged in the firm's auth-keys secret.
+          - name: OCR_DOCAI_CREDENTIALS_JSON
+            value: $secret/@{{ values.env }}/stigmer-law-{{ values.firm }}-auth-keys/gcp-docai-credentials
           {% endif %}
       # All three probes hit /healthz, which answers before auth and
       # deliberately does NOT touch the database (server.ts): a store
