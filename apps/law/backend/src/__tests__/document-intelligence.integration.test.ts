@@ -254,6 +254,7 @@ describe("document intelligence, end to end", () => {
       // loopback (remote-fetch.ts documents this as the seam's ONE
       // purpose). Everything else is the production posture.
       fetchDocument: (url) => fetchRemoteDocument(url, { allowPrivateNetworks: true }),
+      ocrEnabled: false,
       storeDocument: (input, caller) =>
         storeCaseDocument(
           {

@@ -67,6 +67,14 @@ export interface ToolDeps {
     input: CaseDocumentInput,
     caller: CallerPrincipal,
   ) => Promise<Document>;
+  /**
+   * Whether this deployment reads scans (the OCR sweep is configured
+   * AND enabled). The honesty sentences depend on it: promising "being
+   * read — try again shortly" on a deployment that will never read the
+   * scan is the exact dishonesty the tools exist to avoid (DD-009; the
+   * credits notice is the deployment-conditional precedent).
+   */
+  readonly ocrEnabled: boolean;
 }
 
 /** File numbers for answer lines — one bulk lookup, never N+1. */

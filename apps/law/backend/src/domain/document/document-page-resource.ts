@@ -50,6 +50,16 @@ import type { PolicyGuards } from "../authz/policy.js";
  */
 export const MAX_PAGES_PER_DOCUMENT = 200;
 
+/**
+ * The per-page character cap of the DocumentPage contract (proto
+ * max_len on DocumentPageSpec.text), owned here beside the resource
+ * like MAX_PAGES_PER_DOCUMENT: both sweeps truncate against it, and
+ * exporting the one constant is what keeps their truncation and the
+ * proto's promise from drifting apart (review F16 — three copies had
+ * accumulated).
+ */
+export const MAX_PAGE_CHARS = 100_000;
+
 /** The composed natural key — the same string the migration's
  * generated `page_key` column stores. */
 export function pageKey(documentId: string, page: number): string {

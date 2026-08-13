@@ -16,6 +16,7 @@ import { registerAuditSubscriber } from "./domain/audit/audit-subscriber.js";
 import { registerLeadMembershipHandler } from "./domain/case/lead-membership-handler.js";
 import { registerNextHearingRefreshHandler } from "./domain/case/next-hearing-refresh-handler.js";
 import { startExtractionSweep } from "./domain/document/extraction-sweep.js";
+import { startOcrSweep } from "./domain/document/ocr-sweep.js";
 import { registerDeactivationHandler } from "./domain/firmmember/deactivation-handler.js";
 import { registerTaskAssignmentHandler } from "./domain/notification/task-assignment-handler.js";
 import { startReminderSweep } from "./domain/reminders/sweep.js";
@@ -24,6 +25,7 @@ import { createFileRoutes } from "./files/file-routes.js";
 import { fetchRemoteDocument } from "./files/remote-fetch.js";
 import { createMcpHttpServer } from "./mcp/transport.js";
 import type { ObjectStore } from "./objectstore/object-store.js";
+import type { OcrProvider } from "./ocr/provider.js";
 import { type App, buildRoutes, createApp } from "./routes.js";
 import { createStaticRoutes } from "./web/static-routes.js";
 
@@ -72,6 +74,17 @@ export interface BackendDeps {
    * lets the web decide whether an "Ask AI" affordance exists.
    */
   readonly assistant?: AssistantRuntime;
+  /**
+   * The OCR sweep (DD-009): provider + tick interval + per-tick page
+   * budget. 0/absent interval disables the loop (tests drive
+   * runOcrSweepOnce directly). Multi-replica safe: DocumentPage's
+   * composed natural key absorbs concurrent sweeps.
+   */
+  readonly ocr?: {
+    readonly provider: OcrProvider;
+    readonly intervalMs: number;
+    readonly pagesPerTick: number;
+  };
 }
 
 /**
@@ -126,6 +139,10 @@ export function createFirmServers(
             input,
             caller,
           ),
+        // Scan-reading honesty: enabled means the sweep will actually
+        // run (config present AND interval on) — staged-but-disabled
+        // must still read as "cannot read scans" (DD-009).
+        ocrEnabled: (deps.ocr?.intervalMs ?? 0) > 0,
       },
     ),
   };
@@ -210,6 +227,24 @@ function assembleApp(deps: BackendDeps): App {
         recordExtraction: app.resources.documents.invoke.recordExtraction,
       },
       deps.extractionIntervalMs,
+    );
+  }
+
+  if (deps.ocr && deps.ocr.intervalMs > 0) {
+    // The scan reader (DD-009) — drains NO_TEXT_LAYER documents
+    // through the provider under a per-tick page budget.
+    startOcrSweep(
+      {
+        store: deps.store,
+        objectStore: deps.objectStore,
+        createDocumentPage: app.resources.documentPages.invoke.create as NonNullable<
+          typeof app.resources.documentPages.invoke.create
+        >,
+        recordExtraction: app.resources.documents.invoke.recordExtraction,
+        provider: deps.ocr.provider,
+        pagesPerTick: deps.ocr.pagesPerTick,
+      },
+      deps.ocr.intervalMs,
     );
   }
   return app;

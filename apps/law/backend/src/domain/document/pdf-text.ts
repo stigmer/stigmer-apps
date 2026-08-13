@@ -46,9 +46,49 @@ export interface ExtractedPdf {
 const MIN_MEANINGFUL_CHARS = 20;
 
 /**
+ * Counts a PDF's pages without reading any text. The OCR sweep
+ * measures page counts itself because DocumentStatus.page_count is
+ * contractually "DocumentPage rows; 0 unless EXTRACTED"
+ * (document.proto) and NO_TEXT_LAYER rows honestly carry 0. A
+ * NO_TEXT_LAYER PDF parsed clean once by definition (garbage lands
+ * FAILED), so a parse failure here is transient and throws past the
+ * frame — no PdfNotReadableError classification.
+ */
+export async function countPdfPages(bytes: Uint8Array): Promise<number> {
+  const loadingTask = getDocument({
+    // A COPY, never the caller's array: pdfjs v6 TRANSFERS the
+    // underlying ArrayBuffer into its parser (getDocument({ data })
+    // detaches it — proven in isolation: byteLength 797 → 0 after the
+    // call), so handing over the caller's bytes would leave them
+    // reading as 0 bytes afterwards. The OCR sweep counts pages and
+    // then sends the SAME array to the provider; without this copy
+    // every PDF went out as an empty rawDocument (the review's F1
+    // showstopper). Copying here, inside the counter, protects every
+    // future caller too.
+    data: bytes.slice(),
+    // Same posture as extractPdfText: no filesystem lookups, errors
+    // only (the header there has the story).
+    useSystemFonts: false,
+    verbosity: 0,
+  });
+  try {
+    const doc = await loadingTask.promise;
+    return doc.numPages;
+  } finally {
+    // v6 API: teardown lives on the loading task, not the document —
+    // and it must run on the reject path too, or a failed parse leaks
+    // the task's resources.
+    await loadingTask.destroy();
+  }
+}
+
+/**
  * Extracts at most `maxPages` pages, each truncated to `maxPageChars`
  * characters — the caps keep one pathological file from unbounding the
  * sweep; both bounds belong to the caller (the DocumentPage contract).
+ * Callers must not reuse `bytes` after the call: pdfjs v6 transfers
+ * the underlying ArrayBuffer, so the caller's array reads as 0 bytes
+ * afterwards (countPdfPages copies for exactly this reason).
  */
 export async function extractPdfText(
   bytes: Uint8Array,
@@ -64,25 +104,25 @@ export async function extractPdfText(
     // line per swept document.
     verbosity: 0,
   });
-  let doc;
   try {
-    doc = await loadingTask.promise;
-  } catch (err) {
-    // ONLY the parser's verdicts about the BYTES are deterministic
-    // (corrupt data, encryption) — those become PdfNotReadableError
-    // and the sweep records terminal FAILED. Anything else here is the
-    // ENVIRONMENT failing (found live: the image shipped without
-    // pdf.worker.mjs, and the resulting setup error was misclassified
-    // as unreadable documents — a wrong PERMANENT verdict on healthy
-    // bytes). Environmental errors propagate raw; the sweep leaves the
-    // document pending and the next tick retries.
-    if (err instanceof InvalidPDFException || err instanceof PasswordException) {
-      throw new PdfNotReadableError(err.message);
+    let doc;
+    try {
+      doc = await loadingTask.promise;
+    } catch (err) {
+      // ONLY the parser's verdicts about the BYTES are deterministic
+      // (corrupt data, encryption) — those become PdfNotReadableError
+      // and the sweep records terminal FAILED. Anything else here is the
+      // ENVIRONMENT failing (found live: the image shipped without
+      // pdf.worker.mjs, and the resulting setup error was misclassified
+      // as unreadable documents — a wrong PERMANENT verdict on healthy
+      // bytes). Environmental errors propagate raw; the sweep leaves the
+      // document pending and the next tick retries.
+      if (err instanceof InvalidPDFException || err instanceof PasswordException) {
+        throw new PdfNotReadableError(err.message);
+      }
+      throw err;
     }
-    throw err;
-  }
 
-  try {
     const pages: string[] = [];
     const pageCount = Math.min(doc.numPages, opts.maxPages);
     for (let n = 1; n <= pageCount; n++) {
@@ -104,7 +144,9 @@ export async function extractPdfText(
       noTextLayer: pages.reduce((chars, p) => chars + p.length, 0) < MIN_MEANINGFUL_CHARS,
     };
   } finally {
-    // v6 API: teardown lives on the loading task, not the document.
+    // v6 API: teardown lives on the loading task, not the document —
+    // and it must run on the reject path too, or a failed parse leaks
+    // the task's resources.
     await loadingTask.destroy();
   }
 }

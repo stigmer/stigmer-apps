@@ -344,6 +344,104 @@ describe("loadConfigFromEnv", () => {
     });
   });
 
+  describe("the OCR integration (DD-009) — optional as a group, gated by the interval knob", () => {
+    /** The provider pair, complete. Values obviously not real. */
+    function ocrEnv(): Record<string, string> {
+      return {
+        ...fullEnv(),
+        OCR_DOCAI_PROCESSOR: "projects/fictional/locations/us/processors/fake-processor",
+        OCR_DOCAI_CREDENTIALS_JSON: '{"client_email":"fake@test.example","private_key":"not-real"}',
+      };
+    }
+
+    it("is absent when none of the group is set — the feature does not exist", () => {
+      expect(loadConfigFromEnv(fullEnv())).not.toHaveProperty("ocr");
+    });
+
+    it("the pair with interval 0 is the VALID staged-but-disabled deployment (the knob is the gate)", () => {
+      // Rollout ordering: the credential lands first, the owner flips
+      // the interval when ready — this must parse, not fail.
+      expect(loadConfigFromEnv(ocrEnv()).ocr).toEqual({
+        processor: "projects/fictional/locations/us/processors/fake-processor",
+        credentialsJson: '{"client_email":"fake@test.example","private_key":"not-real"}',
+        intervalMs: 0,
+        pagesPerTick: 200,
+      });
+    });
+
+    it("maps an enabled sweep's interval to milliseconds", () => {
+      const env = ocrEnv();
+      env.OCR_SWEEP_INTERVAL_SECONDS = "300";
+
+      expect(loadConfigFromEnv(env).ocr).toMatchObject({ intervalMs: 300_000 });
+    });
+
+    it("refuses the processor without credentials — a half-wired provider fails at deploy, not at first tick", () => {
+      const env = ocrEnv();
+      delete env.OCR_DOCAI_CREDENTIALS_JSON;
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(
+        /OCR_DOCAI_CREDENTIALS_JSON is required \(the OCR pair must be complete/,
+      );
+    });
+
+    it("refuses credentials without the processor", () => {
+      const env = ocrEnv();
+      delete env.OCR_DOCAI_PROCESSOR;
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(
+        /OCR_DOCAI_PROCESSOR is required \(the OCR pair must be complete/,
+      );
+    });
+
+    it("refuses an enabled interval without the pair, naming both variables", () => {
+      const env = fullEnv();
+      env.OCR_SWEEP_INTERVAL_SECONDS = "300";
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(
+        /OCR_SWEEP_INTERVAL_SECONDS > 0 requires OCR_DOCAI_PROCESSOR and OCR_DOCAI_CREDENTIALS_JSON/,
+      );
+    });
+
+    it("treats an empty string as unset — an unresolved reference must fail loudly", () => {
+      const env = ocrEnv();
+      env.OCR_DOCAI_PROCESSOR = "";
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(/OCR_DOCAI_PROCESSOR is required/);
+    });
+
+    it("validates the interval like every sweep interval", () => {
+      const env = ocrEnv();
+      env.OCR_SWEEP_INTERVAL_SECONDS = "-5";
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(
+        /OCR_SWEEP_INTERVAL_SECONDS must be a non-negative integer/,
+      );
+    });
+
+    it("defaults OCR_PAGES_PER_TICK to 200 and honors an override", () => {
+      expect(loadConfigFromEnv(ocrEnv()).ocr?.pagesPerTick).toBe(200);
+
+      const env = ocrEnv();
+      env.OCR_PAGES_PER_TICK = "50";
+      expect(loadConfigFromEnv(env).ocr?.pagesPerTick).toBe(50);
+    });
+
+    it.each([
+      ["0", "zero — the budget is a spending ceiling, not a disable switch"],
+      ["-3", "negative"],
+      ["12.5", "non-integer"],
+      ["many", "non-numeric"],
+    ])("rejects OCR_PAGES_PER_TICK '%s' (%s)", (pagesValue) => {
+      const env = ocrEnv();
+      env.OCR_PAGES_PER_TICK = pagesValue;
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(
+        `OCR_PAGES_PER_TICK must be a positive integer, got '${pagesValue}'`,
+      );
+    });
+  });
+
   it.each([
     ["not-a-number", "non-numeric"],
     ["8080.5", "non-integer"],

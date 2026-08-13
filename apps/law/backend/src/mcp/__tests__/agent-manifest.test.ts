@@ -47,8 +47,11 @@ function registeredToolNames(): string[] {
       names.push(name);
     },
   } as unknown as McpServer;
-  // Identity and deps are never touched at registration time (tools are
-  // registered for every caller, gated at call time — server.ts).
+  // Registration may read deps.ocrEnabled (read_document's description
+  // is deployment-conditional, DD-009) but nothing else; handlers are
+  // gated at call time (server.ts). Empty deps leaves ocrEnabled
+  // undefined, which reads as OCR-off — this registration exercises
+  // the OCR-off shape of the surface.
   const deps = {} as ToolDeps;
   for (const register of FIRM_TOOL_REGISTRARS) {
     register(capturingServer, undefined, deps);

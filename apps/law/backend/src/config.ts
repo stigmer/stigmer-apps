@@ -82,6 +82,25 @@ export interface AssistantConfig {
   readonly consoleUrl: string;
 }
 
+/**
+ * The OCR provider integration (DD-009): the Document AI processor
+ * the OCR sweep sends scans to. OPTIONAL AS A GROUP like the
+ * assistant — absent means the feature does not exist. Interval 0
+ * with credentials staged is deliberately VALID: staged-but-disabled,
+ * for rollout ordering (the credential lands first, the owner flips
+ * the interval knob when ready — the knob IS the feature gate).
+ */
+export interface OcrConfig {
+  /** Processor resource name: projects/…/locations/{loc}/processors/…. */
+  readonly processor: string;
+  /** Service-account key JSON (roles/documentai.apiUser only). */
+  readonly credentialsJson: string;
+  /** The OCR sweep's tick interval; 0 disables the loop. */
+  readonly intervalMs: number;
+  /** Per-tick page budget — the hard spending ceiling (DD-009). */
+  readonly pagesPerTick: number;
+}
+
 export interface BackendConfig {
   /** Postgres connection (either shape — see DatabaseConfig). */
   readonly database: DatabaseConfig;
@@ -146,6 +165,8 @@ export interface BackendConfig {
   };
   /** The assistant integration; absent means the feature does not exist. */
   readonly assistant?: AssistantConfig;
+  /** The OCR integration (DD-009); absent means the feature does not exist. */
+  readonly ocr?: OcrConfig;
 }
 
 export function loadConfigFromEnv(
@@ -255,6 +276,7 @@ export function loadConfigFromEnv(
   }
 
   const assistant = loadAssistantFromEnv(env, problems);
+  const ocr = loadOcrFromEnv(env, problems);
 
   if (problems.length > 0) {
     throw new Error(`Invalid backend configuration:\n- ${problems.join("\n- ")}`);
@@ -288,6 +310,68 @@ export function loadConfigFromEnv(
       reconcileIntervalMs: fgaReconcileSeconds * 1000,
     },
     ...(assistant ? { assistant } : {}),
+    ...(ocr ? { ocr } : {}),
+  };
+}
+
+/**
+ * All-or-nothing PAIR (the assistant group's rule): processor and
+ * credentials together or not at all; a half-wired OCR would bill
+ * failures at first tick instead of failing at deploy. The interval
+ * defaults to 0 — the knob is the feature gate (DD-009): credentials
+ * staged with interval 0 is a valid staged-but-disabled deployment,
+ * but an interval > 0 without the pair is a boot problem. Empty
+ * strings count as unset throughout (an unresolved Kubernetes
+ * reference renders as "").
+ */
+function loadOcrFromEnv(
+  env: Record<string, string | undefined>,
+  problems: string[],
+): OcrConfig | undefined {
+  const pairNames = ["OCR_DOCAI_PROCESSOR", "OCR_DOCAI_CREDENTIALS_JSON"] as const;
+  const present = pairNames.filter((name) => env[name]);
+
+  const intervalRaw = env.OCR_SWEEP_INTERVAL_SECONDS ?? "0";
+  const intervalSeconds = Number(intervalRaw);
+  if (!Number.isInteger(intervalSeconds) || intervalSeconds < 0) {
+    problems.push(
+      `OCR_SWEEP_INTERVAL_SECONDS must be a non-negative integer (0 disables), ` +
+        `got '${intervalRaw}'`,
+    );
+    return undefined;
+  }
+
+  const pagesRaw = env.OCR_PAGES_PER_TICK ?? "200";
+  const pagesPerTick = Number(pagesRaw);
+  if (!Number.isInteger(pagesPerTick) || pagesPerTick < 1) {
+    problems.push(`OCR_PAGES_PER_TICK must be a positive integer, got '${pagesRaw}'`);
+    return undefined;
+  }
+
+  if (present.length === 0) {
+    if (intervalSeconds > 0) {
+      problems.push(
+        "OCR_SWEEP_INTERVAL_SECONDS > 0 requires OCR_DOCAI_PROCESSOR and " +
+          "OCR_DOCAI_CREDENTIALS_JSON (an enabled sweep without a provider " +
+          "would fail at first tick instead of at deploy)",
+      );
+    }
+    return undefined;
+  }
+  const missing = pairNames.filter((name) => !env[name]);
+  if (missing.length > 0) {
+    problems.push(
+      `${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} required ` +
+        "(the OCR pair must be complete once any of it is set — a half-wired " +
+        "provider fails at first tick instead of at deploy)",
+    );
+    return undefined;
+  }
+  return {
+    processor: env.OCR_DOCAI_PROCESSOR as string,
+    credentialsJson: env.OCR_DOCAI_CREDENTIALS_JSON as string,
+    intervalMs: intervalSeconds * 1000,
+    pagesPerTick,
   };
 }
 

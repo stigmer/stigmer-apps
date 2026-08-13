@@ -34,11 +34,8 @@ import {
   DocumentPageSchema,
 } from "../../gen/stigmer/law/documentpage/v1/documentpage_pb.js";
 import type { ObjectStore } from "../../objectstore/object-store.js";
-import { MAX_PAGES_PER_DOCUMENT } from "./document-page-resource.js";
+import { MAX_PAGE_CHARS, MAX_PAGES_PER_DOCUMENT } from "./document-page-resource.js";
 import { extractPdfText, PdfNotReadableError } from "./pdf-text.js";
-
-/** The DocumentPageSpec contract's per-page cap (proto max_len). */
-const MAX_PAGE_CHARS = 100_000;
 
 /** Documents per tick — one page of work, the reminder sweep's bound.
  * A backlog (the backfill) drains a page per tick rather than spiking

@@ -24,6 +24,7 @@ import {
   startAuthzReconcileLoop,
 } from "./domain/authz/reconcile-loop.js";
 import { createS3ObjectStore } from "./objectstore/object-store.js";
+import { createDocumentAiProvider } from "./ocr/document-ai.js";
 import { createFirmServers } from "./server.js";
 import { createResourceStore } from "./storage.js";
 import { detectWebRoot } from "./web/static-routes.js";
@@ -146,6 +147,27 @@ async function main(): Promise<void> {
             assistant: {
               config: config.assistant,
               minter: createPlatformTokenMinter(config.assistant),
+            },
+          }
+        : {}),
+      // The provider is constructed ONLY when the sweep will actually
+      // run (interval > 0): staged-but-disabled is the rollout state
+      // DESIGNED to be safe (config.ts — the credential lands first,
+      // the owner flips the interval knob), and constructing the
+      // adapter parses the service-account key at boot — a malformed
+      // staged key would crash-loop the whole product in exactly that
+      // state (review F4). With interval 0 the config is validated but
+      // the key is never parsed; server.ts already treats the absent
+      // group as OCR-off for the honesty wording.
+      ...(config.ocr && config.ocr.intervalMs > 0
+        ? {
+            ocr: {
+              provider: createDocumentAiProvider({
+                processor: config.ocr.processor,
+                credentialsJson: config.ocr.credentialsJson,
+              }),
+              intervalMs: config.ocr.intervalMs,
+              pagesPerTick: config.ocr.pagesPerTick,
             },
           }
         : {}),
