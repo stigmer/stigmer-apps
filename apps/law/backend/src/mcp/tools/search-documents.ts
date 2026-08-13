@@ -25,11 +25,9 @@ import {
 import { countNoun } from "../format.js";
 import { gated, textResult } from "../gate.js";
 import { caseByFileNumber, type ToolDeps } from "./shared.js";
+import { snippetAround } from "./snippet.js";
 
 const NAME = "search_documents";
-
-/** Characters of context either side of the first match. */
-const SNIPPET_WINDOW = 120;
 
 export function registerSearchDocuments(
   server: McpServer,
@@ -118,20 +116,4 @@ export function registerSearchDocuments(
     }),
   );
   return NAME;
-}
-
-/** The first match with context either side, single-line, ellipsized —
- * the passage a person checks before opening the page. */
-function snippetAround(text: string, query: string): string {
-  const at = text.toLowerCase().indexOf(query.toLowerCase());
-  if (at < 0) {
-    // Defensive: the store matched, so this should not happen; show the
-    // page head rather than nothing.
-    return text.slice(0, SNIPPET_WINDOW * 2) + (text.length > SNIPPET_WINDOW * 2 ? "…" : "");
-  }
-  const start = Math.max(0, at - SNIPPET_WINDOW);
-  const end = Math.min(text.length, at + query.length + SNIPPET_WINDOW);
-  return (
-    (start > 0 ? "…" : "") + text.slice(start, end).trim() + (end < text.length ? "…" : "")
-  );
 }

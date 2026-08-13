@@ -26,7 +26,7 @@ import { createClient, type Client } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { InProcessEventDispatcher } from "@stigmer/resource-api";
+import { InProcessEventDispatcher, SYSTEM_PRINCIPAL } from "@stigmer/resource-api";
 import { runMigrations } from "@stigmer/resource-api/postgres";
 import {
   createCallerIdentityResolver,
@@ -61,6 +61,7 @@ import {
 } from "../gen/stigmer/law/document/v1/document_pb.js";
 import {
   type DocumentPage,
+  DocumentPageSchema,
   ListDocumentPagesRequestSchema,
 } from "../gen/stigmer/law/documentpage/v1/documentpage_pb.js";
 import {
@@ -619,6 +620,72 @@ describe("document intelligence, end to end", () => {
       query: "barred by limitation under Article 113",
     });
     expect(textOf(partner)).toContain("written-statement.pdf");
+  });
+
+  it("searches and windows multilingual pages — store folding + grapheme-safe snippets (#2, #3)", async () => {
+    // Multilingual text enters through the SAME system-only create the
+    // extraction sweep rides (and the future OCR sweep will — DD-009):
+    // the Type1/WinAnsi PDF fixture builder cannot encode complex
+    // scripts, and producing them from scans IS the deferred OCR
+    // feature. What must hold TODAY, end to end on real Postgres:
+    // byte-exact matching for a caseless script, Unicode folding for
+    // accented Latin (the adapter's own ICU collation, whatever locale
+    // this container booted with), and snippet edges that never orphan
+    // a combining mark.
+    const uploaded = await upload(
+      people.lead.email,
+      caseAId,
+      "witness-statement-telugu.pdf",
+      "evidence",
+      "%PDF-1.4 stand-in bytes; the page rows below are the fixture",
+    );
+    expect(uploaded.status).toBe(201);
+    const docId = uploaded.json.metadata?.id ?? "";
+
+    // "మై" clusters flank the match so a ±120 window edge lands inside
+    // one — the exact defect shape of issue #2.
+    const padding = "మై".repeat(150);
+    const sweep = extractionSweepDeps();
+    await sweep.createDocumentPage(
+      create(DocumentPageSchema, {
+        spec: { documentId: docId, caseId: caseAId, page: 1, text: `క${padding} సాక్షి వాంగ్మూలం ${padding}` },
+      }),
+      SYSTEM_PRINCIPAL,
+    );
+    await sweep.createDocumentPage(
+      create(DocumentPageSchema, {
+        spec: { documentId: docId, caseId: caseAId, page: 2, text: "Certified translation of the RÉSUMÉ OF ARGUMENTS follows." },
+      }),
+      SYSTEM_PRINCIPAL,
+    );
+    // Close the loop the sweep would have closed — EXTRACTED is the
+    // promise the pages exist, and later sweep runs skip this document.
+    await sweep.recordExtraction(
+      create(RecordDocumentExtractionRequestSchema, {
+        id: docId,
+        extraction: ExtractionState.EXTRACTED,
+        pageCount: 2,
+      }),
+      SYSTEM_PRINCIPAL,
+    );
+
+    // Caseless script: byte-exact hit; the snippet opens on a whole
+    // grapheme, never an orphaned matra (issue #2's visible defect).
+    const telugu = await runTool("search_documents", people.lead.email, { query: "సాక్షి" });
+    expect(telugu.isError).toBeFalsy();
+    expect(textOf(telugu)).toContain("witness-statement-telugu.pdf");
+    const hit = (telugu.structuredContent as { hits: { snippet: string }[] }).hits[0];
+    expect(hit?.snippet).toContain("సాక్షి");
+    expect(/^…?\p{M}/u.test(hit?.snippet ?? "")).toBe(false);
+
+    // Accented Latin folds INSIDE the store query (issue #3) — the
+    // commons contract suite proves this against a pinned C locale;
+    // here it must simply hold through the whole tool chain.
+    const folded = await runTool("search_documents", people.lead.email, {
+      query: "résumé of arguments",
+    });
+    expect(textOf(folded)).toContain("witness-statement-telugu.pdf");
+    expect(textOf(folded)).toContain("page 2");
   });
 
   it("read_document returns budgeted whole pages, and a single page on request", async () => {
