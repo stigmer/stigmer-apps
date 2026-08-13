@@ -49,7 +49,8 @@ enum ExtractionState {
   EXTRACTION_STATE_EXTRACTED = 2;
   // Parsed fine but carries no usable text — a scan, a photo, or an
   // image-only PDF. The honest state the assistant reports as "a scan
-  // I can't read yet"; flips only when OCR lands (DD-008 gate).
+  // I can't read yet"; the OCR sweep's queue predicate — OCR reads
+  // these and flips them to EXTRACTED (DD-009).
   EXTRACTION_STATE_NO_TEXT_LAYER = 3;
   // The parser rejected the bytes (corrupt or encrypted file).
   // Terminal: a deterministic failure would fail identically on every
@@ -57,6 +58,13 @@ enum ExtractionState {
   // (bucket or store unreachable) never reach this state — the sweep
   // leaves them PENDING and the next tick is the retry.
   EXTRACTION_STATE_FAILED = 4;
+  // The OCR provider deterministically rejected the bytes — the scan
+  // could not be read. Terminal for the same reason FAILED is: the
+  // same bytes fail identically on every sweep. Configuration and
+  // transient failures never reach this state — the OCR sweep leaves
+  // those NO_TEXT_LAYER and retries (DD-009's three-way rule; a
+  // config error must never write a document verdict).
+  EXTRACTION_STATE_OCR_FAILED = 5;
 }
 
 message DocumentSpec {

@@ -49,6 +49,39 @@ message DocumentPageSpec {
   // sweep truncates pathological layers to fit rather than failing the
   // whole document.
   string text = 4 [(buf.validate.field).string.max_len = 100000];
+
+  // What produced this page's text; absent on pre-OCR rows (read as
+  // TEXT_LAYER).
+  TextSource source = 5 [(buf.validate.field).enum.defined_only = true];
+
+  // BCP-47 language tag the OCR provider detected for this page; empty
+  // when unknown or when the text came from a text layer (pdfjs
+  // reports no language). 35 is the RFC 5646 recommended buffer.
+  string language = 6 [(buf.validate.field).string.max_len = 35];
+
+  // Provider-reported recognition confidence for this page, 0-1;
+  // 0 means not reported. Feeds honesty labels; no thresholding in v1
+  // (DD-009).
+  float confidence = 7 [(buf.validate.field).float = {
+    gte: 0,
+    lte: 1
+  }];
+}
+
+// What produced a page's text. Per-page rather than per-document
+// (DD-009): a hybrid document may mix born-digital and scanned pages,
+// and a document-level flag would lie about one half. Any
+// document-level "was this OCR'd" view derives from its pages.
+enum TextSource {
+  // Rows written before OCR existed. Read as TEXT_LAYER: only the
+  // extraction sweep wrote pages then, so the backfill is by
+  // interpretation — no migration touches rows.
+  TEXT_SOURCE_UNSPECIFIED = 0;
+  // Extracted from the document's embedded text layer (pdfjs).
+  TEXT_SOURCE_TEXT_LAYER = 1;
+  // Read off a scan or photo by the OCR provider. Imperfect by
+  // nature — consumers label quotes from these pages honestly.
+  TEXT_SOURCE_OCR = 2;
 }
 
 message ListDocumentPagesRequest {

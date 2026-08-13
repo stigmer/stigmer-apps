@@ -15,8 +15,8 @@
 // @generated from file stigmer/law/documentpage/v1/documentpage.proto (package stigmer.law.documentpage.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import { file_buf_validate_validate } from "../../../../buf/validate/validate_pb.js";
 import type { ResourceMetadata } from "../../../resourceapi/v1/resource_pb.js";
 import { file_stigmer_resourceapi_v1_resource } from "../../../resourceapi/v1/resource_pb.js";
@@ -26,7 +26,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file stigmer/law/documentpage/v1/documentpage.proto.
  */
 export const file_stigmer_law_documentpage_v1_documentpage: GenFile = /*@__PURE__*/
-  fileDesc("Ci5zdGlnbWVyL2xhdy9kb2N1bWVudHBhZ2UvdjEvZG9jdW1lbnRwYWdlLnByb3RvEhtzdGlnbWVyLmxhdy5kb2N1bWVudHBhZ2UudjEisgEKDERvY3VtZW50UGFnZRITCgthcGlfdmVyc2lvbhgBIAEoCRIMCgRraW5kGAIgASgJEjoKCG1ldGFkYXRhGAMgASgLMiguc3RpZ21lci5yZXNvdXJjZWFwaS52MS5SZXNvdXJjZU1ldGFkYXRhEkMKBHNwZWMYBCABKAsyLS5zdGlnbWVyLmxhdy5kb2N1bWVudHBhZ2UudjEuRG9jdW1lbnRQYWdlU3BlY0IGukgDyAEBInoKEERvY3VtZW50UGFnZVNwZWMSHAoLZG9jdW1lbnRfaWQYASABKAlCB7pIBHICEAESGAoHY2FzZV9pZBgCIAEoCUIHukgEcgIQARIVCgRwYWdlGAMgASgFQge6SAQaAigBEhcKBHRleHQYBCABKAlCCbpIBnIEGKCNBiJ0ChhMaXN0RG9jdW1lbnRQYWdlc1JlcXVlc3QSHAoLZG9jdW1lbnRfaWQYASABKAlCB7pIBHICEAESHAoJcGFnZV9zaXplGAIgASgFQgm6SAYaBBhkKAASHAoLcGFnZV9vZmZzZXQYAyABKAVCB7pIBBoCKAAiagoZTGlzdERvY3VtZW50UGFnZXNSZXNwb25zZRI4CgVpdGVtcxgBIAMoCzIpLnN0aWdtZXIubGF3LmRvY3VtZW50cGFnZS52MS5Eb2N1bWVudFBhZ2USEwoLdG90YWxfY291bnQYAiABKAMiYgoaU2VhcmNoRG9jdW1lbnRQYWdlc1JlcXVlc3QSGQoFcXVlcnkYASABKAlCCrpIB3IFEAIYyAESDwoHY2FzZV9pZBgCIAEoCRIYCgVsaW1pdBgDIAEoBUIJukgGGgQYFCgAIlcKG1NlYXJjaERvY3VtZW50UGFnZXNSZXNwb25zZRI4CgVpdGVtcxgBIAMoCzIpLnN0aWdtZXIubGF3LmRvY3VtZW50cGFnZS52MS5Eb2N1bWVudFBhZ2UyiQIKE0RvY3VtZW50UGFnZVNlcnZpY2USdQoETGlzdBI1LnN0aWdtZXIubGF3LmRvY3VtZW50cGFnZS52MS5MaXN0RG9jdW1lbnRQYWdlc1JlcXVlc3QaNi5zdGlnbWVyLmxhdy5kb2N1bWVudHBhZ2UudjEuTGlzdERvY3VtZW50UGFnZXNSZXNwb25zZRJ7CgZTZWFyY2gSNy5zdGlnbWVyLmxhdy5kb2N1bWVudHBhZ2UudjEuU2VhcmNoRG9jdW1lbnRQYWdlc1JlcXVlc3QaOC5zdGlnbWVyLmxhdy5kb2N1bWVudHBhZ2UudjEuU2VhcmNoRG9jdW1lbnRQYWdlc1Jlc3BvbnNlYgZwcm90bzM", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
+  fileDesc("Ci5zdGlnbWVyL2xhdy9kb2N1bWVudHBhZ2UvdjEvZG9jdW1lbnRwYWdlLnByb3RvEhtzdGlnbWVyLmxhdy5kb2N1bWVudHBhZ2UudjEisgEKDERvY3VtZW50UGFnZRITCgthcGlfdmVyc2lvbhgBIAEoCRIMCgRraW5kGAIgASgJEjoKCG1ldGFkYXRhGAMgASgLMiguc3RpZ21lci5yZXNvdXJjZWFwaS52MS5SZXNvdXJjZU1ldGFkYXRhEkMKBHNwZWMYBCABKAsyLS5zdGlnbWVyLmxhdy5kb2N1bWVudHBhZ2UudjEuRG9jdW1lbnRQYWdlU3BlY0IGukgDyAEBIv0BChBEb2N1bWVudFBhZ2VTcGVjEhwKC2RvY3VtZW50X2lkGAEgASgJQge6SARyAhABEhgKB2Nhc2VfaWQYAiABKAlCB7pIBHICEAESFQoEcGFnZRgDIAEoBUIHukgEGgIoARIXCgR0ZXh0GAQgASgJQgm6SAZyBBigjQYSQQoGc291cmNlGAUgASgOMicuc3RpZ21lci5sYXcuZG9jdW1lbnRwYWdlLnYxLlRleHRTb3VyY2VCCLpIBYIBAhABEhkKCGxhbmd1YWdlGAYgASgJQge6SARyAhgjEiMKCmNvbmZpZGVuY2UYByABKAJCD7pIDAoKHQAAgD8tAAAAACJ0ChhMaXN0RG9jdW1lbnRQYWdlc1JlcXVlc3QSHAoLZG9jdW1lbnRfaWQYASABKAlCB7pIBHICEAESHAoJcGFnZV9zaXplGAIgASgFQgm6SAYaBBhkKAASHAoLcGFnZV9vZmZzZXQYAyABKAVCB7pIBBoCKAAiagoZTGlzdERvY3VtZW50UGFnZXNSZXNwb25zZRI4CgVpdGVtcxgBIAMoCzIpLnN0aWdtZXIubGF3LmRvY3VtZW50cGFnZS52MS5Eb2N1bWVudFBhZ2USEwoLdG90YWxfY291bnQYAiABKAMiYgoaU2VhcmNoRG9jdW1lbnRQYWdlc1JlcXVlc3QSGQoFcXVlcnkYASABKAlCCrpIB3IFEAIYyAESDwoHY2FzZV9pZBgCIAEoCRIYCgVsaW1pdBgDIAEoBUIJukgGGgQYFCgAIlcKG1NlYXJjaERvY3VtZW50UGFnZXNSZXNwb25zZRI4CgVpdGVtcxgBIAMoCzIpLnN0aWdtZXIubGF3LmRvY3VtZW50cGFnZS52MS5Eb2N1bWVudFBhZ2UqWgoKVGV4dFNvdXJjZRIbChdURVhUX1NPVVJDRV9VTlNQRUNJRklFRBAAEhoKFlRFWFRfU09VUkNFX1RFWFRfTEFZRVIQARITCg9URVhUX1NPVVJDRV9PQ1IQAjKJAgoTRG9jdW1lbnRQYWdlU2VydmljZRJ1CgRMaXN0EjUuc3RpZ21lci5sYXcuZG9jdW1lbnRwYWdlLnYxLkxpc3REb2N1bWVudFBhZ2VzUmVxdWVzdBo2LnN0aWdtZXIubGF3LmRvY3VtZW50cGFnZS52MS5MaXN0RG9jdW1lbnRQYWdlc1Jlc3BvbnNlEnsKBlNlYXJjaBI3LnN0aWdtZXIubGF3LmRvY3VtZW50cGFnZS52MS5TZWFyY2hEb2N1bWVudFBhZ2VzUmVxdWVzdBo4LnN0aWdtZXIubGF3LmRvY3VtZW50cGFnZS52MS5TZWFyY2hEb2N1bWVudFBhZ2VzUmVzcG9uc2ViBnByb3RvMw", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
 
 /**
  * @generated from message stigmer.law.documentpage.v1.DocumentPage
@@ -105,6 +105,32 @@ export type DocumentPageSpec = Message<"stigmer.law.documentpage.v1.DocumentPage
    * @generated from field: string text = 4;
    */
   text: string;
+
+  /**
+   * What produced this page's text; absent on pre-OCR rows (read as
+   * TEXT_LAYER).
+   *
+   * @generated from field: stigmer.law.documentpage.v1.TextSource source = 5;
+   */
+  source: TextSource;
+
+  /**
+   * BCP-47 language tag the OCR provider detected for this page; empty
+   * when unknown or when the text came from a text layer (pdfjs
+   * reports no language). 35 is the RFC 5646 recommended buffer.
+   *
+   * @generated from field: string language = 6;
+   */
+  language: string;
+
+  /**
+   * Provider-reported recognition confidence for this page, 0-1;
+   * 0 means not reported. Feeds honesty labels; no thresholding in v1
+   * (DD-009).
+   *
+   * @generated from field: float confidence = 7;
+   */
+  confidence: number;
 };
 
 /**
@@ -231,6 +257,46 @@ export type SearchDocumentPagesResponse = Message<"stigmer.law.documentpage.v1.S
  */
 export const SearchDocumentPagesResponseSchema: GenMessage<SearchDocumentPagesResponse> = /*@__PURE__*/
   messageDesc(file_stigmer_law_documentpage_v1_documentpage, 5);
+
+/**
+ * What produced a page's text. Per-page rather than per-document
+ * (DD-009): a hybrid document may mix born-digital and scanned pages,
+ * and a document-level flag would lie about one half. Any
+ * document-level "was this OCR'd" view derives from its pages.
+ *
+ * @generated from enum stigmer.law.documentpage.v1.TextSource
+ */
+export enum TextSource {
+  /**
+   * Rows written before OCR existed. Read as TEXT_LAYER: only the
+   * extraction sweep wrote pages then, so the backfill is by
+   * interpretation — no migration touches rows.
+   *
+   * @generated from enum value: TEXT_SOURCE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Extracted from the document's embedded text layer (pdfjs).
+   *
+   * @generated from enum value: TEXT_SOURCE_TEXT_LAYER = 1;
+   */
+  TEXT_LAYER = 1,
+
+  /**
+   * Read off a scan or photo by the OCR provider. Imperfect by
+   * nature — consumers label quotes from these pages honestly.
+   *
+   * @generated from enum value: TEXT_SOURCE_OCR = 2;
+   */
+  OCR = 2,
+}
+
+/**
+ * Describes the enum stigmer.law.documentpage.v1.TextSource.
+ */
+export const TextSourceSchema: GenEnum<TextSource> = /*@__PURE__*/
+  enumDesc(file_stigmer_law_documentpage_v1_documentpage, 0);
 
 /**
  * @generated from service stigmer.law.documentpage.v1.DocumentPageService
