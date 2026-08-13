@@ -114,7 +114,8 @@ params:
   # un-rendered). Setting it renders the OCR_* env block and expects the
   # gcp-docai-credentials key in the firm's auth-keys secret (fail-closed
   # at apply). The sweep interval is only read when the processor is set;
-  # the knob is the feature gate — 0 = staged but disabled.
+  # the knob is the feature gate — 0 = staged but disabled. Enablement
+  # recipes + cost: this chart README's "Scan reading (OCR)" section.
   - name: ocr_docai_processor
     description: Document AI processor resource name (projects/<number>/locations/<loc>/processors/<id>); empty = no OCR
     value: ""
