@@ -270,8 +270,18 @@ export class PostgresResourceStore implements ResourceStore {
     const params: unknown[] = [`%${escaped}%`];
     // Filter conditions join the WHERE — inside the query, BEFORE the
     // limit (the port contract's starvation rule).
+    //
+    // The explicit ICU collation makes case folding the ADAPTER's
+    // property, not the database's: under a C/POSIX locale (musl-libc
+    // images, unpinned managed defaults) plain ILIKE folds ASCII only,
+    // silently diverging from the memory adapter's Unicode folding
+    // (issue #3). It rides the predicate only — ORDER BY keeps the
+    // database collation, so ordering indexes stay usable. Requires an
+    // ICU-enabled server; assertStoreCapabilities turns a missing
+    // collation into a boot-time refusal instead of a first-search
+    // failure.
     const where = [
-      `${column} ILIKE $1 ESCAPE '\\'`,
+      `${column} COLLATE "und-x-icu" ILIKE $1 ESCAPE '\\'`,
       ...this.#filterConditions(kind, config, filter, params),
     ];
     params.push(Math.max(0, limit));

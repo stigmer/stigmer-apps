@@ -672,6 +672,59 @@ export function runStoreContractTests(
       });
     });
 
+    // Case folding is UNICODE, not whatever the storage engine's locale
+    // happens to provide (issue #3): the Postgres suite runs against a
+    // deliberately C-locale database, so these pass only when the
+    // adapter folds case itself. Single-hit assertions on purpose —
+    // result ORDERING for non-ASCII is adapter-dependent (collation vs
+    // code units) and deliberately outside the contract.
+
+    it("folds accented Latin case-insensitively in both directions", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_upper", serialNumber: "S1", name: "RÉSUMÉ ARCHIVE" }));
+        await store.save("Widget", makeWidget({ id: "wdg_lower", serialNumber: "S2", name: "papers département" }));
+
+        const foldedQuery = (await store.searchText("Widget", "name", "résumé", 10)) as Widget[];
+        expect(foldedQuery.map((w) => w.metadata?.id)).toEqual(["wdg_upper"]);
+
+        const upperQuery = (await store.searchText("Widget", "name", "DÉPARTEMENT", 10)) as Widget[];
+        expect(upperQuery.map((w) => w.metadata?.id)).toEqual(["wdg_lower"]);
+      });
+    });
+
+    it("folds non-Latin bicameral scripts (Cyrillic)", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_cyr", serialNumber: "S1", name: "СЕВЕРНЫЙ СКЛАД" }));
+
+        const hits = (await store.searchText("Widget", "name", "северный", 10)) as Widget[];
+        expect(hits.map((w) => w.metadata?.id)).toEqual(["wdg_cyr"]);
+      });
+    });
+
+    it("matches caseless scripts byte-exactly (Telugu)", async () => {
+      await withStore(async (store) => {
+        // Invented inventory words — fictional by construction (DD-A10).
+        await store.save("Widget", makeWidget({ id: "wdg_tel", serialNumber: "S1", name: "పాత వస్తువుల జాబితా" }));
+
+        const hits = (await store.searchText("Widget", "name", "వస్తువుల", 10)) as Widget[];
+        expect(hits.map((w) => w.metadata?.id)).toEqual(["wdg_tel"]);
+
+        // No folding exists to blur a caseless script: a different
+        // character is a different word, never a near-match.
+        expect(await store.searchText("Widget", "name", "వస్తువులా", 10)).toHaveLength(0);
+      });
+    });
+
+    it("keeps wildcards literal alongside non-ASCII folding", async () => {
+      await withStore(async (store) => {
+        await store.save("Widget", makeWidget({ id: "wdg_pct", serialNumber: "S1", name: "Année 100% coton" }));
+        await store.save("Widget", makeWidget({ id: "wdg_plain", serialNumber: "S2", name: "Année coton" }));
+
+        const hits = (await store.searchText("Widget", "name", "ANNÉE 100% cot", 10)) as Widget[];
+        expect(hits.map((w) => w.metadata?.id)).toEqual(["wdg_pct"]);
+      });
+    });
+
     it("equal order keys page deterministically by id across both adapters", async () => {
       await withStore(async (store) => {
         // Inserted deliberately out of id order so the memory adapter's

@@ -248,6 +248,18 @@ export interface ResourceStore {
    * caller decides the minimum useful length, the port refuses the
    * meaningless case.
    *
+   * Case folding is UNICODE default case conversion, and it is the
+   * ADAPTER's obligation — never the storage engine's locale (issue #3:
+   * a C-locale Postgres folds ASCII only, so "case-insensitive" would
+   * silently mean different things per deployment). The memory adapter's
+   * `toLowerCase()` is the reference; the Postgres adapter folds through
+   * an explicit ICU collation, which requires an ICU-enabled server —
+   * deployments call `assertStoreCapabilities` at boot so a database
+   * that cannot honor the contract refuses the rollout rather than
+   * failing the first user search. Result ORDERING for non-ASCII text
+   * is deliberately adapter-dependent (collation vs code units); the
+   * contract pins matching, not multilingual sort order.
+   *
    * A registered search field MAY render a structured node (e.g. a
    * party-name array) as its JSON text; matching is then substring over
    * that rendering. Adapters may differ in container punctuation and

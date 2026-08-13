@@ -3,7 +3,11 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { InProcessEventDispatcher } from "@stigmer/resource-api";
-import { runMigrations, type MigrationSource } from "@stigmer/resource-api/postgres";
+import {
+  assertStoreCapabilities,
+  runMigrations,
+  type MigrationSource,
+} from "@stigmer/resource-api/postgres";
 import { bootstrapAuthorization } from "@stigmer/authorization";
 import {
   createPgActivationCodeStore,
@@ -84,6 +88,9 @@ async function main(): Promise<void> {
   if (migrated.applied.length > 0) {
     console.log(`migrations applied: ${migrated.applied.join(", ")}`);
   }
+  // Fail the rollout, not the first user search: text search folds case
+  // through an ICU collation the database must be able to serve.
+  await assertStoreCapabilities(pool);
 
   const auth = await createAuthKit(config.auth);
   const store = createResourceStore(pool);

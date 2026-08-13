@@ -1,3 +1,4 @@
+export { assertStoreCapabilities } from "./capabilities.js";
 export { runMigrations, MigrationError } from "./migrate.js";
 export type { MigrationResult, MigrationSource } from "./migrate.js";
 export { PostgresResourceStore } from "./store.js";

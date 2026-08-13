@@ -13,6 +13,16 @@ import pg from "pg";
 // between runs. 17 is the current stable major we target in production.
 const POSTGRES_IMAGE = "postgres:17-alpine";
 
+// The DELIBERATELY HOSTILE locale: under C, libc folds ASCII only, so
+// any case-insensitivity the adapter merely inherits from a friendly
+// database locale fails here — searchText's Unicode folding must be the
+// adapter's own doing (its explicit ICU collation) to pass this suite.
+// Pinned rather than trusting the image default, so the proof survives
+// base-image changes. `--encoding=UTF8` MUST ride along: initdb derives
+// encoding from locale, and a bare C locale yields SQL_ASCII, under
+// which ICU collations cannot be used at all.
+const POSTGRES_INITDB_ARGS = "--locale=C --encoding=UTF8";
+
 export interface TestDatabase {
   container: StartedPostgreSqlContainer;
   /** Creates a pool onto a freshly created, isolated database. */
@@ -37,7 +47,9 @@ function withErrorListener(pool: pg.Pool): pg.Pool {
 }
 
 export async function startTestDatabase(): Promise<TestDatabase> {
-  const container = await new PostgreSqlContainer(POSTGRES_IMAGE).start();
+  const container = await new PostgreSqlContainer(POSTGRES_IMAGE)
+    .withEnvironment({ POSTGRES_INITDB_ARGS })
+    .start();
   const adminPool = withErrorListener(
     new pg.Pool({ connectionString: container.getConnectionUri() }),
   );
