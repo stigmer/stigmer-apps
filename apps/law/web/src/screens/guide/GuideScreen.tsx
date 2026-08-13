@@ -112,6 +112,11 @@ export function GuideScreen() {
             privately; only people on the matter (and partners) can open it.
           </li>
           <li>
+            Or file it through the assistant: send the paper in the conversation (a WhatsApp
+            photo, an attachment in Ask AI) and ask for it to be filed. The assistant confirms
+            the matter, the file name, and the category before it writes.
+          </li>
+          <li>
             The assistant can list what is on file, search the text of documents across every
             matter you can see, and read them back to you. When it quotes a document, it names the
             document and the page.
@@ -140,14 +145,14 @@ export function GuideScreen() {
             and waits for your yes before writing.
           </li>
           <li>Find, search, and read the documents on file, quoting the page.</li>
+          <li>
+            File a paper you send it — a photo of a court order on WhatsApp, an attachment in
+            Ask AI — into the matter&apos;s case file, after confirming the matter and the
+            category with you.
+          </li>
         </ProseList>
         <h3 className="mt-3 mb-1 text-sm font-medium">What it cannot do yet</h3>
         <ProseList>
-          <li>
-            It cannot save a file you send it into the document system. If you send a photo on
-            WhatsApp, it will tell you what it sees and offer to record a case note about it — the
-            paper itself is filed from the web in two clicks.
-          </li>
           <li>It cannot read scanned documents on file, and it will say so.</li>
           <li>It does not give legal advice, predict outcomes, or draft legal documents.</li>
         </ProseList>

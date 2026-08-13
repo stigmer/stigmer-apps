@@ -33,6 +33,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@aws-sdk/s3-request-presigner": "^3.1109.0",
     "@testcontainers/minio": "^12.1.0",
     "@testcontainers/postgresql": "^12.1.0",
     "@types/node": "^26.2.0",

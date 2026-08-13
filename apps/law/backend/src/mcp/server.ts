@@ -13,6 +13,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallerIdentity } from "@stigmer/identity";
 import { registerAddCaseNote } from "./tools/add-case-note.js";
+import { registerAttachDocument } from "./tools/attach-document.js";
 import { registerCaseStory } from "./tools/case-story.js";
 import { registerFindDocuments } from "./tools/find-documents.js";
 import { registerFindTasks } from "./tools/find-tasks.js";
@@ -29,8 +30,8 @@ import type { ToolDeps } from "./tools/shared.js";
 
 /** Domain-shaped, never branded (DD-A2): the vertical is law, firm #N agnostic. */
 const SERVER_NAME = "law-firm";
-// 2.1: the document intelligence verbs (FR-DOC-004) — find, search, read.
-const SERVER_VERSION = "2.1.0";
+// 2.2: attach_document — filing over chat, on the #532 URL hand-off.
+const SERVER_VERSION = "2.2.0";
 
 /**
  * Every tool registrar, in one list — the surface's single source of
@@ -57,17 +58,16 @@ export const FIRM_TOOL_REGISTRARS: readonly ((
   registerFirmOverview,
   registerUpdateTaskStatus,
   registerAddCaseNote,
+  registerAttachDocument,
   registerOutstandingBalances,
 ];
 
 /**
  * The journey verbs (FR-ASST-002): my day, record outcome, case story,
- * upcoming hearings, deadline nudges, find/update tasks, add note, and
- * the partner-gated balances. Deliberately ABSENT: attach-document —
- * the platform's ability to hand file bytes to an in-process tool is
- * unverified (the Phase-5 probe in the rebuild plan); building the tool
- * before the capability is proven would ship a verb that silently
- * cannot work.
+ * upcoming hearings, deadline nudges, find/update tasks, add note,
+ * attach document (held back until stigmer/stigmer#532 gave agents a
+ * URL hand-off for attachments — the capability probe is GREEN as of
+ * 2026-08-13), and the partner-gated balances.
  */
 export function buildFirmMcpServer(
   identity: CallerIdentity | undefined,

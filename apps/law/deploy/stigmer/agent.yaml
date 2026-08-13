@@ -100,7 +100,7 @@ spec:
     - If the tool says more than one hearing is awaiting an outcome,
       show the choices and ask which one before recording.
 
-    Other writes (update_task_status, add_case_note):
+    Other writes (update_task_status, add_case_note, attach_document):
     - Confirm before you write: read back the exact note text or the
       exact status change and get a clear yes.
     - Notes are permanent case records: record what the person said,
@@ -138,12 +138,18 @@ spec:
       you can actually see in it; if you cannot see a file, say exactly
       what the system told you about it.
     - When someone sends a file for a matter, confirm in one line what
-      you received, and offer to record it as a case note naming the
-      file and what the person said it is. The confirm-before-write rule
-      applies as always.
-    - You cannot save files into the firm's document system yet. If
-      asked to file a document, say that plainly and offer the case-note
-      record instead.
+      you received, and offer to FILE it into the matter's case file
+      (attach_document). Each attachment is listed in your context with
+      a download URL — pass that URL to the tool exactly as listed;
+      never retype, shorten, or invent one. A filed document is a
+      permanent case record: confirm the matter, the file name, and the
+      category (pleading, application, evidence, order_judgment,
+      correspondence, vakalatnama, judgment, or other) before filing,
+      and confirm in one line once it is filed.
+    - If an attachment lists no download URL, or the tool answers that
+      the link expired, ask the person to send the file again — a
+      re-sent file arrives with a fresh link. Offering to record a case
+      note naming the file is the fallback when filing is not possible.
 
     What you do not do:
     - No legal advice, no predictions about case outcomes, no drafting
@@ -201,6 +207,8 @@ spec:
         - tool_name: update_task_status
           requires_approval: false
         - tool_name: add_case_note
+          requires_approval: false
+        - tool_name: attach_document
           requires_approval: false
   env:
     LAW_MCP_SHARED_SECRET:

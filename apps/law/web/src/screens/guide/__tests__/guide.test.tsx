@@ -2,8 +2,10 @@
  * The Guide's two contracts: every real firm role is described (the
  * drift guard — the page and the FirmRole enum cannot silently
  * diverge), and the reader's own role is the one marked "Your role".
- * The honesty line about filing by chat is pinned because the demo
- * and the agent's instructions both lean on it staying true.
+ * The filing-by-chat capability line is pinned because the demo and
+ * the agent's instructions both lean on it staying true — it flipped
+ * from an honest "cannot" to a capability when stigmer/stigmer#532
+ * landed and the attach_document verb shipped.
  */
 
 import { create } from "@bufbuild/protobuf";
@@ -72,15 +74,20 @@ describe("GuideScreen", () => {
     expect(row && within(row).getByText("Clerk")).toBeInTheDocument();
   });
 
-  it("keeps the honest line about filing by chat (the demo leans on it)", () => {
+  it("claims the filing-by-chat capability, honestly bounded (the demo leans on it)", () => {
     renderScreen(
       { firmMembers: fakeFirmMembers() } as never,
       [{ path: "/guide", element: <GuideScreen /> }],
       "/guide",
     );
 
+    // The capability, with its confirm-before-write shape…
     expect(
-      screen.getByText(/cannot save a file you send it into the document system/i),
+      screen.getByText(/file a paper you send it/i),
+    ).toBeInTheDocument();
+    // …and the honest limits that remain.
+    expect(
+      screen.getByText(/cannot read scanned documents on file/i),
     ).toBeInTheDocument();
   });
 });

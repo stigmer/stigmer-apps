@@ -17,7 +17,15 @@
 
 import { create } from "@bufbuild/protobuf";
 import type { CallerIdentityResolver } from "@stigmer/identity";
-import type { CallerPrincipal, ResourceStore } from "@stigmer/resource-api";
+import type {
+  AuthorizationPolicy,
+  CallerPrincipal,
+  ResourceStore,
+} from "@stigmer/resource-api";
+import type {
+  CaseDocumentInput,
+} from "../../domain/document/store-document.js";
+import type { FetchedDocument } from "../../files/remote-fetch.js";
 import type { Case } from "../../gen/stigmer/law/case/v1/case_pb.js";
 import { GetCaseRequestSchema } from "../../gen/stigmer/law/case/v1/case_pb.js";
 import type { Deadline } from "../../gen/stigmer/law/deadline/v1/deadline_pb.js";
@@ -39,6 +47,26 @@ export interface ToolDeps {
    * with it (DD-A4: writes ride invoke).
    */
   readonly store: ResourceStore;
+  /**
+   * The policy oracle, for PRE-authorization in front of expensive or
+   * external side effects only (attach_document checks Document/create
+   * before fetching remote bytes — the upload route's "one policy, two
+   * enforcement points" arrangement). Never a substitute for the
+   * pipeline's own authorization, which still runs on every write.
+   */
+  readonly policy: AuthorizationPolicy;
+  /**
+   * The guarded byte entrance for model-quoted URLs (files/
+   * remote-fetch.ts) and the one document store implementation
+   * (domain/document/store-document.ts), injected as narrow
+   * capabilities: rule 1 above means a tool composes these, and the
+   * raw ObjectStore never enters the tool layer.
+   */
+  readonly fetchDocument: (url: string) => Promise<FetchedDocument>;
+  readonly storeDocument: (
+    input: CaseDocumentInput,
+    caller: CallerPrincipal,
+  ) => Promise<Document>;
 }
 
 /** File numbers for answer lines — one bulk lookup, never N+1. */

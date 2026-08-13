@@ -34,7 +34,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import type { CallerPrincipal } from "@stigmer/resource-api";
 import {
   type Document,
-  type DocumentCategory,
+  DocumentCategory,
   DocumentSchema,
 } from "../../gen/stigmer/law/document/v1/document_pb.js";
 import type { ObjectStore } from "../../objectstore/object-store.js";
@@ -64,6 +64,25 @@ export interface CaseDocumentInput {
   readonly bytes: Buffer;
   readonly category: DocumentCategory;
   readonly hearingId?: string;
+}
+
+/** "vakalatnama" → the enum; empty → unspecified; anything else is a
+ * caller mistake worth naming (a typo'd category silently landing in
+ * OTHER would misfile the record). The category vocabulary every byte
+ * transport speaks — the upload route reads it from a header, the
+ * attach_document verb from a tool argument. */
+export function parseCategoryWord(word: string): DocumentCategory {
+  if (!word) return DocumentCategory.UNSPECIFIED;
+  const key = word.trim().toUpperCase();
+  const value = (DocumentCategory as Record<string, unknown>)[key];
+  if (typeof value !== "number" || value === DocumentCategory.UNSPECIFIED) {
+    throw new ConnectError(
+      `Document: unknown category '${word}' (use pleading, application, evidence, ` +
+        `order_judgment, correspondence, vakalatnama, judgment, or other)`,
+      Code.InvalidArgument,
+    );
+  }
+  return value as DocumentCategory;
 }
 
 export async function storeCaseDocument(

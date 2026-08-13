@@ -30,6 +30,7 @@ import {
 import {
   ALLOWED_MIME_TYPES,
   MAX_DOCUMENT_BYTES,
+  parseCategoryWord,
   storeCaseDocument,
   type StoreCaseDocumentDeps,
 } from "../domain/document/store-document.js";
@@ -127,7 +128,7 @@ async function handleUpload(
   // name does: category as the enum's lowercase word ("pleading",
   // "vakalatnama", …) and an optional hearing link. Both optional —
   // an uncategorized upload lands honestly in the unspecified bucket.
-  const category = parseCategory(headerValue(req, "x-document-category"));
+  const category = parseCategoryWord(headerValue(req, "x-document-category"));
   const hearingId = headerValue(req, "x-hearing-id") || undefined;
 
   const body = await readBodyCapped(req);
@@ -198,23 +199,6 @@ async function handleDownload(
 function headerValue(req: IncomingMessage, name: string): string {
   const raw = req.headers[name];
   return (Array.isArray(raw) ? raw[0] : raw) ?? "";
-}
-
-/** "vakalatnama" → the enum; empty → unspecified; anything else is a
- * client mistake worth naming (a typo'd category silently landing in
- * OTHER would misfile the record). */
-function parseCategory(word: string): DocumentCategory {
-  if (!word) return DocumentCategory.UNSPECIFIED;
-  const key = word.trim().toUpperCase();
-  const value = (DocumentCategory as Record<string, unknown>)[key];
-  if (typeof value !== "number" || value === DocumentCategory.UNSPECIFIED) {
-    throw new ConnectError(
-      `Document: unknown category '${word}' (use pleading, application, evidence, ` +
-        `order_judgment, correspondence, vakalatnama, judgment, or other)`,
-      Code.InvalidArgument,
-    );
-  }
-  return value as DocumentCategory;
 }
 
 /**

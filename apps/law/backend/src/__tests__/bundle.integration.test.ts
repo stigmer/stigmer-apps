@@ -203,6 +203,7 @@ describe("the bundled artifact", () => {
     expect(body.result?.tools?.map((t) => t.name).sort()).toEqual(
       [
         "add_case_note",
+        "attach_document",
         "case_story",
         "find_documents",
         "find_tasks",

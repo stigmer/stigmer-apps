@@ -19,7 +19,9 @@ import { startExtractionSweep } from "./domain/document/extraction-sweep.js";
 import { registerDeactivationHandler } from "./domain/firmmember/deactivation-handler.js";
 import { registerTaskAssignmentHandler } from "./domain/notification/task-assignment-handler.js";
 import { startReminderSweep } from "./domain/reminders/sweep.js";
+import { storeCaseDocument } from "./domain/document/store-document.js";
 import { createFileRoutes } from "./files/file-routes.js";
+import { fetchRemoteDocument } from "./files/remote-fetch.js";
 import { createMcpHttpServer } from "./mcp/transport.js";
 import type { ObjectStore } from "./objectstore/object-store.js";
 import { type App, buildRoutes, createApp } from "./routes.js";
@@ -108,6 +110,22 @@ export function createFirmServers(
         // deliberately not in the authenticator chain (identity README).
         resolveCallerIdentity: createCallerIdentityResolver(deps.store),
         store: deps.store,
+        policy: app.policy,
+        // attach_document's byte legs: the guarded fetch (production
+        // posture — no private networks), and the same store core the
+        // upload route rides.
+        fetchDocument: (url) => fetchRemoteDocument(url),
+        storeDocument: (input, caller) =>
+          storeCaseDocument(
+            {
+              objectStore: deps.objectStore,
+              createDocument: app.resources.documents.invoke.create as NonNullable<
+                typeof app.resources.documents.invoke.create
+              >,
+            },
+            input,
+            caller,
+          ),
       },
     ),
   };

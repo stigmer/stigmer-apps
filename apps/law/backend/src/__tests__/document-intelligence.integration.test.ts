@@ -20,7 +20,8 @@
 import type http from "node:http";
 import type { AddressInfo } from "node:net";
 import { create } from "@bufbuild/protobuf";
-import { CreateBucketCommand, S3Client } from "@aws-sdk/client-s3";
+import { CreateBucketCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createClient, type Client } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -71,6 +72,8 @@ import {
   runExtractionSweepOnce,
   type ExtractionSweepDeps,
 } from "../domain/document/extraction-sweep.js";
+import { storeCaseDocument } from "../domain/document/store-document.js";
+import { fetchRemoteDocument } from "../files/remote-fetch.js";
 import { FIRM_TOOL_REGISTRARS } from "../mcp/server.js";
 import type { ToolDeps } from "../mcp/tools/shared.js";
 import { createS3ObjectStore, type ObjectStore } from "../objectstore/object-store.js";
@@ -96,6 +99,7 @@ describe("document intelligence, end to end", () => {
   let engine: AuthorizationEngine;
   let store: ReturnType<typeof createResourceStore>;
   let objectStore: ObjectStore;
+  let s3: S3Client;
   let toolDeps: ToolDeps;
 
   let users: Client<typeof UserService>;
@@ -111,6 +115,9 @@ describe("document intelligence, end to end", () => {
     // Firm staff with NO membership on either matter — the outsider
     // every visibility assertion is about.
     outsider: { email: "divya@firm.example", role: FirmRole.ASSOCIATE, userId: "", memberId: "" },
+    // Office staff never work case content (the role gate the
+    // attach_document pre-authorization must fire for).
+    office: { email: "kiran@firm.example", role: FirmRole.OFFICE_STAFF, userId: "", memberId: "" },
   };
 
   const FILE_A = "CS/2026/101";
@@ -198,12 +205,13 @@ describe("document intelligence, end to end", () => {
       secretAccessKey: minio.getPassword(),
       forcePathStyle: true,
     };
-    await new S3Client({
+    s3 = new S3Client({
       endpoint: s3Config.endpoint,
       region: s3Config.region,
       credentials: { accessKeyId: s3Config.accessKeyId, secretAccessKey: s3Config.secretAccessKey },
       forcePathStyle: true,
-    }).send(new CreateBucketCommand({ Bucket: BUCKET }));
+    });
+    await s3.send(new CreateBucketCommand({ Bucket: BUCKET }));
     objectStore = createS3ObjectStore(s3Config);
 
     server = createBackendServer({
@@ -240,6 +248,22 @@ describe("document intelligence, end to end", () => {
       resources: toolApp.resources,
       resolveCallerIdentity: createCallerIdentityResolver(store),
       store,
+      policy: toolApp.policy,
+      // The guard's test seam: the MinIO container lives on plain-http
+      // loopback (remote-fetch.ts documents this as the seam's ONE
+      // purpose). Everything else is the production posture.
+      fetchDocument: (url) => fetchRemoteDocument(url, { allowPrivateNetworks: true }),
+      storeDocument: (input, caller) =>
+        storeCaseDocument(
+          {
+            objectStore,
+            createDocument: toolApp.resources.documents.invoke.create as NonNullable<
+              typeof toolApp.resources.documents.invoke.create
+            >,
+          },
+          input,
+          caller,
+        ),
     };
 
     // The firm: users + profiles through the operator path.
@@ -640,5 +664,145 @@ describe("document intelligence, end to end", () => {
     });
     expect(denied.isError).toBe(true);
     expect(textOf(denied)).toMatch(/case members and partners/);
+  });
+
+  /* -------- attach_document (FR-ASST-002, on the #532 hand-off) ------- */
+
+  const JPEG_FIXTURE = Buffer.concat([
+    Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+    Buffer.from("photographed court order, fictional"),
+  ]);
+
+  /** Stages a "file someone sent" the way the platform does — an object
+   * in a bucket reachable only through a presigned URL. */
+  async function stageSentFile(key: string, body: Buffer, contentType: string): Promise<string> {
+    await s3.send(
+      new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: body, ContentType: contentType }),
+    );
+    return getSignedUrl(s3, new GetObjectCommand({ Bucket: BUCKET, Key: key }), {
+      expiresIn: 3600,
+    });
+  }
+
+  it("files a sent photo onto the matter: fetched by URL, byte-identical, typed by its bytes, extraction-ready", async () => {
+    const url = await stageSentFile(
+      "attachments/probe/court-order.jpg",
+      JPEG_FIXTURE,
+      // A lying content type — the sniff must type the document, not the header.
+      "application/octet-stream",
+    );
+    const result = await runTool("attach_document", people.lead.email, {
+      file_number: FILE_A,
+      download_url: url,
+      file_name: "court-order.jpg",
+      category: "evidence",
+    });
+    expect(result.isError).toBeFalsy();
+    expect(textOf(result)).toContain("Filed:");
+    expect(textOf(result)).toContain(FILE_A);
+    const filedId = (result.structuredContent as { id: string }).id;
+    expect(filedId).toMatch(/^doc_/);
+
+    // The record: typed from magic bytes, categorized, sized.
+    const filed = await documentById(filedId);
+    expect(filed.spec?.mimeType).toBe("image/jpeg");
+    expect(Number(filed.spec?.sizeBytes)).toBe(JPEG_FIXTURE.byteLength);
+
+    // The bytes ride the same download route as a web upload.
+    const download = await fetch(`${base}/files/documents/${filedId}/content`, {
+      headers: auth.as(people.lead.userId).headers,
+    });
+    expect(download.status).toBe(200);
+    expect(Buffer.from(await download.arrayBuffer()).equals(JPEG_FIXTURE)).toBe(true);
+
+    // Listed beside the uploads, and in the extraction lifecycle like
+    // them: the next sweep answers the honest image verdict.
+    expect(textOf(await runTool("find_documents", people.lead.email, { file_number: FILE_A })))
+      .toContain("court-order.jpg");
+    await runExtractionSweepOnce(extractionSweepDeps());
+    expect((await documentById(filedId)).status?.extraction).toBe(ExtractionState.NO_TEXT_LAYER);
+  });
+
+  it("refuses a non-member with the policy sentence — filing is case content", async () => {
+    const url = await stageSentFile("attachments/probe/outsider.jpg", JPEG_FIXTURE, "image/jpeg");
+    const denied = await runTool("attach_document", people.outsider.email, {
+      file_number: FILE_A,
+      download_url: url,
+      file_name: "outsider.jpg",
+      category: "evidence",
+    });
+    expect(denied.isError).toBe(true);
+    expect(textOf(denied)).toMatch(/case members and partners/);
+  });
+
+  it("refuses office staff BEFORE any fetch — the policy answers, not the network", async () => {
+    // A URL that would answer "could not be reached" if fetched: a
+    // policy sentence in the answer proves authorization fired first.
+    // (Office staff fall at case resolution — they cannot view case
+    // content, so they can never reach the fetch; the verb's explicit
+    // Document/create pre-check behind it covers any future role whose
+    // case visibility and filing rights diverge.)
+    const denied = await runTool("attach_document", people.office.email, {
+      file_number: FILE_A,
+      download_url: "http://127.0.0.1:1/never-fetched.jpg",
+      file_name: "never.jpg",
+      category: "evidence",
+    });
+    expect(denied.isError).toBe(true);
+    expect(textOf(denied)).toMatch(/case members and partners/);
+    expect(textOf(denied)).not.toContain("could not be reached");
+  });
+
+  it("answers a tampered/expired link with the resend instruction", async () => {
+    const url = await stageSentFile("attachments/probe/expired.jpg", JPEG_FIXTURE, "image/jpeg");
+    const tampered = url.replace(/(X-Amz-Signature=)[0-9a-f]{8}/, "$100000000");
+    const refused = await runTool("attach_document", people.lead.email, {
+      file_number: FILE_A,
+      download_url: tampered,
+      file_name: "expired.jpg",
+      category: "evidence",
+    });
+    expect(refused.isError).toBe(true);
+    expect(textOf(refused)).toContain("sent again");
+  });
+
+  it("refuses bytes that are not a PDF/PNG/JPG, whatever the sender named them", async () => {
+    const url = await stageSentFile(
+      "attachments/probe/notes.txt",
+      Buffer.from("just words, no document magic"),
+      "application/pdf",
+    );
+    const refused = await runTool("attach_document", people.lead.email, {
+      file_number: FILE_A,
+      download_url: url,
+      file_name: "notes.pdf",
+      category: "evidence",
+    });
+    expect(refused.isError).toBe(true);
+    expect(textOf(refused)).toContain("not a PDF");
+  });
+
+  it("names the category vocabulary on a typo instead of misfiling", async () => {
+    const url = await stageSentFile("attachments/probe/typo.jpg", JPEG_FIXTURE, "image/jpeg");
+    const refused = await runTool("attach_document", people.lead.email, {
+      file_number: FILE_A,
+      download_url: url,
+      file_name: "typo.jpg",
+      category: "memo",
+    });
+    expect(refused.isError).toBe(true);
+    expect(textOf(refused)).toContain("unknown category");
+    expect(textOf(refused)).toContain("vakalatnama");
+  });
+
+  it("relays the not-found sentence for an unknown file number", async () => {
+    const refused = await runTool("attach_document", people.lead.email, {
+      file_number: "CS/2099/999",
+      download_url: "https://example.com/never.jpg",
+      file_name: "never.jpg",
+      category: "evidence",
+    });
+    expect(refused.isError).toBe(true);
+    expect(textOf(refused)).toMatch(/CS\/2099\/999/);
   });
 });

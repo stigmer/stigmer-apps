@@ -65,6 +65,10 @@ const RELAYED_CODES = new Set<Code>([
   Code.FailedPrecondition,
   Code.PermissionDenied,
   Code.Unauthenticated,
+  // Client-shaped like the rest: "the file is too large" is an answer
+  // for the person (the byte caps in store-document.ts/remote-fetch.ts
+  // speak it), not a server fault to hide.
+  Code.ResourceExhausted,
 ]);
 
 export function gated<Args>(
