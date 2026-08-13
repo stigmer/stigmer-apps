@@ -22,6 +22,7 @@ import {
 import {
   type DocumentPage,
   ListDocumentPagesRequestSchema,
+  TextSource,
 } from "../../gen/stigmer/law/documentpage/v1/documentpage_pb.js";
 import { errorResult, gated, textResult } from "../gate.js";
 import type { ToolDeps } from "./shared.js";
@@ -33,22 +34,42 @@ const NAME = "read_document";
 const ANSWER_BUDGET_CHARS = 8000;
 
 /** The honest sentence per unreadable state — the assistant relays
- * these rather than guessing at file contents. */
-const UNREADABLE: Partial<Record<ExtractionState, string>> = {
-  [ExtractionState.UNSPECIFIED]:
-    "This document hasn't been read by the system yet — its text is usually " +
-    "ready within a few minutes of upload. Try again shortly.",
-  [ExtractionState.PENDING]:
-    "This document hasn't been read by the system yet — its text is usually " +
-    "ready within a few minutes of upload. Try again shortly.",
-  [ExtractionState.NO_TEXT_LAYER]:
-    "This document is a scan or photo, and I can't read those yet — I can " +
-    "only tell you what's recorded about it (name, category, upload). A " +
-    "person will need to open the file itself.",
-  [ExtractionState.FAILED]:
-    "This file couldn't be read by the system (it may be damaged or " +
-    "password-protected). A person will need to open the file itself.",
-};
+ * these rather than guessing at file contents. The scan sentence is
+ * deployment-conditional (DD-009): "being read" is only ever said
+ * where the OCR sweep will actually run. */
+function unreadableSentence(
+  state: ExtractionState,
+  ocrEnabled: boolean,
+): string | undefined {
+  switch (state) {
+    case ExtractionState.UNSPECIFIED:
+    case ExtractionState.PENDING:
+      return (
+        "This document hasn't been read by the system yet — its text is usually " +
+        "ready within a few minutes of upload. Try again shortly."
+      );
+    case ExtractionState.NO_TEXT_LAYER:
+      return ocrEnabled
+        ? "This document is a scan or photo and is being read — its text is " +
+          "usually ready within a few minutes. Try again shortly."
+        : "This document is a scan or photo, and I can't read those yet — I can " +
+          "only tell you what's recorded about it (name, category, upload). A " +
+          "person will need to open the file itself.";
+    case ExtractionState.OCR_FAILED:
+      return (
+        "The system tried to read this scan and couldn't make out the text — I " +
+        "can only tell you what's recorded about it (name, category, upload). " +
+        "A person will need to open the file itself."
+      );
+    case ExtractionState.FAILED:
+      return (
+        "This file couldn't be read by the system (it may be damaged or " +
+        "password-protected). A person will need to open the file itself."
+      );
+    default:
+      return undefined;
+  }
+}
 
 export function registerReadDocument(
   server: McpServer,
@@ -63,7 +84,12 @@ export function registerReadDocument(
         "search_documents), optionally one page. Long documents return the " +
         "first pages up to a budget and say where they stopped — ask for a " +
         "specific page to continue. Scans, photos, and unreadable files are " +
-        "reported honestly instead of guessed at.",
+        "reported honestly instead of guessed at." +
+        // Deployment-conditional (DD-009): the automatic-reading promise
+        // is only made where the OCR sweep will actually run.
+        (deps.ocrEnabled
+          ? " Scans and photos are read automatically a few minutes after upload."
+          : ""),
       inputSchema: {
         document_id: z
           .string()
@@ -86,7 +112,7 @@ export function registerReadDocument(
         caller.principal,
       );
       const state = document.status?.extraction ?? ExtractionState.UNSPECIFIED;
-      const unreadable = UNREADABLE[state];
+      const unreadable = unreadableSentence(state, deps.ocrEnabled);
       if (unreadable) {
         return errorResult(`${document.spec?.fileName}: ${unreadable}`);
       }
@@ -112,8 +138,14 @@ export function registerReadDocument(
         }
         const text = wanted.spec?.text ?? "";
         const body = text.length > 0 ? text : "(this page carries no text)";
+        // OCR-sourced pages carry the recognition caution inline —
+        // the model quotes the label with the text (DD-009).
+        const scanNote =
+          wanted.spec?.source === TextSource.OCR
+            ? " (read from a scan — may contain recognition errors)"
+            : "";
         return textResult(
-          `${document.spec?.fileName}, page ${args.page} of ${totalPages}:\n${body}`,
+          `${document.spec?.fileName}, page ${args.page} of ${totalPages}${scanNote}:\n${body}`,
           { document_id: args.document_id, page: args.page, total_pages: totalPages },
         );
       }
@@ -125,7 +157,15 @@ export function registerReadDocument(
       for (const page of items) {
         const text = page.spec?.text ?? "";
         if (sections.length > 0 && spent + text.length > ANSWER_BUDGET_CHARS) break;
-        sections.push(`[page ${page.spec?.page}]\n${text.length > 0 ? text : "(no text)"}`);
+        // Absent source reads as text-layer (pre-OCR rows) — only a
+        // page the OCR sweep wrote carries the label. The label stays
+        // short: the per-quote recognition caution lives in the agent
+        // instructions, not in every section header.
+        const header =
+          page.spec?.source === TextSource.OCR
+            ? `[page ${page.spec?.page} — read from a scan]`
+            : `[page ${page.spec?.page}]`;
+        sections.push(`${header}\n${text.length > 0 ? text : "(no text)"}`);
         spent += text.length;
         lastIncluded = page.spec?.page ?? lastIncluded;
         if (spent > ANSWER_BUDGET_CHARS) break;

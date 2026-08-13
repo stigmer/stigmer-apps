@@ -62,8 +62,9 @@ function DocumentSearchResults(props: {
   if (hits.length === 0) {
     return (
       <EmptyState title="No pages match">
-        Matching is exact — a different word may find it. Scanned documents and
-        photos are not searchable yet.
+        Matching is exact — a different word may find it. Scans are searchable only
+        after the system has read them — where scan reading is set up, that takes a
+        few minutes.
       </EmptyState>
     );
   }

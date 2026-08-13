@@ -141,7 +141,7 @@ test("intake → diary → recorded outcome auto-schedules → notes → documen
   const documentSearch = page.getByLabel(/Search inside this matter/);
   await documentSearch.fill("limitation");
   await expect(docs.getByText("No pages match")).toBeVisible();
-  await expect(docs.getByText(/scanned documents and photos are not searchable yet/i)).toBeVisible();
+  await expect(docs.getByText(/scans are searchable only after the system has read them/i)).toBeVisible();
   await documentSearch.fill("");
   await expect(docs.getByText("vakalatnama.pdf")).toBeVisible();
 });

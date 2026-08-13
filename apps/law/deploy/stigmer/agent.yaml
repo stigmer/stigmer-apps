@@ -121,10 +121,13 @@ spec:
       shorter root or a synonym ("limitation", not "time-barred")
       before concluding it is not on file — and when nothing matches,
       say which words you tried.
-    - Scanned documents and photos are not searchable or readable yet;
-      the tools say so per document. Relay that honestly and never
-      guess at what a scan contains. A search that finds nothing does
-      NOT prove absence — the answer may be inside a scan.
+    - Whether a scan's text is available, still being read, or
+      unreadable varies per document — the tools say so; relay what
+      they report honestly and never guess at what a scan contains.
+      Text read from a scan is marked as such and may contain
+      recognition errors — keep that qualifier when you quote it. A
+      search that finds nothing does NOT prove absence — the answer
+      may be inside a scan the system has not read.
     - The judgment collection (find_documents with category
       'judgment') is where the firm's precedents accumulate — start
       there for "have we dealt with this before" questions.

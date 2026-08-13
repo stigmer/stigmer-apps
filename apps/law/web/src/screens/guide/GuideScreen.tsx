@@ -122,8 +122,9 @@ export function GuideScreen() {
             document and the page.
           </li>
           <li>
-            Scanned papers and photos cannot be read or searched yet. The system says so honestly
-            per document rather than guessing at what a scan contains.
+            Scanned papers and photos are read automatically where scan reading is set up for the
+            firm — it takes a few minutes after upload. The assistant and search say honestly, per
+            document, what can and cannot be read.
           </li>
         </ProseList>
       </SectionCard>
@@ -153,7 +154,10 @@ export function GuideScreen() {
         </ProseList>
         <h3 className="mt-3 mb-1 text-sm font-medium">What it cannot do yet</h3>
         <ProseList>
-          <li>It cannot read scanned documents on file, and it will say so.</li>
+          <li>
+            Reading a scan is never perfect — text read from a scan is marked, and may contain
+            recognition errors.
+          </li>
           <li>It does not give legal advice, predict outcomes, or draft legal documents.</li>
         </ProseList>
       </SectionCard>

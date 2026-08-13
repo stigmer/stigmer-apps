@@ -85,9 +85,11 @@ describe("GuideScreen", () => {
     expect(
       screen.getByText(/file a paper you send it/i),
     ).toBeInTheDocument();
-    // …and the honest limits that remain.
+    // …and the honest limits that remain. Scans are now READ where
+    // configured (DD-009), so the pinned limit is the recognition
+    // caution, not a missing capability.
     expect(
-      screen.getByText(/cannot read scanned documents on file/i),
+      screen.getByText(/text read from a scan is marked/i),
     ).toBeInTheDocument();
   });
 });

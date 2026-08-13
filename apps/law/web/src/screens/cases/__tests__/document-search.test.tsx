@@ -150,7 +150,7 @@ describe("Documents tab search", () => {
     expect(router.state.location.search).toBe("?tab=Documents&doc=doc_ws&page=4");
   });
 
-  it("says exactly why nothing matched — exact matching, scans not searchable", async () => {
+  it("says exactly why nothing matched — exact matching, scans searchable only once read", async () => {
     const clients = fakeClients([]);
     renderDocumentsTab(clients);
 
@@ -161,7 +161,7 @@ describe("Documents tab search", () => {
 
     expect(await screen.findByText("No pages match")).toBeInTheDocument();
     expect(
-      screen.getByText(/Matching is exact.*scanned documents and photos are not searchable yet/is),
+      screen.getByText(/Matching is exact.*scans are searchable only after the system has read them/is),
     ).toBeInTheDocument();
   });
 });

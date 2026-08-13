@@ -8,8 +8,11 @@
  *
  * Honesty rules: matching is literal substring (no stemming — the
  * description tells the model to try another word, not this tool
- * again with the same one), and scans/images are not searchable until
- * OCR lands — the description says so, so the assistant can say so.
+ * again with the same one), and the scan sentence is
+ * deployment-conditional (DD-009): where the OCR sweep runs, scans
+ * become searchable once read; where it doesn't, they are not
+ * searchable — the description says whichever is true, so the
+ * assistant can say so.
  */
 
 import { create } from "@bufbuild/protobuf";
@@ -21,6 +24,7 @@ import type { Document } from "../../gen/stigmer/law/document/v1/document_pb.js"
 import {
   type DocumentPage,
   SearchDocumentPagesRequestSchema,
+  TextSource,
 } from "../../gen/stigmer/law/documentpage/v1/documentpage_pb.js";
 import { countNoun } from "../format.js";
 import { gated, textResult } from "../gate.js";
@@ -42,8 +46,12 @@ export function registerSearchDocuments(
         "extracted) for an exact word or phrase, across every case the " +
         "caller can see or within one matter. Matching is literal — if a " +
         "word finds nothing, try a synonym or a shorter root (e.g. " +
-        "'limitation' not 'time-barred'). Scanned documents and photos are " +
-        "not searchable yet. Each hit cites the matter, the document, and " +
+        "'limitation' not 'time-barred'). " +
+        (deps.ocrEnabled
+          ? "Scanned documents and photos become searchable a few minutes " +
+            "after upload, once the system has read them. "
+          : "Scanned documents and photos are not searchable yet. ") +
+        "Each hit cites the matter, the document, and " +
         "the page, and includes the document's id.",
       inputSchema: {
         query: z
@@ -79,8 +87,10 @@ export function registerSearchDocuments(
       if (pages.length === 0) {
         return textResult(
           `No document pages match "${args.query}" ${where}. Matching is ` +
-            `exact — a different word may find it; scanned documents are not ` +
-            `searchable yet.`,
+            `exact — a different word may find it; ` +
+            (deps.ocrEnabled
+              ? `recently uploaded scans may still be being read.`
+              : `scanned documents are not searchable yet.`),
         );
       }
 
@@ -102,12 +112,15 @@ export function registerSearchDocuments(
           file_number: fileNumber,
           page: page.spec?.page ?? 0,
           document_id: page.spec?.documentId,
+          // Terse by design — read_document's page label carries the
+          // full recognition caution (DD-009).
+          from_scan: page.spec?.source === TextSource.OCR || undefined,
         };
       });
 
       const lines = hits.map(
         (h, i) =>
-          `${i + 1}. "${h.snippet}"\n   — ${h.file_name}, page ${h.page} · ${h.file_number} · id ${h.document_id}`,
+          `${i + 1}. "${h.snippet}"\n   — ${h.file_name}, page ${h.page}${h.from_scan ? " (from a scan)" : ""} · ${h.file_number} · id ${h.document_id}`,
       );
       return textResult(
         `${countNoun(hits.length, "matching page")} ${where} (top matches):\n${lines.join("\n")}`,
