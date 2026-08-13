@@ -131,6 +131,19 @@ test("intake → diary → recorded outcome auto-schedules → notes → documen
   // Opening PUSHED history, so Back is "close the document".
   await page.goBack();
   await expect(docs.getByText("order-sheet.png")).toBeVisible();
+
+  // Search inside the matter (FR-DOC-004 on the web). The e2e server
+  // deliberately never runs the extraction sweep (no background writes),
+  // so fresh uploads have no page rows — what e2e proves is the
+  // list-for-results swap and the HONEST empty state. Hit rendering and
+  // the ?doc/?page deep link are pinned by component tests; real
+  // extraction and matching by the backend integration suite.
+  const documentSearch = page.getByLabel(/Search inside this matter/);
+  await documentSearch.fill("limitation");
+  await expect(docs.getByText("No pages match")).toBeVisible();
+  await expect(docs.getByText(/scanned documents and photos are not searchable yet/i)).toBeVisible();
+  await documentSearch.fill("");
+  await expect(docs.getByText("vakalatnama.pdf")).toBeVisible();
 });
 
 test("the conflict check fires DURING intake when the name is on the other side", async ({ page }) => {
