@@ -5,7 +5,29 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { snippetParts } from "../snippet.js";
+import { clipGraphemeSafe, snippetParts } from "../snippet.js";
+
+describe("clipGraphemeSafe (mark quoted-text bounding)", () => {
+  it("returns short text unchanged", () => {
+    expect(clipGraphemeSafe("barred by limitation", 1000)).toBe("barred by limitation");
+  });
+
+  it("clips ASCII at exactly the bound", () => {
+    expect(clipGraphemeSafe("abcdef", 4)).toBe("abcd");
+  });
+
+  it("never splits a Telugu base+matra cluster — drops it whole instead", () => {
+    // "వాయిదా" = వా(2) యి(2) దా(2) UTF-16 units. A bound of 3 falls
+    // inside యి; the clip snaps INWARD to వా, never emitting half a
+    // rendered character (the #2 obligation).
+    expect(clipGraphemeSafe("వాయిదా", 3)).toBe("వా");
+    expect(clipGraphemeSafe("వాయిదా", 4)).toBe("వాయి");
+  });
+
+  it("never splits a surrogate-paired emoji", () => {
+    expect(clipGraphemeSafe("ab\u{1F600}cd", 3)).toBe("ab");
+  });
+});
 
 const SEGMENTER = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 

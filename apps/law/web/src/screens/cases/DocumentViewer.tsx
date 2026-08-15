@@ -15,22 +15,44 @@
  * KNOWINGLY DEGRADED: the native viewer's print is gone — Download
  * covers the need (recorded owner trade-off, T12).
  *
- * Images still render as a plain img on a blob object URL, and
- * Download rides the same URL for both kinds; the URL exists exactly
- * as long as the viewer does (created when the bytes arrive, revoked
- * on close) — the tested pairing invariant.
+ * MARKS (T13, DD-010): this file is where the reader's generic marking
+ * seams meet the DocumentAnnotation domain — select text → highlight
+ * with per-line rects + quoted text; drag → region (the workhorse on
+ * a scan-heavy corpus: scans and images carry no text geometry, so
+ * the highlight affordance is structurally absent there — a selection
+ * cannot exist without a text layer). A capture becomes a DRAFT; the
+ * panel (AnnotationsPanel) takes the required comment and creates.
+ * Marks render through the kit's MarkerLayer on both surfaces.
+ *
+ * Images still render as a plain img on a blob object URL — now inside
+ * a relative box so the same marking kit covers them (an image is one
+ * page: page = 1). Download rides the same URL for both kinds; the URL
+ * exists exactly as long as the viewer does (created when the bytes
+ * arrive, revoked on close) — the tested pairing invariant.
  */
 
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorState, Loading } from "../../components/async.js";
 import { Badge } from "../../components/Badge.js";
 import { Button } from "../../components/Button.js";
+import { MarkerLayer, type Marker } from "../../components/marking/MarkerLayer.js";
+import { RegionDrawLayer } from "../../components/marking/RegionDrawLayer.js";
+import type { MarkRect } from "../../components/marking/rect.js";
+import { AnnotationKind, type DocumentAnnotation } from "../../gen/stigmer/law/documentannotation/v1/documentannotation_pb.js";
 import { documentCategoryLabel } from "../../lib/format.js";
-import { useDocument, useDocumentBytes } from "./queries.js";
+import { clipGraphemeSafe } from "../../lib/snippet.js";
+import type { PdfReaderController } from "../../pdf/PdfReader.js";
+import type { SelectionCapture } from "../../pdf/selection.js";
+import { AnnotationsPanel, type MarkDraft } from "./AnnotationsPanel.js";
+import { useDocument, useDocumentAnnotations, useDocumentBytes } from "./queries.js";
 
 // pdfjs costs the main bundle nothing: the reader chunk loads on the
 // first PDF open (the AssistantConversation precedent).
 const PdfReader = lazy(() => import("../../pdf/PdfReader.js"));
+
+/** The proto bound on quoted_text; the clip keeps an over-long
+ * selection an honest prefix instead of a failed create. */
+const QUOTED_TEXT_MAX = 1000;
 
 /** One object URL per blob, revoked when the blob or viewer goes away. */
 function useObjectUrl(blob: Blob | undefined): string | undefined {
@@ -56,6 +78,32 @@ function useObjectUrl(blob: Blob | undefined): string | undefined {
 const SURFACE_CLASS =
   "h-[calc(100dvh-11rem)] w-full rounded-card border border-line bg-surface";
 
+/** Saved marks + the pending draft, as the kit renders them. The draft
+ * previews in place so what gets saved is what was seen. */
+function markersForPage(
+  annotations: readonly DocumentAnnotation[],
+  draft: MarkDraft | null,
+  page: number,
+): Marker[] {
+  const markers: Marker[] = annotations
+    .filter((mark) => mark.spec?.page === page)
+    .map((mark) => ({
+      id: mark.metadata?.id ?? "",
+      rects: (mark.spec?.rects ?? []).map((rect) => ({
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      })),
+      appearance:
+        mark.spec?.annotationKind === AnnotationKind.REGION ? "region" : "highlight",
+    }));
+  if (draft && draft.page === page) {
+    markers.push({ id: "draft", rects: draft.rects, appearance: draft.kind });
+  }
+  return markers;
+}
+
 export function DocumentViewer(props: {
   documentId: string;
   /** 1-based page to open at (the assistant's citation unit). */
@@ -65,9 +113,50 @@ export function DocumentViewer(props: {
   const doc = useDocument(props.documentId);
   const bytes = useDocumentBytes(props.documentId);
   const objectUrl = useObjectUrl(bytes.data);
+  const annotations = useDocumentAnnotations(props.documentId);
+  const [draft, setDraft] = useState<MarkDraft | null>(null);
+  const readerController = useRef<PdfReaderController | null>(null);
 
   const fileName = doc.data?.spec?.fileName ?? "Document";
+  const caseId = doc.data?.spec?.caseId ?? "";
   const isPdf = doc.data?.spec?.mimeType === "application/pdf";
+  const annotationItems = annotations.data?.items;
+
+  // ---- the reader's marking seams (stability contract: PdfReaderProps) ----
+
+  const renderPageOverlay = useCallback(
+    (page: number) => (
+      <MarkerLayer markers={markersForPage(annotationItems ?? [], draft, page)} />
+    ),
+    [annotationItems, draft],
+  );
+
+  const selectionAction = useMemo(
+    () => ({
+      label: "Add mark",
+      onCapture: (capture: SelectionCapture) =>
+        setDraft({
+          page: capture.page,
+          kind: "highlight",
+          rects: capture.rects,
+          quotedText: clipGraphemeSafe(capture.text, QUOTED_TEXT_MAX),
+        }),
+    }),
+    [],
+  );
+
+  const regionTool = useMemo(
+    () => ({
+      label: "Mark region",
+      onCapture: (page: number, rect: MarkRect) =>
+        setDraft({ page, kind: "region", rects: [rect], quotedText: "" }),
+    }),
+    [],
+  );
+
+  const onJumpToPage = useCallback((page: number) => {
+    readerController.current?.scrollToPage(page);
+  }, []);
 
   function onDownload() {
     if (!objectUrl) return;
@@ -94,24 +183,100 @@ export function DocumentViewer(props: {
         <ErrorState error={bytes.error} onRetry={() => void bytes.refetch()} />
       )}
 
-      {doc.isSuccess &&
-        bytes.data &&
-        (isPdf ? (
-          <Suspense fallback={<Loading label="Opening the document…" />}>
-            <PdfReader
-              blob={bytes.data}
-              label={fileName}
-              initialPage={props.page}
-              className={SURFACE_CLASS}
-            />
-          </Suspense>
-        ) : (
-          objectUrl && (
-            <div className={`${SURFACE_CLASS} overflow-auto p-2`}>
-              <img src={objectUrl} alt={fileName} className="mx-auto max-w-full" />
+      {doc.isSuccess && bytes.data && (
+        <div className="lg:flex lg:items-start lg:gap-4">
+          <div className="min-w-0 lg:flex-1">
+            {isPdf ? (
+              <Suspense fallback={<Loading label="Opening the document…" />}>
+                <PdfReader
+                  blob={bytes.data}
+                  label={fileName}
+                  initialPage={props.page}
+                  className={SURFACE_CLASS}
+                  controllerRef={readerController}
+                  renderPageOverlay={renderPageOverlay}
+                  selectionAction={selectionAction}
+                  regionTool={regionTool}
+                />
+              </Suspense>
+            ) : (
+              objectUrl && (
+                <ImageSurface
+                  src={objectUrl}
+                  alt={fileName}
+                  markers={markersForPage(annotationItems ?? [], draft, 1)}
+                  onRegion={(rect) =>
+                    setDraft({ page: 1, kind: "region", rects: [rect], quotedText: "" })
+                  }
+                />
+              )
+            )}
+          </div>
+          <aside className="mt-4 lg:mt-0 lg:w-80 lg:shrink-0">
+            <div className="lg:flex lg:max-h-[calc(100dvh-11rem)] lg:flex-col">
+              <AnnotationsPanel
+                documentId={props.documentId}
+                caseId={caseId}
+                draft={draft}
+                onDraftDone={() => setDraft(null)}
+                onJumpToPage={onJumpToPage}
+              />
             </div>
-          )
-        ))}
+          </aside>
+        </div>
+      )}
     </section>
+  );
+}
+
+/**
+ * The image surface with marks: one page by definition (page = 1), the
+ * box sized by the image itself so the kit's percentage-positioned
+ * marks land on the pixels (intrinsic size = natural dimensions —
+ * max-w-full only ever scales proportionally). No highlight affordance
+ * exists here and none is faked: an image has no text to select
+ * (DD-010's capability matrix); the region tool is the mark.
+ */
+function ImageSurface(props: {
+  src: string;
+  alt: string;
+  markers: readonly Marker[];
+  onRegion: (rect: MarkRect) => void;
+}) {
+  const [regionArmed, setRegionArmed] = useState(false);
+  return (
+    <div className={`${SURFACE_CLASS} flex flex-col overflow-hidden`}>
+      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line bg-surface px-2">
+        <Button
+          onClick={() => setRegionArmed((armed) => !armed)}
+          aria-pressed={regionArmed}
+          title="Drag a rectangle on the image (Esc cancels)"
+        >
+          Mark region
+        </Button>
+      </div>
+      <div
+        className="min-h-0 flex-1 overflow-auto p-2"
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && regionArmed) {
+            event.preventDefault();
+            setRegionArmed(false);
+          }
+        }}
+      >
+        <div className="relative mx-auto w-fit">
+          <img src={props.src} alt={props.alt} className="block max-w-full" />
+          <MarkerLayer markers={props.markers} />
+          {regionArmed && (
+            <RegionDrawLayer
+              onCapture={(rect) => {
+                setRegionArmed(false);
+                props.onRegion(rect);
+              }}
+            />
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
