@@ -14,7 +14,11 @@
 version: v2
 clean: true
 plugins:
-  - remote: buf.build/bufbuild/es
+  # The version pin is load-bearing: unpinned, the remote registry decides
+  # the generator version, and every registry release re-arms the codegen
+  # drift check on the NEXT unrelated push (v2.13.0->v2.14.0 broke main,
+  # 2026-08-15). Upgrading means bumping this pin AND regenerating.
+  - remote: buf.build/bufbuild/es:v2.13.0
     out: apps/law/web/src/gen
     opt:
       - target=ts
