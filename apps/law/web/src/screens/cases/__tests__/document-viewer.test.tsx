@@ -20,6 +20,7 @@ import {
   DocumentSchema,
   ListDocumentsResponseSchema,
 } from "../../../gen/stigmer/law/document/v1/document_pb.js";
+import { ListDocumentAnnotationsResponseSchema } from "../../../gen/stigmer/law/documentannotation/v1/documentannotation_pb.js";
 import { computeLayout, scrollOffsetForPage } from "../../../pdf/geometry.js";
 import { fakeFirmMembers, renderScreen } from "../../../test-support/render.js";
 import { CaseDetailScreen } from "../CaseDetailScreen.js";
@@ -122,6 +123,14 @@ function fakeClients() {
       downloadDocument: vi.fn(async (id: string) =>
         fakeBytes(id === "doc_pdf" ? "application/pdf" : "image/png"),
       ),
+    },
+    // The viewer always mounts the marks panel (T13); this suite keeps
+    // it empty — mark behavior lives in annotations.test.tsx.
+    documentAnnotations: {
+      list: vi.fn(async () =>
+        create(ListDocumentAnnotationsResponseSchema, { items: [], totalCount: 0n }),
+      ),
+      create: vi.fn(),
     },
     firmMembers: fakeFirmMembers(),
   };

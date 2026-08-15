@@ -1,0 +1,25 @@
+/*
+ * Mark rendering — colors from the app's one token source (--law-*,
+ * styles/app.css), mixed to translucency at point of use because a
+ * mark must never fully cover what it marks (the pdf.css precedent).
+ * Loaded with the marking components' chunk; the main bundle carries
+ * none of it.
+ */
+
+.law-mark-highlight {
+  background-color: color-mix(in srgb, var(--law-warn) 30%, transparent);
+  border-radius: 2px;
+}
+
+.law-mark-region {
+  background-color: color-mix(in srgb, var(--law-warn) 12%, transparent);
+  border: 2px solid color-mix(in srgb, var(--law-warn) 75%, transparent);
+  border-radius: 3px;
+}
+
+/* The in-flight drag preview reads as "about to become a region". */
+.law-mark-region-preview {
+  background-color: color-mix(in srgb, var(--law-brand) 12%, transparent);
+  border: 2px dashed color-mix(in srgb, var(--law-brand) 70%, transparent);
+  border-radius: 3px;
+}

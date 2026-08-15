@@ -21,7 +21,7 @@
  * silent blank page.
  */
 
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { OutputScale, TextLayer, type PDFDocumentProxy } from "./pdfjs.js";
 import type { PageSize } from "./geometry.js";
 
@@ -41,6 +41,15 @@ export interface PdfPageProps {
   /** Registers the rendered text layer for find-highlighting
    * (null on teardown); referentially stable like onMeasured. */
   readonly registerTextLayer: (page: number, container: Element | null) => void;
+  /** Optional per-page overlay (the T13 annotation seam): rendered
+   * inside the page box ABOVE canvas and text layer, in a
+   * pointer-events-none wrapper (an overlay that wants pointer events
+   * opts back in itself). MUST be referentially stable like the two
+   * callbacks above — the parent re-renders on every scroll, and an
+   * unstable identity here would re-render every mounted page per
+   * scroll tick. Deliberately EXCLUDED from the paint effect: overlay
+   * changes cost a render, never a re-paint. */
+  readonly renderOverlay?: (page: number) => ReactNode;
 }
 
 function PdfPageImpl(props: PdfPageProps) {
@@ -121,6 +130,11 @@ function PdfPageImpl(props: PdfPageProps) {
       >
         <canvas ref={canvasRef} aria-hidden="true" className="size-full" />
         <div ref={textRef} className="law-pdf-text-layer" />
+        {props.renderOverlay && (
+          <div className="pointer-events-none absolute inset-0">
+            {props.renderOverlay(props.pageNumber)}
+          </div>
+        )}
         {failed && (
           <p role="alert" className="absolute inset-x-0 top-1/2 px-4 text-center text-sm text-danger">
             This page could not be displayed. Download the document to read it.

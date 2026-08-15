@@ -1,0 +1,152 @@
+// DocumentAnnotation — a mark on a filed document with a comment
+// attached (DD-010): a senior marks a section, a junior finds the mark
+// and learns from it. Institutional knowledge written where the
+// knowledge lives: on the page.
+//
+// Append-only by contract: create and list are the ENTIRE operation
+// set — the proto declares no other method, so the absence is the
+// contract (the TaskComment rule). A mark is never edited, resolved,
+// or deleted in v1; a resolved/hidden state is a named deferral shaped
+// as a dedicated UpdateStatus-style RPC (DD-010), never a spec update.
+// Author and timestamp come from the envelope metadata, never from
+// the spec.
+//
+// The anchor is sound because documents are immutable: the anchored
+// bytes can never change under the mark, so there is no drift problem
+// to engineer around.
+syntax = "proto3";
+
+package stigmer.law.documentannotation.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message DocumentAnnotation {
+  string api_version = 1;
+  string kind = 2;
+  // System-managed; the pipeline overwrites whatever a client sends.
+  // created_by/created_at ARE the mark's author and date — the
+  // learning trail's attribution, signed and dated (DD-010).
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  DocumentAnnotationSpec spec = 4 [(buf.validate.field).required = true];
+}
+
+// A rectangle normalized to the page's INTRINSIC size (the pdfjs
+// scale-1 viewport for PDFs, natural dimensions for images), each
+// coordinate 0-1. Zoom- and DPR-independent by construction: an anchor
+// can never be accidentally saved in screen pixels (DD-010).
+message NormalizedRect {
+  float left = 1 [(buf.validate.field).float = {
+    gte: 0,
+    lte: 1
+  }];
+  float top = 2 [(buf.validate.field).float = {
+    gte: 0,
+    lte: 1
+  }];
+  // Width/height must be positive: a zero-area mark marks nothing.
+  float width = 3 [(buf.validate.field).float = {
+    gt: 0,
+    lte: 1
+  }];
+  float height = 4 [(buf.validate.field).float = {
+    gt: 0,
+    lte: 1
+  }];
+}
+
+// How the mark was made — which is also what it may honestly render
+// as. The capability matrix (DD-010) is law: highlights exist only
+// where a real text layer exists; regions exist everywhere.
+enum AnnotationKind {
+  ANNOTATION_KIND_UNSPECIFIED = 0;
+  // From a text selection on a born-digital PDF's text layer. Carries
+  // per-line rects (one per selected line) and the quoted text.
+  ANNOTATION_KIND_HIGHLIGHT = 1;
+  // A drawn rectangle — the workhorse on a scan-heavy corpus (DD-010):
+  // scans and images have no text geometry, so a region is the only
+  // honest mark there. Exactly one rect (enforced by the pipeline —
+  // field validation cannot see across fields).
+  ANNOTATION_KIND_REGION = 2;
+}
+
+message DocumentAnnotationSpec {
+  // The document this mark belongs to — existence enforced by the
+  // pipeline's reference check (FAILED_PRECONDITION).
+  string document_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // Denormalized from the owning Document at create time — safe
+  // because documents are immutable (the case link can never change),
+  // and load-bearing: it is what the policy's case-content rule reads
+  // without a store hop (the DocumentPage precedent). Client-supplied,
+  // so the pipeline VERIFIES it against the referenced document and
+  // refuses a mismatch — denormalized, never trusted.
+  string case_id = 2 [(buf.validate.field).string.min_len = 1];
+
+  // 1-based page the mark anchors to, as a lawyer cites it. Marks are
+  // single-page by contract (DD-010): a cross-page selection is
+  // refused at capture with an honest message, never silently split.
+  int32 page = 3 [(buf.validate.field).int32.gte = 1];
+
+  // HIGHLIGHT or REGION — never unspecified.
+  AnnotationKind annotation_kind = 4 [(buf.validate.field).enum = {
+    defined_only: true,
+    not_in: [0]
+  }];
+
+  // The marked area: per-line rects for a HIGHLIGHT (so a multi-line
+  // selection renders as a highlight over the glyphs, not a bounding
+  // box — the DD-010 per-line amendment), exactly one rect for a
+  // REGION. The cap is a sanity bound: a page has finitely many lines,
+  // and a selection producing more than 64 is a capture bug, not a
+  // bigger mark.
+  repeated NormalizedRect rects = 5 [(buf.validate.field).repeated = {
+    min_items: 1,
+    max_items: 64
+  }];
+
+  // The selected text, captured at mark time so the mark is meaningful
+  // in the panel and to the assistant without opening the page.
+  // Present only on highlights; the web truncates over-long selections
+  // grapheme-safely to fit (an honest prefix beats a failed create).
+  string quoted_text = 6 [(buf.validate.field).string.max_len = 1000];
+
+  // The comment — a mark without a comment is not the feature
+  // (DD-010: the comment carries the senior's judgment). Bounded like
+  // TaskComment's content.
+  string body = 7 [(buf.validate.field).string = {
+    min_len: 1,
+    max_len: 2000
+  }];
+}
+
+message ListDocumentAnnotationsRequest {
+  // Marks are always read in the context of a document — the viewer
+  // overlay and the panel both consume them per document.
+  string document_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // Defaults to 20, capped at 100. Oldest first — the learning trail
+  // reads chronologically (the TaskComment list contract).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 100
+  }];
+  int32 page_offset = 3 [(buf.validate.field).int32.gte = 0];
+}
+
+message ListDocumentAnnotationsResponse {
+  // Oldest first (see the request's page_size comment).
+  repeated DocumentAnnotation items = 1;
+  int64 total_count = 2;
+}
+
+service DocumentAnnotationService {
+  // Add a mark with a comment to a document. The referenced document
+  // must exist, the submitted case_id must match its case, and the
+  // caller must be able to work the case's content (case members and
+  // partners; office staff refused).
+  rpc Create(DocumentAnnotation) returns (DocumentAnnotation);
+  // List a document's marks, oldest first. Case content: a mark is
+  // never more visible than its document.
+  rpc List(ListDocumentAnnotationsRequest) returns (ListDocumentAnnotationsResponse);
+}

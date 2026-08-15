@@ -49,6 +49,25 @@ function snapToGraphemeBoundaries(
   return { start: snappedStart, end: snappedEnd };
 }
 
+/**
+ * Clips text to at most `max` UTF-16 units WITHOUT splitting a
+ * grapheme cluster (the same #2 obligation as the window edges): an
+ * over-long capture stores an honest prefix — never a mangled Telugu
+ * base+matra at the cut. Snaps INWARD (unlike the window helper, which
+ * widens): the result must fit the bound, so the straddling cluster is
+ * dropped whole. Used by mark creation to fit quoted text into its
+ * proto bound.
+ */
+export function clipGraphemeSafe(text: string, max: number): string {
+  if (text.length <= max) return text;
+  let cut = 0;
+  for (const { index } of graphemes.segment(text)) {
+    if (index > max) break;
+    cut = index;
+  }
+  return text.slice(0, cut);
+}
+
 export interface SnippetParts {
   /** Context before the match, ellipsized when the page continues. */
   readonly prefix: string;

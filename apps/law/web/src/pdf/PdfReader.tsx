@@ -21,6 +21,13 @@
  * Only pages near the viewport are mounted (geometry.ts windowing);
  * scrolling drives state, state drives the window, and each PdfPage
  * is memoized so only pages whose own inputs changed re-render.
+ *
+ * Marking seams (T13, DD-010): a per-page overlay render-prop, a
+ * text-selection capture affordance, a drag-a-region tool, and a
+ * post-mount navigation controller — all generic (this module never
+ * learns what a mark IS), all bound by the stability contract on
+ * PdfReaderProps. Selection capture math lives in selection.ts; the
+ * draw layer is the kit's (components/marking/).
  */
 
 import {
@@ -31,10 +38,15 @@ import {
   useState,
   type FormEvent,
   type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from "react";
-import { ChevronDown, ChevronUp, Search, X, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, SquareDashed, X, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "../components/Button.js";
 import { Loading } from "../components/async.js";
+import { RegionDrawLayer } from "../components/marking/RegionDrawLayer.js";
+import type { MarkRect } from "../components/marking/rect.js";
+import { captureSelection, type SelectionCapture } from "./selection.js";
 import {
   computeLayout,
   currentPage as currentPageAt,
@@ -60,6 +72,26 @@ const FIT_MARGIN = 24;
 const ZOOM_STEPS = [0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 3] as const;
 const MIN_SCALE = 0.25;
 
+/** Post-mount navigation commands (the T13 panel's jump-to-page).
+ * A deliberate imperative seam: scrolling is a command, not state —
+ * the reader already drives surface.scrollTop directly. initialPage
+ * stays the one-shot ?page= input; this is the channel for everything
+ * after mount. */
+export interface PdfReaderController {
+  scrollToPage(page: number): void;
+}
+
+/** The marking seams (T13, DD-010) — generic by design: the reader
+ * reports captures and renders overlays; what a capture BECOMES (an
+ * annotation, an excerpt) is the consumer's business, so this module
+ * stays liftable by the next vertical.
+ *
+ * STABILITY CONTRACT: like onMeasured/registerTextLayer on PdfPage,
+ * every function-valued prop here must be referentially stable across
+ * the consumer's renders — the reader re-renders on every scroll tick,
+ * and unstable identities would re-render every mounted page each
+ * tick. Change identity exactly when the rendered output must change
+ * (e.g. the marks data changed). */
 export interface PdfReaderProps {
   readonly blob: Blob;
   /** Accessible name for the reading surface (the file name). */
@@ -70,6 +102,26 @@ export interface PdfReaderProps {
   /** The bounded-height frame (DD-019: the surface scrolls INSIDE it;
    * the shell's `main` stays the app's one scroll container). */
   readonly className?: string;
+  /** Receives the navigation controller while mounted (null after
+   * unmount) — the annotations panel's jump-to-page channel. */
+  readonly controllerRef?: { current: PdfReaderController | null };
+  /** Per-page overlay above canvas and text layer (marks render here),
+   * pointer-events-none by default. Stability contract above. */
+  readonly renderPageOverlay?: (page: number) => ReactNode;
+  /** When present, a completed text selection inside one page offers
+   * this action beside the selection; a selection spanning pages gets
+   * an honest refusal instead (single-page marks — DD-010). */
+  readonly selectionAction?: {
+    readonly label: string;
+    readonly onCapture: (capture: SelectionCapture) => void;
+  };
+  /** When present, the toolbar grows a drag-to-mark-a-region toggle;
+   * a completed drag reports its page and normalized rect. Escape
+   * disarms. */
+  readonly regionTool?: {
+    readonly label: string;
+    readonly onCapture: (page: number, rect: MarkRect) => void;
+  };
 }
 
 export default function PdfReader(props: PdfReaderProps) {
@@ -95,22 +147,10 @@ export default function PdfReader(props: PdfReaderProps) {
       </div>
     );
   }
-  return (
-    <PdfReaderBody
-      doc={state.doc}
-      label={props.label}
-      initialPage={props.initialPage}
-      className={props.className}
-    />
-  );
+  return <PdfReaderBody {...props} doc={state.doc} />;
 }
 
-function PdfReaderBody(props: {
-  doc: PDFDocumentProxy;
-  label: string;
-  initialPage?: number;
-  className?: string;
-}) {
+function PdfReaderBody(props: Omit<PdfReaderProps, "blob"> & { doc: PDFDocumentProxy }) {
   const { doc } = props;
   const pageCount = doc.numPages;
   const surfaceRef = useRef<HTMLDivElement>(null);
@@ -124,6 +164,17 @@ function PdfReaderBody(props: {
   const [findQuery, setFindQuery] = useState("");
   const [matches, setMatches] = useState<readonly PageMatch[]>([]);
   const [matchIndex, setMatchIndex] = useState(0);
+  /** The region tool's armed state; disarms on capture and on Escape. */
+  const [regionArmed, setRegionArmed] = useState(false);
+  /** A completed selection's pending affordance (or the cross-page
+   * refusal), positioned in the CONTENT div's coordinate space so it
+   * rides along with the page when the surface scrolls. */
+  const [pendingSelection, setPendingSelection] = useState<
+    | { kind: "captured"; capture: SelectionCapture; x: number; y: number }
+    | { kind: "cross-page"; x: number; y: number }
+    | null
+  >(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   /** Rendered text layers, for find-highlighting; the tick tells the
    * highlight effect the map changed (refs are invisible to React). */
@@ -200,6 +251,17 @@ function PdfReaderBody(props: {
   const scrollToPageRef = useRef(scrollToPage);
   scrollToPageRef.current = scrollToPage;
 
+  // The controller seam: one stable object delegating through the ref,
+  // so consumers may hold it for the reader's whole lifetime.
+  const { controllerRef } = props;
+  useEffect(() => {
+    if (!controllerRef) return;
+    controllerRef.current = { scrollToPage: (page) => scrollToPageRef.current(page) };
+    return () => {
+      controllerRef.current = null;
+    };
+  }, [controllerRef]);
+
   // The ?page= deep link: one scroll, after the first layout exists.
   const deepLinked = useRef(false);
   useEffect(() => {
@@ -230,6 +292,84 @@ function PdfReaderBody(props: {
     else textLayersRef.current.delete(page);
     setRenderedTick((tick) => tick + 1);
   }, []);
+
+  // ---- marking seams (T13, DD-010) ----
+
+  const { regionTool, selectionAction, renderPageOverlay } = props;
+
+  const onRegionCapture = useCallback(
+    (page: number, rect: MarkRect) => {
+      // One drag, one mark: the tool disarms so reading resumes.
+      setRegionArmed(false);
+      regionTool?.onCapture(page, rect);
+    },
+    [regionTool],
+  );
+
+  // The composed per-page overlay PdfPage receives: the consumer's
+  // marks below, the armed draw layer above. Identity changes exactly
+  // when the rendered output must (marks data via renderPageOverlay,
+  // arming) — the memoized pages' stability contract.
+  const composedOverlay = useCallback(
+    (page: number) => (
+      <>
+        {renderPageOverlay?.(page)}
+        {regionArmed && <RegionDrawLayer onCapture={(rect) => onRegionCapture(page, rect)} />}
+      </>
+    ),
+    [renderPageOverlay, regionArmed, onRegionCapture],
+  );
+  const overlayForPages = renderPageOverlay || regionTool ? composedOverlay : undefined;
+
+  // A completed pointer selection offers the action. Read on the next
+  // frame — the Selection settles after pointerup. Keyboard-driven
+  // selection shows no bubble (recorded limitation: the annotations
+  // panel is the keyboard/screen-reader surface; a pointer cannot be
+  // required to CONSUME marks, only to place them).
+  function onSurfacePointerUp(_event: ReactPointerEvent<HTMLDivElement>) {
+    if (!selectionAction || regionArmed) return;
+    requestAnimationFrame(() => {
+      const selection = document.getSelection();
+      const content = contentRef.current;
+      const result = captureSelection(selection);
+      if (!result || !content) {
+        setPendingSelection(null);
+        return;
+      }
+      const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+      const rangeRect = range?.getBoundingClientRect();
+      const contentRect = content.getBoundingClientRect();
+      const x = rangeRect ? rangeRect.right - contentRect.left : 0;
+      const y = rangeRect ? rangeRect.bottom - contentRect.top : 0;
+      setPendingSelection(
+        result.kind === "captured"
+          ? { kind: "captured", capture: result, x, y }
+          : { kind: "cross-page", x, y },
+      );
+    });
+  }
+
+  // The bubble follows the selection's life: collapse dismisses it.
+  useEffect(() => {
+    if (!selectionAction) return;
+    const onSelectionChange = () => {
+      const selection = document.getSelection();
+      if (!selection || selection.isCollapsed) setPendingSelection(null);
+    };
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => document.removeEventListener("selectionchange", onSelectionChange);
+  }, [selectionAction]);
+
+  // Bubble coordinates are content-space CSS px: a zoom re-layout
+  // moves the content under them, so the bubble goes rather than lies.
+  useEffect(() => setPendingSelection(null), [scale]);
+
+  function acceptPendingSelection() {
+    if (pendingSelection?.kind !== "captured") return;
+    selectionAction?.onCapture(pendingSelection.capture);
+    setPendingSelection(null);
+    document.getSelection()?.removeAllRanges();
+  }
 
   // ---- find ----
 
@@ -297,6 +437,13 @@ function PdfReaderBody(props: {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
       event.preventDefault();
       openFind();
+    } else if (event.key === "Escape" && pendingSelection) {
+      event.preventDefault();
+      setPendingSelection(null);
+      document.getSelection()?.removeAllRanges();
+    } else if (event.key === "Escape" && regionArmed) {
+      event.preventDefault();
+      setRegionArmed(false);
     } else if (event.key === "Escape" && findOpen) {
       event.preventDefault();
       closeFind();
@@ -362,6 +509,19 @@ function PdfReaderBody(props: {
           <Search className="size-4" aria-hidden="true" />
           Find
         </Button>
+        {regionTool && (
+          <>
+            <span aria-hidden="true" className="mx-1 h-5 w-px bg-line" />
+            <Button
+              onClick={() => setRegionArmed((armed) => !armed)}
+              aria-pressed={regionArmed}
+              title="Drag a rectangle on the page (Esc cancels)"
+            >
+              <SquareDashed className="size-4" aria-hidden="true" />
+              {regionTool.label}
+            </Button>
+          </>
+        )}
       </div>
 
       {findOpen && (
@@ -417,9 +577,10 @@ function PdfReaderBody(props: {
         aria-label={props.label}
         tabIndex={0}
         onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+        onPointerUp={onSurfacePointerUp}
         className="relative min-h-0 flex-1 overflow-auto bg-ink/5"
       >
-        <div className="relative" style={{ height: layout.totalHeight }}>
+        <div ref={contentRef} className="relative" style={{ height: layout.totalHeight }}>
           {layout.pages.map((band, index) => {
             const page = index + 1;
             if (page < window_.first || page > window_.last) return null;
@@ -435,9 +596,40 @@ function PdfReaderBody(props: {
                 height={band.height}
                 onMeasured={onMeasured}
                 registerTextLayer={registerTextLayer}
+                renderOverlay={overlayForPages}
               />
             );
           })}
+          {pendingSelection && (
+            <div
+              className="absolute z-10"
+              style={{
+                left: pendingSelection.x,
+                top: pendingSelection.y + 4,
+                transform: "translateX(-100%)",
+              }}
+            >
+              {pendingSelection.kind === "captured" ? (
+                <Button
+                  variant="primary"
+                  // Prevent the mousedown default so clicking the
+                  // bubble does not collapse the selection first —
+                  // collapse would dismiss the bubble before click.
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={acceptPendingSelection}
+                >
+                  {selectionAction?.label}
+                </Button>
+              ) : (
+                <p
+                  role="status"
+                  className="whitespace-nowrap rounded-card border border-line bg-surface px-2 py-1 text-xs text-ink-muted shadow-md"
+                >
+                  Select within a single page to mark it.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

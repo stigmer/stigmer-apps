@@ -27,6 +27,7 @@ import { CaseNoteSchema } from "./gen/stigmer/law/casenote/v1/casenote_pb.js";
 import { ClientSchema } from "./gen/stigmer/law/client/v1/client_pb.js";
 import { DeadlineSchema } from "./gen/stigmer/law/deadline/v1/deadline_pb.js";
 import { DocumentSchema } from "./gen/stigmer/law/document/v1/document_pb.js";
+import { DocumentAnnotationSchema } from "./gen/stigmer/law/documentannotation/v1/documentannotation_pb.js";
 import { DocumentPageSchema } from "./gen/stigmer/law/documentpage/v1/documentpage_pb.js";
 import { FeeArrangementSchema } from "./gen/stigmer/law/feearrangement/v1/feearrangement_pb.js";
 import { FirmMemberSchema } from "./gen/stigmer/law/firmmember/v1/firmmember_pb.js";
@@ -171,6 +172,15 @@ export function createResourceStore(pool: pg.Pool): ResourceStore {
         createdAt: "created_at",
         // The extraction sweep's work-queue predicate (absent | PENDING).
         extraction: "extraction",
+      },
+    },
+    DocumentAnnotation: {
+      schema: DocumentAnnotationSchema,
+      table: "document_annotations",
+      columns: {
+        documentId: "document_id",
+        caseId: "case_id",
+        createdAt: "created_at",
       },
     },
     DocumentPage: {

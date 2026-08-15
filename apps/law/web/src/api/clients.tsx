@@ -23,6 +23,7 @@ import { CaseNoteService } from "../gen/stigmer/law/casenote/v1/casenote_pb.js";
 import { ClientService } from "../gen/stigmer/law/client/v1/client_pb.js";
 import { DeadlineService } from "../gen/stigmer/law/deadline/v1/deadline_pb.js";
 import { DocumentService } from "../gen/stigmer/law/document/v1/document_pb.js";
+import { DocumentAnnotationService } from "../gen/stigmer/law/documentannotation/v1/documentannotation_pb.js";
 import { DocumentPageService } from "../gen/stigmer/law/documentpage/v1/documentpage_pb.js";
 import { FeeArrangementService } from "../gen/stigmer/law/feearrangement/v1/feearrangement_pb.js";
 import { FirmMemberService } from "../gen/stigmer/law/firmmember/v1/firmmember_pb.js";
@@ -48,6 +49,8 @@ export interface ApiClients {
   readonly caseNotes: Client<typeof CaseNoteService>;
   readonly taskComments: Client<typeof TaskCommentService>;
   readonly documents: Client<typeof DocumentService>;
+  /** Marks with comments on filed documents (DD-010) — append-only. */
+  readonly documentAnnotations: Client<typeof DocumentAnnotationService>;
   /** Extracted page text — the in-app document content search (FR-DOC-004). */
   readonly documentPages: Client<typeof DocumentPageService>;
   /** Account administration (DD-003 D4) — managing partner + operator only. */
@@ -74,6 +77,7 @@ export function createApiClients(transport: Transport, files: FilesClient): ApiC
     caseNotes: createClient(CaseNoteService, transport),
     taskComments: createClient(TaskCommentService, transport),
     documents: createClient(DocumentService, transport),
+    documentAnnotations: createClient(DocumentAnnotationService, transport),
     documentPages: createClient(DocumentPageService, transport),
     users: createClient(UserService, transport),
     assistant: createClient(AssistantService, transport),

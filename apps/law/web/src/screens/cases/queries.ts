@@ -20,6 +20,11 @@ import {
   CaseSpecSchema,
 } from "../../gen/stigmer/law/case/v1/case_pb.js";
 import { RoleOnCase } from "../../gen/stigmer/law/casemember/v1/casemember_pb.js";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import {
+  DocumentAnnotationSchema,
+  type DocumentAnnotationSpecSchema,
+} from "../../gen/stigmer/law/documentannotation/v1/documentannotation_pb.js";
 
 /** The list's named predicates — each a server-side query, never a client filter. */
 export interface CaseListPredicates {
@@ -246,6 +251,37 @@ export function useUploadDocuments(caseId: string) {
     // The case's derived document_count changed too — one prefix covers
     // the documents list AND every case read.
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cases"] }),
+  });
+}
+
+/* ---------------------------- annotations ---------------------------- */
+
+/**
+ * A document's marks (DD-010), oldest first — the server's trail
+ * contract. One query feeds BOTH consumers (the page overlay and the
+ * panel); the proto's 100-cap bounds a document's v1 mark count
+ * honestly rather than paging a surface that renders whole.
+ */
+export function useDocumentAnnotations(documentId: string) {
+  const { documentAnnotations } = useApiClients();
+  return useQuery({
+    queryKey: ["cases", "annotations", documentId],
+    queryFn: () => documentAnnotations.list({ documentId, pageSize: 100 }),
+  });
+}
+
+/** Create is the only write (append-only by contract — no update or
+ * delete exists to hook). Invalidates exactly this document's marks. */
+export function useAddAnnotation(documentId: string) {
+  const { documentAnnotations } = useApiClients();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (spec: MessageInitShape<typeof DocumentAnnotationSpecSchema>) =>
+      documentAnnotations.create(
+        create(DocumentAnnotationSchema, { spec: { ...spec, documentId } }),
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["cases", "annotations", documentId] }),
   });
 }
 
