@@ -11,6 +11,7 @@ import {
   currentPage,
   PAGE_GAP,
   scrollOffsetForPage,
+  scrollOffsetForRect,
   visiblePageRange,
 } from "../geometry.js";
 
@@ -101,5 +102,31 @@ describe("scrollOffsetForPage", () => {
 
   it("an out-of-range page answers 0 rather than NaN", () => {
     expect(scrollOffsetForPage(layout, 99)).toBe(0);
+  });
+});
+
+describe("scrollOffsetForRect", () => {
+  const layout = computeLayout(Array.from({ length: 3 }, () => LETTER), 1);
+
+  it("puts the rect's top at the 35% reading line", () => {
+    const page2 = layout.pages[1]!;
+    const offset = scrollOffsetForRect(layout, 2, 0.4, 800);
+    expect(offset).toBe(page2.top + 0.4 * page2.height - 800 * 0.35);
+    // The landing agrees with the indicator: the reading line sits on
+    // the target page — a jump must never read as a neighbor.
+    expect(currentPage(layout, offset, 800)).toBe(2);
+  });
+
+  it("degrades to rect-at-viewport-top when the viewport height is unknown (jsdom)", () => {
+    const page2 = layout.pages[1]!;
+    expect(scrollOffsetForRect(layout, 2, 0.4, 0)).toBe(page2.top + 0.4 * page2.height);
+  });
+
+  it("a rect near the top of page 1 clamps to 0, never a negative offset", () => {
+    expect(scrollOffsetForRect(layout, 1, 0, 800)).toBe(0);
+  });
+
+  it("an out-of-range page answers 0 rather than NaN", () => {
+    expect(scrollOffsetForRect(layout, 99, 0.5, 800)).toBe(0);
   });
 });

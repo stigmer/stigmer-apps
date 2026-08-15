@@ -122,7 +122,9 @@ test("mark a highlight on a PDF, a region on an image; both read in the panel; j
     markBox && pageBox && markBox.x + markBox.width <= pageBox.x + pageBox.width + 1,
   ).toBe(true);
 
-  // Jump-to-page from the panel rides the reader controller.
+  // Jump from the panel rides the reader controller and lands ON the
+  // mark — the reading-line convention keeps the indicator on the
+  // mark's own page.
   await page.getByRole("button", { name: "Mark region" }).waitFor(); // toolbar settled
   await panel.getByRole("button", { name: "Page 1 →" }).waitFor();
   await page.getByLabel("Go to page").fill("2");
@@ -131,7 +133,51 @@ test("mark a highlight on a PDF, a region on an image; both read in the panel; j
   await panel.getByRole("button", { name: "Page 1 →" }).click();
   await expect(page.getByLabel("Go to page")).toHaveValue("1");
 
-  // The viewer with marks + panel faces the axe gate like every screen.
+  // ---- mark identity: TWO marks on the SAME page (the reported
+  // ambiguity) — numbered badges + bidirectional linking resolve it ----
+
+  await page.getByRole("button", { name: "Mark region" }).click();
+  const pageOneDrawLayer = page.locator('[data-page-number="1"] [data-region-draw-layer]');
+  const drawBox = await pageOneDrawLayer.boundingBox();
+  if (!drawBox) throw new Error("page 1 draw layer has no box");
+  await page.mouse.move(drawBox.x + drawBox.width * 0.55, drawBox.y + drawBox.height * 0.55);
+  await page.mouse.down();
+  await page.mouse.move(drawBox.x + drawBox.width * 0.8, drawBox.y + drawBox.height * 0.7, {
+    steps: 5,
+  });
+  await page.mouse.up();
+  await expect(panel.getByText("New mark — page 1 (marked region)")).toBeVisible();
+  await page.getByLabel("Comment").fill("Second flag on the same page.");
+  await page.getByRole("button", { name: "Save mark" }).click();
+
+  // Creation-order numbers on the page and (implicitly, same numbers)
+  // in the panel rows.
+  await expect(reader.getByRole("button", { name: "Mark 1 on page 1" })).toBeVisible();
+  await expect(reader.getByRole("button", { name: "Mark 2 on page 1" })).toBeVisible();
+  const rows = panel.getByRole("listitem");
+  await expect(rows).toHaveCount(2);
+
+  // Row → mark: jumping from row 2 focuses ITS rect (the region),
+  // never the other page-1 mark.
+  await rows.nth(1).getByRole("button", { name: "Page 1 →" }).click();
+  await expect(reader.locator(".law-mark-region.law-mark-focused")).toBeVisible();
+  await expect(reader.locator(".law-mark-highlight.law-mark-focused")).toHaveCount(0);
+
+  // Badge → row: selecting mark 1 on the page lights its panel row
+  // and moves the focus emphasis to the highlight.
+  await reader.getByRole("button", { name: "Mark 1 on page 1" }).click();
+  await expect(rows.nth(0)).toHaveAttribute("aria-current", "true");
+  await expect(reader.locator(".law-mark-highlight.law-mark-focused").first()).toBeVisible();
+  await expect(reader.locator(".law-mark-region.law-mark-focused")).toHaveCount(0);
+
+  // The rects stayed passive: text selection still works over a
+  // marked area (the badge, not the rect, owns pointer events).
+  await selectOnPageOne(page, 10);
+  await reader.dispatchEvent("pointerup");
+  await expect(page.getByRole("button", { name: "Add mark" })).toBeVisible();
+
+  // The viewer with marks, badges, and panel faces the axe gate like
+  // every screen.
   const results = await new AxeBuilder({ page }).analyze();
   const blocking = results.violations.filter(
     (v) => v.impact === "serious" || v.impact === "critical",

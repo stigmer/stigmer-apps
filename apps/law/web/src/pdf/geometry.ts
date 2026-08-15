@@ -102,6 +102,25 @@ export function scrollOffsetForPage(layout: ReaderLayout, page: number): number 
   return band ? Math.max(0, band.top - PAGE_GAP) : 0;
 }
 
+/**
+ * The scrollTop that puts a point inside page n — given as a normalized
+ * (0–1) offset from the page's top, the anchor convention — at the 35%
+ * reading line. The SAME line currentPage reads, deliberately: landing
+ * a target at the reading line means the page indicator immediately
+ * names the target's page, never a neighbor. With an unknown viewport
+ * height (jsdom) this degrades to the point at the viewport top.
+ */
+export function scrollOffsetForRect(
+  layout: ReaderLayout,
+  page: number,
+  rectTop: number,
+  viewportHeight: number,
+): number {
+  const band = layout.pages[page - 1];
+  if (!band) return 0;
+  return Math.max(0, band.top + rectTop * band.height - viewportHeight * 0.35);
+}
+
 function pageAtLine(layout: ReaderLayout, line: number): number {
   const count = layout.pages.length;
   for (const [index, band] of layout.pages.entries()) {
