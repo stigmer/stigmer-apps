@@ -269,6 +269,25 @@ describe("document intelligence (FR-DOC-003/004)", () => {
     expect((await decide(callers.clerk, "DocumentPage", "search")).allow).toBe(true);
   });
 
+  it("a document's marks are its case's content: non-members denied on the loaded annotation (DD-010)", async () => {
+    const mark = { spec: { caseId: "case_a", documentId: "doc_x", page: 1 } };
+    expectDeny(
+      await decide(callers.junior, "DocumentAnnotation", "get", mark),
+      /case members and partners/,
+    );
+    expect((await decide(callers.associate, "DocumentAnnotation", "get", mark)).allow).toBe(true);
+  });
+
+  it("office staff neither create nor list document marks; a case-worker clerk MAY create (DD-010, decided 2026-08-15)", async () => {
+    expectDeny(await decide(callers.staff, "DocumentAnnotation", "create"), /Office staff/);
+    expectDeny(await decide(callers.staff, "DocumentAnnotation", "list"), /Office staff/);
+    // The clerk decision: whoever works the case may mark its documents
+    // (DD-001's tasks/notes/comments row applied to annotations). The
+    // role gate passes here; case MEMBERSHIP is the guard's check in
+    // the resource pipeline (proven in the acceptance suite).
+    expect((await decide(callers.clerk, "DocumentAnnotation", "create")).allow).toBe(true);
+  });
+
   it("extraction machinery is system-written: every PERSON is refused, the system passes its named seams only", async () => {
     // Even the managing partner: membership must not fall through to
     // the case-content allowance for these operations.

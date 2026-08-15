@@ -75,6 +75,9 @@ const CASE_REF: Readonly<
   Document: (r) => r.spec?.caseId,
   // Denormalized from the immutable Document at extraction time.
   DocumentPage: (r) => r.spec?.caseId,
+  // Denormalized from the immutable Document at create time,
+  // pipeline-verified against the referenced document (DD-010).
+  DocumentAnnotation: (r) => r.spec?.caseId,
 };
 
 export interface FirmPolicy {
@@ -331,10 +334,15 @@ export function createFirmPolicy(
       case "Hearing":
       case "CaseNote":
       case "Document":
+      case "DocumentAnnotation":
       case "Task": {
         // Case content, clerk included (the clerk records hearings —
-        // DD-001's division of labour). Creates carry their membership
-        // check in the guard; loaded-resource operations check here.
+        // DD-001's division of labour; a clerk who works the case may
+        // mark its documents, DD-010 as decided 2026-08-15). Creates
+        // carry their membership check in the guard; loaded-resource
+        // operations check here. DocumentAnnotation joins this branch
+        // rather than TaskComment's standalone one because its case_id
+        // is denormalized on the spec — no store hop needed.
         if (kind === "Document" && operation === "recordExtraction") {
           // The sweep's status report — a person can never write it,
           // membership notwithstanding (the fall-through below would
