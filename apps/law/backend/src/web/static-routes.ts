@@ -31,6 +31,13 @@ const CONNECT_PATH_PREFIX = "/stigmer.";
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  // Vite emits worker assets as .mjs (T12: pdf.worker.min-*.mjs). A
+  // module worker REFUSES to execute under the octet-stream fallback —
+  // browsers enforce a JavaScript MIME type for module scripts — so
+  // this entry is load-bearing, not cosmetic (found by the e2e reader
+  // rendering assertions; the Vite dev server types .mjs correctly, so
+  // dev never shows the break — the session-14 artifact-only class).
+  ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".map": "application/json",
   ".json": "application/json",
