@@ -3,29 +3,61 @@
  * chunk (the assistant.css precedent), so the main bundle carries
  * none of it.
  *
- * The text layer rules are the minimal contract pdfjs's TextLayer
- * needs from its host: an absolutely positioned overlay whose spans
- * (positioned by pdfjs via --scale-factor calc()) carry REAL text,
- * painted transparent so the canvas below shows through — selection
- * and find work on the text, the eye reads the paint.
+ * The text-layer block MIRRORS pdfjs v6's own .textLayer contract
+ * (pdfjs-dist/web/pdf_viewer.css), scoped to our class instead of
+ * importing their 6000-line viewer stylesheet unscoped (the
+ * stigmer/stigmer#454 lesson). The contract is variable-driven and
+ * NOT optional: TextLayer writes --font-height and --scale-x per span
+ * and expects the host CSS to consume them — without these rules the
+ * spans render at the inherited font size with no width correction,
+ * and selection/find highlights drift visibly off the painted glyphs
+ * (observed live before this block existed: a find hit on "The suit"
+ * painted over "2: The"). PdfPage sets --scale-factor on the
+ * container; --user-unit defaults to 1 as in the pdfjs viewer.
  */
 
 .law-pdf-text-layer {
+  --user-unit: 1;
+  --total-scale-factor: calc(var(--scale-factor) * var(--user-unit));
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+
   position: absolute;
   inset: 0;
-  overflow: hidden;
+  overflow: clip;
   line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-align: initial;
   text-size-adjust: none;
   forced-color-adjust: none;
+  transform-origin: 0 0;
   caret-color: CanvasText;
 }
 
-.law-pdf-text-layer span {
+.law-pdf-text-layer :is(span, br) {
   color: transparent;
   position: absolute;
   white-space: pre;
   cursor: text;
   transform-origin: 0% 0%;
+  user-select: text;
+}
+
+.law-pdf-text-layer > :not(.markedContent),
+.law-pdf-text-layer .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x))
+    scale(var(--min-font-size-inv));
+}
+
+.law-pdf-text-layer .markedContent {
+  display: contents;
 }
 
 /* Colors come from the app's one token source (--law-*, styles/app.css)
