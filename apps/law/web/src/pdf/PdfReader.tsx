@@ -51,6 +51,7 @@ import {
   computeLayout,
   currentPage as currentPageAt,
   scrollOffsetForPage,
+  scrollOffsetForRect,
   visiblePageRange,
   type PageSize,
 } from "./geometry.js";
@@ -79,6 +80,11 @@ const MIN_SCALE = 0.25;
  * after mount. */
 export interface PdfReaderController {
   scrollToPage(page: number): void;
+  /** Scrolls a normalized rect within a page to the reading line —
+   * the panel's jump-to-mark lands ON the mark, not at the page top.
+   * Generic like everything here: the reader scrolls to a rect and
+   * never learns what the rect means. */
+  scrollToRect(page: number, rect: MarkRect): void;
 }
 
 /** The marking seams (T13, DD-010) — generic by design: the reader
@@ -245,18 +251,34 @@ function PdfReaderBody(props: Omit<PdfReaderProps, "blob"> & { doc: PDFDocumentP
     },
     [layout, pageCount],
   );
+  const scrollToRect = useCallback(
+    (page: number, rect: MarkRect) => {
+      const surface = surfaceRef.current;
+      if (!surface) return;
+      const clamped = Math.min(Math.max(page, 1), pageCount);
+      const top = scrollOffsetForRect(layout, clamped, rect.top, surfaceSize.height);
+      surface.scrollTop = top;
+      setScrollTop(top);
+    },
+    [layout, pageCount, surfaceSize.height],
+  );
   // The find effect jumps to the first match as the query settles (the
   // native-find convention) — through a ref, so a layout change (zoom,
   // page measurement) never re-fires the search or re-jumps the reader.
   const scrollToPageRef = useRef(scrollToPage);
   scrollToPageRef.current = scrollToPage;
+  const scrollToRectRef = useRef(scrollToRect);
+  scrollToRectRef.current = scrollToRect;
 
-  // The controller seam: one stable object delegating through the ref,
+  // The controller seam: one stable object delegating through the refs,
   // so consumers may hold it for the reader's whole lifetime.
   const { controllerRef } = props;
   useEffect(() => {
     if (!controllerRef) return;
-    controllerRef.current = { scrollToPage: (page) => scrollToPageRef.current(page) };
+    controllerRef.current = {
+      scrollToPage: (page) => scrollToPageRef.current(page),
+      scrollToRect: (page, rect) => scrollToRectRef.current(page, rect),
+    };
     return () => {
       controllerRef.current = null;
     };

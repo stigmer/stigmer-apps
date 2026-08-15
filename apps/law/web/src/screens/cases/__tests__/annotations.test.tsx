@@ -27,7 +27,7 @@ import {
   ListDocumentAnnotationsResponseSchema,
   type DocumentAnnotation,
 } from "../../../gen/stigmer/law/documentannotation/v1/documentannotation_pb.js";
-import { computeLayout, scrollOffsetForPage } from "../../../pdf/geometry.js";
+import { computeLayout, scrollOffsetForRect } from "../../../pdf/geometry.js";
 import { fakeFirmMembers, renderScreen } from "../../../test-support/render.js";
 import { CaseDetailScreen } from "../CaseDetailScreen.js";
 
@@ -96,8 +96,10 @@ const PNG_DOC = create(DocumentSchema, {
   },
 });
 
-/** A senior's highlight on page 1 and a region on page 2 — authored by
- * the roster's colleague so the panel proves the name join. */
+/** A senior's highlight on page 1, a region on page 2, and a SECOND
+ * page-1 mark (the reported ambiguity: two marks, one page) — all
+ * authored by the roster's colleague so the panel proves the name
+ * join. Creation order is the identity: marks 1 and 3 share page 1. */
 const MARKS: DocumentAnnotation[] = [
   create(DocumentAnnotationSchema, {
     metadata: {
@@ -132,6 +134,24 @@ const MARKS: DocumentAnnotation[] = [
       rects: [{ left: 0.4, top: 0.4, width: 0.2, height: 0.1 }],
       quotedText: "",
       body: "Stamp illegible — check with the registry",
+    },
+  }),
+  // Starts too close to the left edge for a margin badge — pins the
+  // badge's inside-the-rect placement fallback.
+  create(DocumentAnnotationSchema, {
+    metadata: {
+      id: "ann_3",
+      createdBy: { id: "usr_ravi" },
+      createdAt: timestampFromDate(new Date("2026-08-15T12:00:00Z")),
+    },
+    spec: {
+      documentId: "doc_pdf",
+      caseId: "case_1",
+      page: 1,
+      annotationKind: AnnotationKind.REGION,
+      rects: [{ left: 0.02, top: 0.6, width: 0.3, height: 0.1 }],
+      quotedText: "",
+      body: "Annexure reference wrong — verify against the filing",
     },
   }),
 ];
@@ -209,9 +229,10 @@ describe("document annotations (viewer + panel)", () => {
     const page1 = await screen.findByRole("group", { name: "Page 1 of 3" });
     const page2 = await screen.findByRole("group", { name: "Page 2 of 3" });
 
-    // The highlight's TWO per-line rects on page 1; the region on 2.
+    // The highlight's TWO per-line rects + the second region on page 1;
+    // the other region on 2.
     await waitFor(() => expect(page1.querySelectorAll(".law-mark-highlight")).toHaveLength(2));
-    expect(page1.querySelectorAll(".law-mark-region")).toHaveLength(0);
+    expect(page1.querySelectorAll(".law-mark-region")).toHaveLength(1);
     expect(page2.querySelectorAll(".law-mark-region")).toHaveLength(1);
     // Percentage positioning — the normalized anchor IS the style.
     const first = page1.querySelector(".law-mark-highlight") as HTMLElement;
@@ -219,21 +240,79 @@ describe("document annotations (viewer + panel)", () => {
     expect(first.style.top).toBe("20%");
   });
 
-  it("the panel reads the trail: author, quoted text or region label, comment — and jumps to the page", async () => {
+  it("every mark carries its creation-order number on the page — same-page marks are distinguishable", async () => {
+    renderViewer(fakeClients(MARKS), "doc_pdf");
+    const page1 = await screen.findByRole("group", { name: "Page 1 of 3" });
+    const page2 = await screen.findByRole("group", { name: "Page 2 of 3" });
+
+    // Numbers are document-wide creation order, assigned BEFORE the
+    // page filter: page 1 carries marks 1 and 3, page 2 carries mark 2.
+    const badge1 = await screen.findByRole("button", { name: "Mark 1 on page 1" });
+    const badge3 = screen.getByRole("button", { name: "Mark 3 on page 1" });
+    expect(page1.contains(badge1)).toBe(true);
+    expect(page1.contains(badge3)).toBe(true);
+    expect(badge1).toHaveTextContent("1");
+    expect(badge3).toHaveTextContent("3");
+    expect(page2.contains(screen.getByRole("button", { name: "Mark 2 on page 2" }))).toBe(true);
+
+    // Placement: ann_1 (left 10%) fits a margin badge; ann_3 (left 2%)
+    // flips inside its rect so it can never clip off-page.
+    expect(badge1.className).toContain("law-mark-badge-margin");
+    expect(badge3.className).not.toContain("law-mark-badge-margin");
+  });
+
+  it("the panel reads the trail: number, author, quoted text or region label, comment — and jumps to the MARK", async () => {
     renderViewer(fakeClients(MARKS), "doc_pdf");
     const panel = await screen.findByRole("region", { name: "Marks" });
     const surface = await screen.findByRole("region", { name: "written-statement.pdf" });
 
     // Author names join through the roster (usr_ravi → Ravi Iyer).
-    expect((await screen.findAllByText("Ravi Iyer")).length).toBe(2);
+    expect((await screen.findAllByText("Ravi Iyer")).length).toBe(3);
     expect(panel).toHaveTextContent("barred by limitation");
     expect(panel).toHaveTextContent("Limitation defence — cite Art. 113");
     expect(panel).toHaveTextContent("Marked region");
     expect(panel).toHaveTextContent("Stamp illegible — check with the registry");
 
+    // The jump lands ON the mark's rect (ann_2: top 0.4 of page 2) at
+    // the reading line — no longer at the page top — and focuses it.
     await userEvent.click(screen.getByRole("button", { name: "Page 2 →" }));
     const layout = computeLayout(Array.from({ length: PAGE_COUNT }, () => PAGE_SIZE), 1);
-    await waitFor(() => expect(surface.scrollTop).toBe(scrollOffsetForPage(layout, 2)));
+    // jsdom viewports have no height; the offset degrades to rect-at-top.
+    await waitFor(() =>
+      expect(surface.scrollTop).toBe(scrollOffsetForRect(layout, 2, 0.4, 0)),
+    );
+    const page2 = screen.getByRole("group", { name: "Page 2 of 3" });
+    expect(page2.querySelector('[data-marker-id="ann_2"]')?.className).toContain(
+      "law-mark-focused",
+    );
+  });
+
+  it("selecting an on-page badge marks its panel row current; hovering a row emphasizes its rects", async () => {
+    renderViewer(fakeClients(MARKS), "doc_pdf");
+    const panel = await screen.findByRole("region", { name: "Marks" });
+    await screen.findByRole("group", { name: "Page 1 of 3" });
+
+    // Badge → row: the row lights up (aria-current is the contract).
+    await userEvent.click(await screen.findByRole("button", { name: "Mark 3 on page 1" }));
+    const row3 = panel.querySelector('[data-mark-id="ann_3"]');
+    expect(row3).toHaveAttribute("aria-current", "true");
+    expect(panel.querySelector('[data-mark-id="ann_1"]')).not.toHaveAttribute("aria-current");
+    // ...and the mark's own rects show the selection.
+    const page1 = screen.getByRole("group", { name: "Page 1 of 3" });
+    expect(page1.querySelector('[data-marker-id="ann_3"]')?.className).toContain(
+      "law-mark-focused",
+    );
+
+    // Row hover → rect emphasis, released on leave.
+    const row1 = panel.querySelector('[data-mark-id="ann_1"]') as HTMLElement;
+    fireEvent.mouseEnter(row1);
+    expect(page1.querySelector('[data-marker-id="ann_1"]')?.className).toContain(
+      "law-mark-hovered",
+    );
+    fireEvent.mouseLeave(row1);
+    expect(page1.querySelector('[data-marker-id="ann_1"]')?.className).not.toContain(
+      "law-mark-hovered",
+    );
   });
 
   it("an empty document answers honestly", async () => {

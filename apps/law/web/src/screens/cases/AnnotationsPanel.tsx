@@ -1,27 +1,41 @@
 /**
  * The marks panel (DD-010's consumption surface #2): every mark on the
- * open document — author, date, what was marked, the comment, and
- * jump-to-page — readable without hunting through pages. Append-only
- * like the resource: no edit, no delete, and the panel offers neither.
+ * open document — its number, author, date, what was marked, the
+ * comment, and jump-to-mark — readable without hunting through pages.
+ * Append-only like the resource: no edit, no delete, and the panel
+ * offers neither.
+ *
+ * Row numbers are creation order (index + 1 over the oldest-first
+ * list) — the same derivation DocumentViewer feeds the on-page badges,
+ * consistent by construction because both read the one cached list.
+ * The row and its badge link both ways: jumping from a row focuses the
+ * mark on the page; selecting a badge marks the row current
+ * (aria-current) and scrolls it into view; hovering a row emphasizes
+ * the mark's rects.
  *
  * The panel is ALSO where a pending mark becomes real: the draft form
  * renders at the top (comment required — a mark without a comment is
  * not the feature). A panel form instead of an on-page popover is
  * deliberate: it is keyboard-reachable by construction, needs no
  * portal/z-index machinery over the reader, and keeps the page surface
- * for reading. This makes the panel the feature's one a11y surface —
- * drawing has no keyboard path (recorded limitation), consuming and
- * commenting do.
+ * for reading. This makes the panel the feature's one FULL a11y
+ * surface — drawing has no keyboard path (recorded limitation);
+ * consuming, commenting, and mark selection (the badges are real
+ * buttons) do.
  */
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { ConnectError } from "@connectrpc/connect";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { Badge } from "../../components/Badge.js";
 import { Button } from "../../components/Button.js";
 import { FormError, Label, TextArea } from "../../components/Field.js";
 import type { MarkRect } from "../../components/marking/rect.js";
-import { AnnotationKind } from "../../gen/stigmer/law/documentannotation/v1/documentannotation_pb.js";
+import {
+  AnnotationKind,
+  type DocumentAnnotation,
+} from "../../gen/stigmer/law/documentannotation/v1/documentannotation_pb.js";
 import { formatInstant } from "../../lib/format.js";
 import { useFirmRoster } from "../members/queries.js";
 import { useAddAnnotation, useDocumentAnnotations } from "./queries.js";
@@ -40,13 +54,17 @@ export function AnnotationsPanel(props: {
   caseId: string;
   draft: MarkDraft | null;
   onDraftDone: () => void;
-  onJumpToPage: (page: number) => void;
+  /** The mark selected on either surface (owned by DocumentViewer). */
+  focusedMark: { readonly id: string; readonly nonce: number } | null;
+  onJumpToMark: (mark: DocumentAnnotation) => void;
+  onHoverMark: (id: string | null) => void;
 }) {
   const annotations = useDocumentAnnotations(props.documentId);
   const addAnnotation = useAddAnnotation(props.documentId);
   const roster = useFirmRoster();
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | undefined>();
+  const listRef = useRef<HTMLUListElement>(null);
 
   // A body left half-typed for a previous draft must not leak into a
   // new one; the form's autoFocus puts the caret in the comment box the
@@ -56,6 +74,18 @@ export function AnnotationsPanel(props: {
     setBody("");
     setError(undefined);
   }, [draft]);
+
+  // A badge selection on the page answers here: the row scrolls into
+  // view (keyed on the nonce so re-selections answer too). Guarded:
+  // jsdom implements no scrollIntoView.
+  const { focusedMark } = props;
+  useEffect(() => {
+    if (!focusedMark) return;
+    const row = listRef.current?.querySelector(
+      `[data-mark-id="${CSS.escape(focusedMark.id)}"]`,
+    );
+    row?.scrollIntoView?.({ block: "nearest" });
+  }, [focusedMark]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -127,15 +157,26 @@ export function AnnotationsPanel(props: {
           </EmptyState>
         )}
         {annotations.isSuccess && annotations.data.items.length > 0 && (
-          <ul className="rounded-card border border-line bg-surface">
-            {annotations.data.items.map((mark) => {
+          <ul ref={listRef} className="rounded-card border border-line bg-surface">
+            {annotations.data.items.map((mark, index) => {
               const createdAt = mark.metadata?.createdAt;
+              const id = mark.metadata?.id ?? "";
+              const current = props.focusedMark?.id === id;
               return (
                 <li
-                  key={mark.metadata?.id}
-                  className="border-b border-line px-3 py-2 last:border-b-0"
+                  key={id}
+                  data-mark-id={id}
+                  aria-current={current || undefined}
+                  className={`border-b border-line px-3 py-2 last:border-b-0 ${
+                    current ? "bg-brand-surface" : ""
+                  }`}
+                  onMouseEnter={() => props.onHoverMark(id)}
+                  onMouseLeave={() => props.onHoverMark(null)}
                 >
                   <p className="text-xs text-ink-muted">
+                    {/* The number is the mark's identity across surfaces —
+                        it matches the badge pinned at the rect on the page. */}
+                    <Badge tone="warn">{index + 1}</Badge>{" "}
                     <span className="font-medium text-ink">
                       {/* Audit fields carry USER ids; the roster maps them. */}
                       {roster.data?.nameOfUser(mark.metadata?.createdBy?.id ?? "") ?? "…"}
@@ -150,7 +191,9 @@ export function AnnotationsPanel(props: {
                     <p className="mt-1 text-xs text-ink-faint">Marked region</p>
                   )}
                   <p className="mt-1 whitespace-pre-wrap">{mark.spec?.body}</p>
-                  <Button onClick={() => props.onJumpToPage(mark.spec?.page ?? 1)}>
+                  {/* The wording stays "Page N" (where the mark lives); the
+                      landing is the mark itself, at the reading line. */}
+                  <Button onClick={() => props.onJumpToMark(mark)}>
                     Page {mark.spec?.page} →
                   </Button>
                 </li>

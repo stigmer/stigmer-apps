@@ -24,6 +24,17 @@
  * panel (AnnotationsPanel) takes the required comment and creates.
  * Marks render through the kit's MarkerLayer on both surfaces.
  *
+ * MARK IDENTITY: every saved mark carries a stable NUMBER — its
+ * position in creation order, derived per render, never stored. Sound
+ * because the resource is append-only (create + list, oldest-first by
+ * server contract): the third mark ever made is Mark 3 forever. The
+ * number is what lets two same-page marks be told apart, and this
+ * component owns the linking state both surfaces share: the focused
+ * mark (selected on either side — the panel row lights up AND the
+ * on-page rects pulse) and the hovered mark (pointed at on one side,
+ * emphasized on the other). Jumps land ON the mark's rect at the
+ * reading line, not at the page top.
+ *
  * Images still render as a plain img on a blob object URL — now inside
  * a relative box so the same marking kit covers them (an image is one
  * page: page = 1). Download rides the same URL for both kinds; the URL
@@ -78,17 +89,33 @@ function useObjectUrl(blob: Blob | undefined): string | undefined {
 const SURFACE_CLASS =
   "h-[calc(100dvh-11rem)] w-full rounded-card border border-line bg-surface";
 
+/** The mark selected on either surface. The nonce makes a re-selection
+ * observable (it keys the pulsing rects, so clicking the same row
+ * again replays the flash — CSS animations restart only on remount). */
+interface MarkFocus {
+  readonly id: string;
+  readonly nonce: number;
+}
+
 /** Saved marks + the pending draft, as the kit renders them. The draft
- * previews in place so what gets saved is what was seen. */
+ * previews in place so what gets saved is what was seen.
+ *
+ * Numbers are assigned over the FULL list before the page filter —
+ * a mark's number is its position in the document's creation order
+ * (the panel's row order), not its position on the page. */
 function markersForPage(
   annotations: readonly DocumentAnnotation[],
   draft: MarkDraft | null,
   page: number,
+  focusedId: string | null,
+  hoveredId: string | null,
 ): Marker[] {
-  const markers: Marker[] = annotations
-    .filter((mark) => mark.spec?.page === page)
-    .map((mark) => ({
-      id: mark.metadata?.id ?? "",
+  const markers: Marker[] = [];
+  annotations.forEach((mark, index) => {
+    if (mark.spec?.page !== page) return;
+    const id = mark.metadata?.id ?? "";
+    markers.push({
+      id,
       rects: (mark.spec?.rects ?? []).map((rect) => ({
         left: rect.left,
         top: rect.top,
@@ -97,7 +124,12 @@ function markersForPage(
       })),
       appearance:
         mark.spec?.annotationKind === AnnotationKind.REGION ? "region" : "highlight",
-    }));
+      label: String(index + 1),
+      ariaLabel: `Mark ${index + 1} on page ${page}`,
+      focused: focusedId === id,
+      hovered: hoveredId === id,
+    });
+  });
   if (draft && draft.page === page) {
     markers.push({ id: "draft", rects: draft.rects, appearance: draft.kind });
   }
@@ -115,6 +147,9 @@ export function DocumentViewer(props: {
   const objectUrl = useObjectUrl(bytes.data);
   const annotations = useDocumentAnnotations(props.documentId);
   const [draft, setDraft] = useState<MarkDraft | null>(null);
+  /** The linking state both surfaces share (see the header). */
+  const [focusedMark, setFocusedMark] = useState<MarkFocus | null>(null);
+  const [hoveredMarkId, setHoveredMarkId] = useState<string | null>(null);
   const readerController = useRef<PdfReaderController | null>(null);
 
   const fileName = doc.data?.spec?.fileName ?? "Document";
@@ -124,11 +159,27 @@ export function DocumentViewer(props: {
 
   // ---- the reader's marking seams (stability contract: PdfReaderProps) ----
 
+  const onSelectMark = useCallback((id: string) => {
+    setFocusedMark((prev) => ({ id, nonce: (prev?.nonce ?? 0) + 1 }));
+  }, []);
+  const onHoverMark = useCallback((id: string | null) => setHoveredMarkId(id), []);
+
   const renderPageOverlay = useCallback(
     (page: number) => (
-      <MarkerLayer markers={markersForPage(annotationItems ?? [], draft, page)} />
+      <MarkerLayer
+        markers={markersForPage(
+          annotationItems ?? [],
+          draft,
+          page,
+          focusedMark?.id ?? null,
+          hoveredMarkId,
+        )}
+        focusNonce={focusedMark?.nonce}
+        onSelect={onSelectMark}
+        onHover={onHoverMark}
+      />
     ),
-    [annotationItems, draft],
+    [annotationItems, draft, focusedMark, hoveredMarkId, onSelectMark, onHoverMark],
   );
 
   const selectionAction = useMemo(
@@ -154,8 +205,17 @@ export function DocumentViewer(props: {
     [],
   );
 
-  const onJumpToPage = useCallback((page: number) => {
-    readerController.current?.scrollToPage(page);
+  // Jump lands ON the mark (its first rect at the reading line) and
+  // focuses it, so the landing is unambiguous even among same-page
+  // marks. On the image surface no controller exists — ImageSurface
+  // scrolls its own (unwindowed) box to the focused mark itself.
+  const onJumpToMark = useCallback((mark: DocumentAnnotation) => {
+    const id = mark.metadata?.id ?? "";
+    setFocusedMark((prev) => ({ id, nonce: (prev?.nonce ?? 0) + 1 }));
+    const page = mark.spec?.page ?? 1;
+    const rect = mark.spec?.rects[0];
+    if (rect) readerController.current?.scrollToRect(page, rect);
+    else readerController.current?.scrollToPage(page);
   }, []);
 
   function onDownload() {
@@ -204,7 +264,16 @@ export function DocumentViewer(props: {
                 <ImageSurface
                   src={objectUrl}
                   alt={fileName}
-                  markers={markersForPage(annotationItems ?? [], draft, 1)}
+                  markers={markersForPage(
+                    annotationItems ?? [],
+                    draft,
+                    1,
+                    focusedMark?.id ?? null,
+                    hoveredMarkId,
+                  )}
+                  focus={focusedMark}
+                  onSelectMark={onSelectMark}
+                  onHoverMark={onHoverMark}
                   onRegion={(rect) =>
                     setDraft({ page: 1, kind: "region", rects: [rect], quotedText: "" })
                   }
@@ -219,7 +288,9 @@ export function DocumentViewer(props: {
                 caseId={caseId}
                 draft={draft}
                 onDraftDone={() => setDraft(null)}
-                onJumpToPage={onJumpToPage}
+                focusedMark={focusedMark}
+                onJumpToMark={onJumpToMark}
+                onHoverMark={onHoverMark}
               />
             </div>
           </aside>
@@ -236,14 +307,32 @@ export function DocumentViewer(props: {
  * max-w-full only ever scales proportionally). No highlight affordance
  * exists here and none is faked: an image has no text to select
  * (DD-010's capability matrix); the region tool is the mark.
+ *
+ * Jump-to-mark here is DOM-native scrollIntoView on the focused rect
+ * (the kit stamps data-marker-id): this box is one unwindowed scroller,
+ * so no layout math is warranted — the reader's scrollToRect exists
+ * because ITS pages mount and unmount under windowing.
  */
 function ImageSurface(props: {
   src: string;
   alt: string;
   markers: readonly Marker[];
+  focus: { readonly id: string; readonly nonce: number } | null;
+  onSelectMark: (id: string) => void;
+  onHoverMark: (id: string | null) => void;
   onRegion: (rect: MarkRect) => void;
 }) {
   const [regionArmed, setRegionArmed] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  const { focus } = props;
+  useEffect(() => {
+    if (!focus) return;
+    const rect = boxRef.current?.querySelector(`[data-marker-id="${CSS.escape(focus.id)}"]`);
+    // Guarded: jsdom implements no scrollIntoView.
+    rect?.scrollIntoView?.({ block: "center" });
+  }, [focus]);
+
   return (
     <div className={`${SURFACE_CLASS} flex flex-col overflow-hidden`}>
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line bg-surface px-2">
@@ -264,9 +353,14 @@ function ImageSurface(props: {
           }
         }}
       >
-        <div className="relative mx-auto w-fit">
+        <div ref={boxRef} className="relative mx-auto w-fit">
           <img src={props.src} alt={props.alt} className="block max-w-full" />
-          <MarkerLayer markers={props.markers} />
+          <MarkerLayer
+            markers={props.markers}
+            focusNonce={props.focus?.nonce}
+            onSelect={props.onSelectMark}
+            onHover={props.onHoverMark}
+          />
           {regionArmed && (
             <RegionDrawLayer
               onCapture={(rect) => {

@@ -23,3 +23,70 @@
   border: 2px dashed color-mix(in srgb, var(--law-brand) 70%, transparent);
   border-radius: 3px;
 }
+
+/*
+ * The numbered badge — the mark's on-page identity. FIXED CSS-px size
+ * on purpose: rects scale with zoom (percentages of the page box), but
+ * a number must stay readable at 50% and sane at 300%. Solid warn-on-
+ * warn-surface is the token sheet's documented AA pairing; the
+ * translucent mixes above stay rect-only because a badge, unlike a
+ * mark, may cover what it sits on — it IS the label.
+ */
+.law-mark-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--law-warn) 45%, transparent);
+  background-color: var(--law-warn-surface);
+  color: var(--law-warn);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Default placement: in the page margin beside the rect's first line.
+ * Rects starting too close to the surface's left edge to fit a badge
+ * keep it inside the corner instead (MarkerLayer's flip rule) — a
+ * badge must never clip off-surface. */
+.law-mark-badge-margin {
+  transform: translateX(calc(-100% - 4px));
+}
+
+.law-mark-badge[aria-pressed="true"] {
+  border-color: var(--law-warn);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--law-warn) 35%, transparent);
+}
+
+/* Cross-surface emphasis: hovering a panel row lights the rects; the
+ * selected mark holds a ring. Brand, not warn — pointing is an action,
+ * and every mark is already warn. */
+.law-mark-hovered {
+  outline: 2px solid color-mix(in srgb, var(--law-brand) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.law-mark-focused {
+  outline: 2px solid color-mix(in srgb, var(--law-brand) 80%, transparent);
+  outline-offset: 1px;
+  animation: law-mark-pulse 0.9s ease-out 2;
+}
+
+@keyframes law-mark-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--law-brand) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .law-mark-focused {
+    animation: none;
+  }
+}
