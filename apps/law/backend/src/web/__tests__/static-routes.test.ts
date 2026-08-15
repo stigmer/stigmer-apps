@@ -27,6 +27,12 @@ describe("static routes (T04b D1)", () => {
     writeFileSync(path.join(root, "favicon.svg"), "<svg/>");
     mkdirSync(path.join(root, "assets"));
     writeFileSync(path.join(root, "assets", "app-abc123.js"), ASSET_JS);
+    writeFileSync(path.join(root, "assets", "pdf.worker.min-x1y2z3.mjs"), "export {};");
+    // The T12 layout: verbatim-copied (unhashed) pdfjs data files in
+    // their own top-level dir — NOT assets/, whose immutable cache
+    // rule would year-stale them across pdfjs upgrades.
+    mkdirSync(path.join(root, "pdf-assets", "cmaps"), { recursive: true });
+    writeFileSync(path.join(root, "pdf-assets", "cmaps", "78-H.bcmap"), "cmapbytes");
     // A file OUTSIDE the web root — the traversal target.
     writeFileSync(path.join(root, "..", "law-static-secret.txt"), "secret");
 
@@ -61,6 +67,23 @@ describe("static routes (T04b D1)", () => {
     expect(res.headers.get("content-type")).toContain("text/javascript");
     expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
     expect(await res.text()).toBe(ASSET_JS);
+  });
+
+  it("serves .mjs with a JavaScript MIME type — module workers refuse octet-stream (T12)", async () => {
+    const res = await fetch(`${baseUrl}/assets/pdf.worker.min-x1y2z3.mjs`);
+    expect(res.status).toBe(200);
+    // Chromium enforces a JS MIME type for module scripts/workers; the
+    // octet-stream fallback made the pdfjs worker silently unloadable.
+    expect(res.headers.get("content-type")).toContain("text/javascript");
+    expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+  });
+
+  it("serves nested unhashed pdf data files with revalidation, not immutability (T12)", async () => {
+    const res = await fetch(`${baseUrl}/pdf-assets/cmaps/78-H.bcmap`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/octet-stream");
+    expect(res.headers.get("cache-control")).toBe("no-cache");
+    expect(await res.text()).toBe("cmapbytes");
   });
 
   it("serves other files with revalidation", async () => {

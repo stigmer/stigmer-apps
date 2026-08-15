@@ -11,14 +11,13 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { ASHA, SEED_CASE } from "./fixtures.js";
+import { makeTextPdf } from "./test-pdf.js";
 
-// A 1×1 PNG for the reading-frame scan: axe cannot inject into a PDF
-// plugin frame, so the scanned document is an image (cases.spec makes
-// the same choice for the same reason).
-const PNG_BYTES = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-  "base64",
-);
+// The reading-frame scan uses a REAL text PDF: the T12 pdfjs reader is
+// ordinary DOM (unlike the retired native plugin frame axe could never
+// inject into), so the viewer chrome, find bar, and page landmarks all
+// face the same gate as every screen — a first.
+const PDF_BYTES = makeTextPdf(["FICTIONAL AXE FIXTURE - one page of readable text"]);
 
 async function signIn(page: Page) {
   await page.goto("/login");
@@ -110,18 +109,25 @@ test("accessibility: no serious or critical axe violations on any screen", async
   await expect(page.getByRole("heading", { name: SEED_CASE.fileNumber })).toBeVisible();
   await scan("case detail");
 
-  // The document reading frame (T09.2): upload a fixture and open it —
-  // the viewer chrome faces the same gate as every screen.
+  // The document reading frame (T09.2/T12): upload a fixture, open the
+  // pdfjs reader, and open its find bar — the full viewer chrome faces
+  // the same gate as every screen.
   await page.getByRole("button", { name: "Documents" }).click();
   await page
     .locator("#document-upload")
-    .setInputFiles([{ name: "axe-fixture.png", mimeType: "image/png", buffer: PNG_BYTES }]);
+    .setInputFiles([{ name: "axe-fixture.pdf", mimeType: "application/pdf", buffer: PDF_BYTES }]);
   await page
     .getByRole("listitem")
-    .filter({ hasText: "axe-fixture.png" })
+    .filter({ hasText: "axe-fixture.pdf" })
     .getByRole("button", { name: "View" })
     .click();
-  await expect(page.getByRole("img", { name: "axe-fixture.png" })).toBeVisible();
+  // exact: substring matching would also answer the outer
+  // "Document axe-fixture.pdf" frame (see cases.spec).
+  const reader = page.getByRole("region", { name: "axe-fixture.pdf", exact: true });
+  await expect(reader).toBeVisible();
+  await expect(reader.getByText(/FICTIONAL AXE FIXTURE/)).toBeVisible();
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByLabel("Find in document")).toBeVisible();
   await scan("document viewer");
 
   await page.goto("/clients");
@@ -144,4 +150,16 @@ test("accessibility: no serious or critical axe violations on any screen", async
 
   await page.goto("/profile");
   await scan("profile");
+});
+
+test("the pdfjs asset directories ship beside the build (T12)", async ({ page }) => {
+  // Standard fonts are implicitly proven by the reader tests (the
+  // fixture's non-embedded Helvetica cannot render without them), but
+  // CMaps are fetched only by CID-encoded documents no fixture covers —
+  // this probe is their artifact-presence gate (the missing-worker
+  // defect class, session 14).
+  const cmap = await page.request.get("/pdf-assets/cmaps/78-H.bcmap");
+  expect(cmap.status()).toBe(200);
+  const font = await page.request.get("/pdf-assets/standard_fonts/FoxitFixed.pfb");
+  expect(font.status()).toBe(200);
 });

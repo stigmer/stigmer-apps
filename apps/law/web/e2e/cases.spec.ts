@@ -8,14 +8,19 @@
 
 import { expect, test, type Page } from "@playwright/test";
 import { ASHA } from "./fixtures.js";
+import { makeTextPdf } from "./test-pdf.js";
 
-const PDF_BYTES = Buffer.from(
-  "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n",
-);
+// A real multi-page text-layer PDF (fictional by construction): the
+// T12 pdfjs reader renders in headless Chromium — unlike the retired
+// native plugin frame — so the suite asserts REAL page content now.
+const PDF_PAGES = [
+  "FICTIONAL VAKALATNAMA - Beta Industries authorizes counsel",
+  "The limitation period is preserved by this filing",
+  "Prayer: adjournment sought for recording evidence",
+] as const;
+const PDF_BYTES = makeTextPdf(PDF_PAGES);
 
-// A 1×1 PNG: the View assertion uses an image because headless Chromium
-// has no PDF viewer (a PDF popup degrades to a download there, while
-// headed Chrome renders it) — the image proves the view path end to end.
+// A 1×1 PNG for the image renderer's decoded-pixels proof.
 const PNG_BYTES = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
   "base64",
@@ -106,18 +111,73 @@ test("intake → diary → recorded outcome auto-schedules → notes → documen
   await pdfRow.getByRole("button", { name: "Download" }).click();
   expect((await downloadEvent).suggestedFilename()).toBe("vakalatnama.pdf");
 
-  // View opens the IN-APP reading frame (T09.2) — same window, the URL
-  // carrying ?doc=. Headless Chromium renders no PDF plugin, so the PDF
-  // assertion is the frame + blob src; the PNG below proves rendering.
+  // View opens the IN-APP reading frame (T09.2/T12) — same window, the
+  // URL carrying ?doc=. The pdfjs reader renders in headless CI, so
+  // the assertions are REAL: painted canvas pixels, the selectable
+  // text layer's content, and the app-owned chrome.
   await pdfRow.getByRole("button", { name: "View" }).click();
-  await expect(page.locator('iframe[title="vakalatnama.pdf"]')).toHaveAttribute(
-    "src",
-    /^blob:/,
-  );
+  // exact: the outer frame is "Document vakalatnama.pdf"; the reading
+  // surface itself is the bare file name — Playwright name matching is
+  // substring by default and the weak form matched the frame even when
+  // the reader had failed into its error state.
+  const reader = page.getByRole("region", { name: "vakalatnama.pdf", exact: true });
+  await expect(reader).toBeVisible();
   expect(page.url()).toContain("doc=");
+  await expect(page.getByText(`/ ${PDF_PAGES.length}`)).toBeVisible();
+
+  // Page 1's text layer carries the actual document text — this is
+  // what makes selection (and T13's highlights) possible, and it only
+  // renders if the worker AND the standard-font assets shipped.
+  await expect(reader.getByText(PDF_PAGES[0])).toBeVisible();
+  // Painted pixels, not just elements: sample the canvas for any
+  // non-blank pixel — the honest replacement for the retired
+  // "frame + blob: src" workaround that could not see inside the
+  // native plugin.
+  await expect
+    .poll(() =>
+      reader
+        .locator("canvas")
+        .first()
+        .evaluate((el) => {
+          const canvas = el as HTMLCanvasElement;
+          const context = canvas.getContext("2d");
+          if (!context || canvas.width === 0) return false;
+          const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+          for (let i = 0; i < data.length; i += 401) {
+            if (data[i] !== 255 && data[i] !== 0) return true;
+          }
+          return false;
+        }),
+    )
+    .toBe(true);
+
+  // The in-viewer find searches the WHOLE document: the phrase lives
+  // on page 3, outside the initial render window.
+  await page.getByRole("button", { name: "Find" }).click();
+  await page.getByLabel("Find in document").fill("adjournment sought");
+  await expect(page.getByText("1 of 1")).toBeVisible();
+  await page.getByLabel("Find in document").press("Enter");
+  await expect(page.getByLabel("Go to page")).toHaveValue("3");
+  await expect(reader.getByText(PDF_PAGES[2])).toBeVisible();
+
+  // Zoom is app-owned chrome now; the percent display follows.
+  const zoomBefore = await page.getByText(/%$/).textContent();
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  await expect(page.getByText(/%$/)).not.toHaveText(zoomBefore ?? "");
+
   // exact: the sidebar's "Close navigation" also answers to /Close/.
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await expect(docs.getByText("vakalatnama.pdf")).toBeVisible();
+
+  // The ?page= deep link (the assistant-citation / search-hit seam):
+  // app-controlled scroll-to-page, asserted by the indicator.
+  await pdfRow.getByRole("button", { name: "View" }).click();
+  await expect(reader).toBeVisible();
+  const deepLink = new URL(page.url());
+  deepLink.searchParams.set("page", "2");
+  await page.goto(deepLink.toString());
+  await expect(page.getByLabel("Go to page")).toHaveValue("2");
+  await page.getByRole("button", { name: "Close", exact: true }).click();
 
   const pngRow = docs.getByRole("listitem").filter({ hasText: "order-sheet.png" });
   await pngRow.getByRole("button", { name: "View" }).click();

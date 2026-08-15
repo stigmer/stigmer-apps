@@ -133,7 +133,8 @@ export function CaseDocuments(props: { caseId: string }) {
 
   function onOpenHit(documentId: string, atPage: number) {
     // Same PUSH semantics as View, landing the reading frame on the
-    // cited page (?page rides as the PDF #page= fragment).
+    // cited page (?page is the reader's app-controlled scroll-to-page
+    // since T12; input-only — scrolling never writes it back).
     setSearchParams((params) => {
       params.set("doc", documentId);
       params.set("page", String(atPage));
