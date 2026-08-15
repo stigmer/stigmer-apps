@@ -1,0 +1,47 @@
+/*
+ * Scoped styles for the pdf reading surface — loaded WITH the lazy
+ * chunk (the assistant.css precedent), so the main bundle carries
+ * none of it.
+ *
+ * The text layer rules are the minimal contract pdfjs's TextLayer
+ * needs from its host: an absolutely positioned overlay whose spans
+ * (positioned by pdfjs via --scale-factor calc()) carry REAL text,
+ * painted transparent so the canvas below shows through — selection
+ * and find work on the text, the eye reads the paint.
+ */
+
+.law-pdf-text-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  caret-color: CanvasText;
+}
+
+.law-pdf-text-layer span {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+/* Colors come from the app's one token source (--law-*, styles/app.css)
+ * — mixed to translucency here because a highlight must never fully
+ * cover the glyphs it marks. */
+.law-pdf-text-layer ::selection {
+  background: color-mix(in srgb, var(--law-brand) 35%, transparent);
+}
+
+/* Find highlighting rides the CSS Custom Highlight API (highlight.ts
+ * builds the ranges); browsers without it lose only the visual — the
+ * count and navigation still work. */
+::highlight(law-pdf-find) {
+  background-color: color-mix(in srgb, var(--law-warn) 40%, transparent);
+}
+
+::highlight(law-pdf-find-current) {
+  background-color: color-mix(in srgb, var(--law-brand) 45%, transparent);
+}

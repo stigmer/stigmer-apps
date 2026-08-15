@@ -1,16 +1,17 @@
 /**
- * The in-app reading frame (T09.2): ?doc=<id> is derived from the URL
- * like the tab contract, swaps the whole detail frame, renders by mime
- * (iframe for PDF, img for images) on a blob object URL whose lifetime
- * IS the viewer's — jsdom has no createObjectURL, so the suite stubs
- * the pair and asserts create/revoke actually pair, turning the blob
- * lifecycle from a comment into a tested invariant.
+ * The in-app reading frame (T09.2, re-rendered by T12): ?doc=<id> is
+ * derived from the URL like the tab contract, swaps the whole detail
+ * frame, and renders by mime — the pdfjs reader for PDFs (mocked at
+ * its ONE seam, src/pdf/pdfjs.ts; jsdom paints no canvas — real
+ * rendering is Playwright's assertion), an img on a blob object URL
+ * for images. The object URL (still the Download path for both kinds)
+ * keeps its tested create/revoke pairing.
  */
 
 import { create } from "@bufbuild/protobuf";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { CaseSchema, ClientRole } from "../../../gen/stigmer/law/case/v1/case_pb.js";
 import { ListCaseMembersResponseSchema } from "../../../gen/stigmer/law/casemember/v1/casemember_pb.js";
 import { ClientSchema } from "../../../gen/stigmer/law/client/v1/client_pb.js";
@@ -19,8 +20,41 @@ import {
   DocumentSchema,
   ListDocumentsResponseSchema,
 } from "../../../gen/stigmer/law/document/v1/document_pb.js";
+import { computeLayout, scrollOffsetForPage } from "../../../pdf/geometry.js";
 import { fakeFirmMembers, renderScreen } from "../../../test-support/render.js";
 import { CaseDetailScreen } from "../CaseDetailScreen.js";
+
+const PAGE_COUNT = 5;
+const PAGE_SIZE = { width: 612, height: 792 };
+
+vi.mock("../../../pdf/pdfjs.js", () => ({
+  getDocument: (_args: { data: unknown }) => ({
+    promise: Promise.resolve({
+      numPages: PAGE_COUNT,
+      getPage: async () => ({
+        getViewport: ({ scale }: { scale: number }) => ({
+          width: PAGE_SIZE.width * scale,
+          height: PAGE_SIZE.height * scale,
+          scale,
+        }),
+        render: () => ({ promise: Promise.resolve(), cancel() {} }),
+        streamTextContent: () => ({}),
+        getTextContent: async () => ({ items: [{ str: "" }] }),
+      }),
+    }),
+    destroy: async () => {},
+  }),
+  OutputScale: class {
+    sx = 1;
+    sy = 1;
+    scaled = false;
+  },
+  TextLayer: class {
+    async render() {}
+    cancel() {}
+  },
+  PDF_ASSET_OPTIONS: {},
+}));
 
 const MATTER = create(CaseSchema, {
   metadata: { id: "case_1" },
@@ -60,6 +94,12 @@ const PNG_DOC = create(DocumentSchema, {
   },
 });
 
+/** jsdom's Blob lacks arrayBuffer(); the byte route answers this
+ * blob-shaped stand-in with exactly the surface the viewer consumes. */
+function fakeBytes(type: string) {
+  return { type, arrayBuffer: async () => new ArrayBuffer(8) } as unknown as Blob;
+}
+
 function fakeClients() {
   return {
     cases: { get: vi.fn(async () => MATTER) },
@@ -79,7 +119,9 @@ function fakeClients() {
     },
     files: {
       uploadDocument: vi.fn(),
-      downloadDocument: vi.fn(async () => new Blob(["bytes"], { type: "application/pdf" })),
+      downloadDocument: vi.fn(async (id: string) =>
+        fakeBytes(id === "doc_pdf" ? "application/pdf" : "image/png"),
+      ),
     },
     firmMembers: fakeFirmMembers(),
   };
@@ -100,51 +142,68 @@ const revokeObjectURL = vi.fn();
 URL.createObjectURL = createObjectURL;
 URL.revokeObjectURL = revokeObjectURL;
 
-beforeEach(() => {
-  urlCounter = 0;
-  createObjectURL.mockClear();
-  revokeObjectURL.mockClear();
+// The reader's fit-width hook observes its frame; jsdom has no
+// ResizeObserver (per-suite stub, the matchMedia precedent).
+beforeAll(() => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
 });
-
 afterAll(() => {
+  vi.unstubAllGlobals();
   // @ts-expect-error — restoring jsdom's original (absent) surface.
   delete URL.createObjectURL;
   // @ts-expect-error — restoring jsdom's original (absent) surface.
   delete URL.revokeObjectURL;
 });
 
+beforeEach(() => {
+  urlCounter = 0;
+  createObjectURL.mockClear();
+  revokeObjectURL.mockClear();
+});
+
 describe("DocumentViewer (URL-derived reading frame)", () => {
-  it("a ?doc= deep link swaps the frame for the PDF iframe on a blob URL", async () => {
+  it("a ?doc= deep link swaps the frame for the pdf reader", async () => {
     renderDetail(fakeClients(), "/cases/case_1?tab=Documents&doc=doc_pdf");
 
-    const frame = await screen.findByTitle("vakalatnama.pdf");
-    expect(frame).toHaveAttribute("src", "blob:test-1");
+    // The reader's reading surface, named by the file (the lazy chunk
+    // and the fake document both resolve inside this wait).
+    expect(await screen.findByRole("region", { name: "vakalatnama.pdf" })).toBeInTheDocument();
+    expect(await screen.findByText(`/ ${PAGE_COUNT}`)).toBeInTheDocument();
     expect(screen.getByText("Vakalatnama")).toBeInTheDocument();
     // The whole frame swapped: no rail, no tab strip.
     expect(screen.queryByRole("complementary", { name: "Matter facts" })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Matter sections" })).not.toBeInTheDocument();
   });
 
-  it("?page= rides as the PDF open-parameter fragment (the citation seam)", async () => {
+  it("?page= scrolls the reader to the cited page (the citation seam)", async () => {
     renderDetail(fakeClients(), "/cases/case_1?doc=doc_pdf&page=4");
 
-    const frame = await screen.findByTitle("vakalatnama.pdf");
-    expect(frame).toHaveAttribute("src", "blob:test-1#page=4");
+    const surface = await screen.findByRole("region", { name: "vakalatnama.pdf" });
+    // jsdom reports zero frame width, so the reader falls back to
+    // scale 1 — the expectation reuses the reader's own geometry.
+    const layout = computeLayout(Array.from({ length: PAGE_COUNT }, () => PAGE_SIZE), 1);
+    await waitFor(() => expect(surface.scrollTop).toBe(scrollOffsetForPage(layout, 4)));
   });
 
-  it("an image document renders as an img, not an iframe", async () => {
+  it("an image document renders as an img, not the pdf reader", async () => {
     renderDetail(fakeClients(), "/cases/case_1?doc=doc_png");
 
     const image = await screen.findByRole("img", { name: "order-sheet.png" });
     expect(image).toHaveAttribute("src", "blob:test-1");
-    expect(screen.queryByTitle("order-sheet.png")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "order-sheet.png" })).not.toBeInTheDocument();
   });
 
-  it("Close lands on the Documents tab and revokes the blob URL", async () => {
+  it("Close lands on the Documents tab and revokes the Download blob URL", async () => {
     const clients = fakeClients();
     const router = renderDetail(clients, "/cases/case_1?tab=Documents&doc=doc_pdf");
 
-    await screen.findByTitle("vakalatnama.pdf");
+    await screen.findByRole("region", { name: "vakalatnama.pdf" });
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
 
     expect(await screen.findByRole("region", { name: "Documents" })).toBeInTheDocument();
@@ -162,7 +221,7 @@ describe("DocumentViewer (URL-derived reading frame)", () => {
     const viewButtons = await screen.findAllByRole("button", { name: "View" });
     await userEvent.click(viewButtons[0]!);
 
-    expect(await screen.findByTitle("vakalatnama.pdf")).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "vakalatnama.pdf" })).toBeInTheDocument();
     expect(router.state.location.search).toBe("?tab=Documents&doc=doc_pdf");
   });
 
@@ -171,6 +230,6 @@ describe("DocumentViewer (URL-derived reading frame)", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("doc_foreign");
-    expect(screen.queryByTitle("vakalatnama.pdf")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "vakalatnama.pdf" })).not.toBeInTheDocument();
   });
 });

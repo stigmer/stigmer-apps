@@ -25,6 +25,14 @@ import {
 import { fakeFirmMembers, renderScreen } from "../../../test-support/render.js";
 import { CaseDetailScreen } from "../CaseDetailScreen.js";
 
+// Opening a hit navigates INTO the reading frame, which lazy-loads the
+// pdfjs reader — out of scope here (document-viewer.test.tsx and the
+// pdf suites own it), so the chunk is stubbed to keep this suite about
+// the search contract and jsdom free of pdfjs.
+vi.mock("../../../pdf/PdfReader.js", () => ({
+  default: (props: { label: string }) => <div role="region" aria-label={props.label} />,
+}));
+
 const MATTER = create(CaseSchema, {
   metadata: { id: "case_1" },
   spec: {
@@ -80,7 +88,9 @@ function fakeClients(searchItems: (typeof HIT_PAGE)[]) {
         create(SearchDocumentPagesResponseSchema, { items: searchItems }),
       ),
     },
-    files: { uploadDocument: vi.fn(), downloadDocument: vi.fn() },
+    // The opened hit's viewer fetches bytes; a shaped answer keeps the
+    // byte query defined (the reader itself is stubbed above).
+    files: { uploadDocument: vi.fn(), downloadDocument: vi.fn(async () => new Blob(["x"])) },
     firmMembers: fakeFirmMembers(),
   };
 }

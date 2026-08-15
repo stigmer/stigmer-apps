@@ -5,25 +5,32 @@
  * heart of the practice; it must not eject the lawyer into a bare
  * browser tab.
  *
- * Rendering is deliberately the browser's own: the byte routes only
- * ever hold PDF/PNG/JPEG, and an iframe/img on a blob object URL keeps
- * text selection, find, zoom, and print for free — capabilities a
- * hand-rolled PDF renderer would have to rebuild. The blob URL exists
- * exactly as long as the viewer does (created when the bytes arrive,
- * revoked on close), replacing the list's fire-and-forget timer for
- * the view path.
+ * PDFs render through the app's own pdfjs reader (src/pdf/, T12 —
+ * DD-010 fired the T09.2 named deferral): the earlier native-iframe
+ * rendering was a sealed frame with no geometry access, so the T13
+ * annotation overlay was physically impossible on it, and its chrome
+ * read as a browser plugin rather than the product. The reader carries
+ * selection, in-viewer find, zoom, and page navigation itself; `page`
+ * is app-controlled scroll-to-page now, not a #page= fragment hint.
+ * KNOWINGLY DEGRADED: the native viewer's print is gone — Download
+ * covers the need (recorded owner trade-off, T12).
  *
- * `page` rides as the PDF open-parameter fragment (#page=N) — the seam
- * the assistant's page-cited answers can deep-link into. Optional, and
- * harmless where a viewer ignores it.
+ * Images still render as a plain img on a blob object URL, and
+ * Download rides the same URL for both kinds; the URL exists exactly
+ * as long as the viewer does (created when the bytes arrive, revoked
+ * on close) — the tested pairing invariant.
  */
 
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { ErrorState, Loading } from "../../components/async.js";
 import { Badge } from "../../components/Badge.js";
 import { Button } from "../../components/Button.js";
 import { documentCategoryLabel } from "../../lib/format.js";
 import { useDocument, useDocumentBytes } from "./queries.js";
+
+// pdfjs costs the main bundle nothing: the reader chunk loads on the
+// first PDF open (the AssistantConversation precedent).
+const PdfReader = lazy(() => import("../../pdf/PdfReader.js"));
 
 /** One object URL per blob, revoked when the blob or viewer goes away. */
 function useObjectUrl(blob: Blob | undefined): string | undefined {
@@ -42,16 +49,16 @@ function useObjectUrl(blob: Blob | undefined): string | undefined {
 
 /**
  * The shell's `main` is the app's ONE scroll container (DD-019); the
- * document surface gets a bounded viewport-relative height so the PDF
- * scrolls INSIDE its frame — an unsized iframe would grow the page and
- * leak scrolling back to `main`.
+ * document surface gets a bounded viewport-relative height so pages
+ * scroll INSIDE their frame — an unsized surface would grow the page
+ * and leak scrolling back to `main`.
  */
 const SURFACE_CLASS =
   "h-[calc(100dvh-11rem)] w-full rounded-card border border-line bg-surface";
 
 export function DocumentViewer(props: {
   documentId: string;
-  /** 1-based PDF page to open at (the assistant's citation unit). */
+  /** 1-based page to open at (the assistant's citation unit). */
   page?: number;
   onClose: () => void;
 }) {
@@ -88,17 +95,22 @@ export function DocumentViewer(props: {
       )}
 
       {doc.isSuccess &&
-        objectUrl &&
+        bytes.data &&
         (isPdf ? (
-          <iframe
-            title={fileName}
-            src={props.page ? `${objectUrl}#page=${props.page}` : objectUrl}
-            className={SURFACE_CLASS}
-          />
+          <Suspense fallback={<Loading label="Opening the document…" />}>
+            <PdfReader
+              blob={bytes.data}
+              label={fileName}
+              initialPage={props.page}
+              className={SURFACE_CLASS}
+            />
+          </Suspense>
         ) : (
-          <div className={`${SURFACE_CLASS} overflow-auto p-2`}>
-            <img src={objectUrl} alt={fileName} className="mx-auto max-w-full" />
-          </div>
+          objectUrl && (
+            <div className={`${SURFACE_CLASS} overflow-auto p-2`}>
+              <img src={objectUrl} alt={fileName} className="mx-auto max-w-full" />
+            </div>
+          )
         ))}
     </section>
   );
