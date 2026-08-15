@@ -4,17 +4,28 @@
  * span-wrapped text nodes — the mapping must agree at every boundary.
  * jsdom has no CSS Custom Highlight API, which itself proves the
  * capability guard (applyFindHighlights must be a safe no-op here).
+ *
+ * The aligned suite pins the geometry contract: exact highlights only
+ * where the run's --scale-x says the browser font reproduced the
+ * embedded font's widths; divergent runs widen to the full run box
+ * (the live-measured Telugu case: --scale-x 0.456).
  */
 
 import { describe, expect, it } from "vitest";
-import { applyFindHighlights, rangeForMatch } from "../highlight.js";
+import { alignedRangeForMatch, applyFindHighlights, rangeForMatch } from "../highlight.js";
 
-/** A TextLayer-shaped container: one span per text item. */
-function makeContainer(items: readonly string[]): HTMLElement {
+/** A TextLayer-shaped container: one span per text item, optionally
+ * carrying the per-span --scale-x pdfjs writes. */
+function makeContainer(items: readonly (string | { text: string; scaleX: number })[]): HTMLElement {
   const container = document.createElement("div");
   for (const item of items) {
     const span = document.createElement("span");
-    span.textContent = item;
+    if (typeof item === "string") {
+      span.textContent = item;
+    } else {
+      span.textContent = item.text;
+      span.style.setProperty("--scale-x", String(item.scaleX));
+    }
     container.append(span);
   }
   return container;
@@ -51,6 +62,43 @@ describe("rangeForMatch", () => {
     const container = makeContainer(["short"]);
     expect(rangeForMatch(container, { start: 3, end: 99 })).toBeNull();
     expect(rangeForMatch(container, { start: 99, end: 104 })).toBeNull();
+  });
+});
+
+describe("alignedRangeForMatch (the geometry contract)", () => {
+  it("stays exact when the run declares no --scale-x (the CSS default is 1)", () => {
+    const container = makeContainer(["next hearing date"]);
+    const range = alignedRangeForMatch(container, { start: 5, end: 12 });
+    expect(range?.toString()).toBe("hearing");
+  });
+
+  it("stays exact within tolerance (the live-measured Latin case, 1.004)", () => {
+    const container = makeContainer([{ text: "next hearing date", scaleX: 1.004 }]);
+    const range = alignedRangeForMatch(container, { start: 5, end: 12 });
+    expect(range?.toString()).toBe("hearing");
+  });
+
+  it("widens to the full run when the run diverges (the live-measured Telugu case, 0.456)", () => {
+    const line = "తదుపరి విచారణ తేదీ 2026 సెప్టెంబర్ 2కి వాయిదా వేయబడింది.";
+    const container = makeContainer([{ text: line, scaleX: 0.456 }]);
+    const start = line.indexOf("వాయిదా");
+    const range = alignedRangeForMatch(container, { start, end: start + "వాయిదా".length });
+    expect(range?.toString()).toBe(line);
+  });
+
+  it("widens across every touched run when ANY of them diverges", () => {
+    const container = makeContainer([
+      { text: "faithful start ", scaleX: 1.0 },
+      { text: "దివర్జెంట్ రన్", scaleX: 0.5 },
+    ]);
+    // A phrase match spanning both runs: "start దివ..."
+    const range = alignedRangeForMatch(container, { start: 9, end: 18 });
+    expect(range?.toString()).toBe("faithful start దివర్జెంట్ రన్");
+  });
+
+  it("answers null for out-of-text offsets exactly like the exact path", () => {
+    const container = makeContainer([{ text: "short", scaleX: 0.5 }]);
+    expect(alignedRangeForMatch(container, { start: 99, end: 104 })).toBeNull();
   });
 });
 
