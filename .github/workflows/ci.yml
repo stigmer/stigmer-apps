@@ -116,21 +116,20 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium-shell
 
-      # Download and apt are SEPARATE steps with hard timeouts on
-      # purpose: on 2026-08-19 the combined install hung silently for
-      # 10-13 minutes on GitHub's runners (historical baseline: ~27s),
-      # and a single opaque step could not say which half was stuck. A
-      # hang now fails in bounded time and names its culprit.
+      # DELIBERATELY no `install-deps` step: the ubuntu-24.04 runner
+      # image ships with Google Chrome preinstalled, so every shared
+      # library the headless shell needs is already on the machine —
+      # and on 2026-08-19 the apt step proved to be the hang (GitHub's
+      # azure.archive.ubuntu.com mirror stalled apt-get update past a
+      # 5-minute timeout; the browser download itself took 5s). If a
+      # future runner image ever drops a library, the failure is loud
+      # and immediate — the browser fails to launch in the E2E step —
+      # and the fix is restoring `npx playwright install-deps chromium`
+      # here.
       - name: Install Playwright headless shell
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         timeout-minutes: 5
         run: npx playwright install --only-shell chromium
-
-      - name: Install Playwright system dependencies
-        # Needed on the cache-hit path too — the cache carries only
-        # browser binaries, never OS libraries.
-        timeout-minutes: 5
-        run: npx playwright install-deps chromium
 
       - name: Web E2E
         run: npm run test:e2e -w @law/web
