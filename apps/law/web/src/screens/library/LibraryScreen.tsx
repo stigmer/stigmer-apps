@@ -1,20 +1,21 @@
 /**
  * The Library (FR-CIT-002 + FR-DOC-005): the firm's public-record
- * shelf. Three honest piles, three simple queries — never one
+ * shelf. Two honest piles, two simple queries — never one
  * offset-spliced list:
  *
- *   1. Bare acts — the statutes' own texts, case-less by construction,
- *      linked from every matter's Acts tab ("Read the Act").
- *   2. The library's citations — judgments filed directly to the firm
+ *   1. The library's citations — judgments filed directly to the firm
  *      (no owning matter), with each one's reliance trail.
- *   3. Judgments filed on matters — the case-bound collection
+ *   2. Judgments filed on matters — the case-bound collection
  *      (FR-DOC-002), reachable through their own matter's viewer.
  *
- * The front door is HERE: upload a bare act or a standalone citation
- * firm-wide (the byte route enforces the library-categories rule).
- * Reading a library document swaps this frame for the shared viewer
- * (?doc= — the case-detail precedent); marks are a named deferral on
- * library documents, so the panel simply lists none.
+ * (Bare acts were the third pile until the acts feature was removed —
+ * owner decision, 2026-08-19.)
+ *
+ * The front door is HERE: upload a standalone citation firm-wide (the
+ * byte route enforces the library-category rule). Reading a library
+ * document swaps this frame for the shared viewer (?doc= — the
+ * case-detail precedent); marks are a named deferral on library
+ * documents, so the panel simply lists none.
  */
 
 import { useRef, useState, type FormEvent } from "react";
@@ -26,10 +27,7 @@ import { FormError, Input, Label, Select } from "../../components/Field.js";
 import { PageHeader } from "../../components/PageHeader.js";
 import { Pagination } from "../../components/Pagination.js";
 import { SectionCard } from "../../components/SectionCard.js";
-import {
-  DocumentCategory,
-  type Document,
-} from "../../gen/stigmer/law/document/v1/document_pb.js";
+import { type Document } from "../../gen/stigmer/law/document/v1/document_pb.js";
 import { formatCalendarDate } from "../../lib/format.js";
 import { useCaseList, useCaseSummaryMap } from "../cases/queries.js";
 import { DocumentViewer } from "../cases/DocumentViewer.js";
@@ -48,10 +46,9 @@ function uploadedDay(document: Document): string {
     : "";
 }
 
-/** The front door: pick the shelf (act or judgment), pick the file. */
+/** The front door: pick the judgment file(s) to put on the shelf. */
 function LibraryUpload() {
   const upload = useUploadLibraryDocument();
-  const [category, setCategory] = useState<"act" | "judgment">("judgment");
   const [error, setError] = useState<string | undefined>();
   const [confirmation, setConfirmation] = useState<string | undefined>();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -62,7 +59,7 @@ function LibraryUpload() {
     setConfirmation(undefined);
     try {
       for (const file of files) {
-        await upload.mutateAsync({ file, category });
+        await upload.mutateAsync({ file });
       }
       setConfirmation(
         `${files.length > 1 ? `${files.length} files` : `“${files[0]?.name}”`} added to the library.`,
@@ -76,17 +73,6 @@ function LibraryUpload() {
 
   return (
     <div className="flex flex-wrap items-end gap-2">
-      <div>
-        <Label htmlFor="library-category">Add to the library as</Label>
-        <Select
-          id="library-category"
-          value={category}
-          onChange={(e) => setCategory(e.target.value as "act" | "judgment")}
-        >
-          <option value="judgment">Judgment / citation</option>
-          <option value="act">Bare act (the statute's text)</option>
-        </Select>
-      </div>
       <input
         ref={fileInput}
         type="file"
@@ -97,7 +83,7 @@ function LibraryUpload() {
         onChange={(e) => void onPicked(e.target.files)}
       />
       <label htmlFor="library-upload" className={`${buttonClass("primary")} cursor-pointer`}>
-        {upload.isPending ? "Uploading…" : "Upload to library"}
+        {upload.isPending ? "Uploading…" : "Upload a judgment / citation"}
       </label>
       {confirmation && (
         <p role="status" className="w-full text-sm text-ok">
@@ -240,11 +226,9 @@ function JudgmentRow(props: {
 
 export function LibraryScreen() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [actsPage, setActsPage] = useState(0);
   const [shelfPage, setShelfPage] = useState(0);
   const [mattersPage, setMattersPage] = useState(0);
-  const acts = useLibraryDocuments(DocumentCategory.ACT, actsPage);
-  const shelf = useLibraryDocuments(DocumentCategory.JUDGMENT, shelfPage);
+  const shelf = useLibraryDocuments(shelfPage);
   const onMatters = useJudgmentCollection(mattersPage);
   const summaries = useCaseSummaryMap();
   const fileNumberOf = (caseId: string | undefined) =>
@@ -289,48 +273,12 @@ export function LibraryScreen() {
     <div className="grid gap-4">
       <PageHeader title="Library" />
       <p className="-mt-2 text-sm text-ink-muted">
-        The firm&apos;s public-record shelf: bare acts and citations, filed once for everyone.
-        Ask the assistant to search inside them — &ldquo;what does Section 420 say?&rdquo;
+        The firm&apos;s citation shelf: judgments the firm relies on, filed once for everyone,
+        with each one&apos;s reliance trail.
       </p>
 
       <SectionCard title="Add to the library">
         <LibraryUpload />
-      </SectionCard>
-
-      <SectionCard title="Bare acts">
-        {acts.isPending && <Loading label="Loading the acts…" />}
-        {acts.isError && <ErrorState error={acts.error} onRetry={() => void acts.refetch()} />}
-        {acts.isSuccess && acts.data.items.length === 0 && (
-          <EmptyState title="No act texts yet">
-            Upload a bare act (IPC, NI Act…) and every matter&apos;s Acts tab can link straight
-            to its sections.
-          </EmptyState>
-        )}
-        {acts.isSuccess && acts.data.items.length > 0 && (
-          <>
-            <ul>
-              {acts.data.items.map((document) => (
-                <li
-                  key={document.metadata?.id}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-3 py-2 last:border-b-0"
-                >
-                  <span className="font-medium">{document.spec?.fileName}</span>
-                  <span className="text-xs text-ink-muted">{uploadedDay(document)}</span>
-                  <span className="ml-auto">
-                    <Button onClick={() => openDocument(document.metadata?.id ?? "")}>
-                      Read
-                    </Button>
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <Pagination
-              page={actsPage}
-              totalCount={Number(acts.data.totalCount)}
-              onPage={setActsPage}
-            />
-          </>
-        )}
       </SectionCard>
 
       <SectionCard title="Citations in the library">

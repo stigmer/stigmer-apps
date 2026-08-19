@@ -1,18 +1,17 @@
 /**
- * The firm library (FR-DOC-005): the public-record shelf's front door
- * and the acts-with-their-texts loop — upload a bare act to the
- * library, read it in the library's own viewer, link it from a
- * matter's statutory frame, and land back in the text from "Read the
- * Act". Real bytes through the real library route; the pdfjs reader
- * asserts actual page content (the T12 discipline).
+ * The firm library (FR-DOC-005 + FR-CIT-002): the citation shelf's
+ * front door and the reliance-trail loop — upload a judgment to the
+ * library, read it in the library's own viewer, and record where the
+ * firm used it. Real bytes through the real library route; the pdfjs
+ * reader asserts actual page content (the T12 discipline).
  */
 
 import { expect, test, type Page } from "@playwright/test";
 import { ASHA } from "./fixtures.js";
 import { makeTextPdf } from "./test-pdf.js";
 
-const ACT_PDF = makeTextPdf([
-  "FICTIONAL PENAL CODE - Section 420. Cheating and dishonestly inducing delivery of property.",
+const JUDGMENT_PDF = makeTextPdf([
+  "FICTIONAL GUIDELINES - Bail is the rule where the offence carries under seven years.",
 ]);
 
 async function signIn(page: Page) {
@@ -43,43 +42,44 @@ async function createMatter(page: Page, fileNumber: string, clientName: string) 
   await expect(page.getByRole("heading", { name: fileNumber })).toBeVisible();
 }
 
-test("upload a bare act, read it in the library, link it from a matter's frame", async ({ page }) => {
+test("upload a judgment, read it in the library, record where the firm used it", async ({ page }) => {
   await signIn(page);
 
-  // The front door: pick the acts shelf, upload real bytes.
+  // A matter to record the use against, created first so the shelf's
+  // "Record a use" picker has it.
+  await createMatter(page, "CRL/2026/121", "Zeta Traders");
+
+  // The front door: upload real bytes to the citation shelf.
   await page.goto("/library");
-  await page.getByLabel("Add to the library as").selectOption({ label: "Bare act (the statute's text)" });
   await page
     .locator("#library-upload")
-    .setInputFiles([{ name: "fictional-penal-code.pdf", mimeType: "application/pdf", buffer: ACT_PDF }]);
+    .setInputFiles([
+      { name: "fictional-guidelines.pdf", mimeType: "application/pdf", buffer: JUDGMENT_PDF },
+    ]);
   await expect(page.getByRole("status")).toContainText("added to the library");
 
-  const actsPile = page.getByRole("region", { name: "Bare acts" });
-  await expect(actsPile.getByText("fictional-penal-code.pdf")).toBeVisible();
+  const shelf = page.getByRole("region", { name: "Citations in the library" });
+  await expect(shelf.getByText("fictional-guidelines.pdf")).toBeVisible();
 
   // Read opens the shared viewer IN PLACE (?doc=) and renders the
-  // statute's actual text — the whole point of the library.
-  await actsPile.getByRole("button", { name: "Read" }).click();
-  const reader = page.getByRole("region", { name: "fictional-penal-code.pdf", exact: true });
+  // judgment's actual text — the whole point of the library.
+  await shelf.getByRole("button", { name: "Read" }).click();
+  const reader = page.getByRole("region", { name: "fictional-guidelines.pdf", exact: true });
   await expect(reader).toBeVisible();
   expect(page.url()).toContain("/library?");
-  await expect(reader.getByText(/dishonestly inducing delivery/)).toBeVisible();
+  await expect(reader.getByText(/offence carries under seven years/)).toBeVisible();
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(actsPile.getByText("fictional-penal-code.pdf")).toBeVisible();
+  await expect(shelf.getByText("fictional-guidelines.pdf")).toBeVisible();
 
-  // The loop closes on a matter: link the act's text on the frame and
-  // land back in it from "Read the Act".
-  await createMatter(page, "CRL/2026/121", "Zeta Traders");
-  await page.getByRole("button", { name: "Acts" }).click();
-  await page.getByRole("button", { name: "Add act" }).click();
-  await page.getByLabel("Act", { exact: true }).fill("Fictional Penal Code");
-  await page.getByLabel(/Sections/).fill("420");
-  await page.getByLabel(/The Act's text/).selectOption({ label: "fictional-penal-code.pdf" });
-  await page.getByRole("button", { name: "Add act" }).click();
-
-  await page.getByRole("link", { name: "Read the Act" }).click();
-  await expect(
-    page.getByRole("region", { name: "fictional-penal-code.pdf", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText(/Section 420/).first()).toBeVisible();
+  // The reliance trail (FR-CIT-002): record a use against the matter
+  // and see it in the trail.
+  await shelf.getByRole("button", { name: "Where we used it" }).click();
+  await shelf.getByRole("button", { name: "Record a use" }).click();
+  await page.getByLabel("Used in").selectOption({ label: "CRL/2026/121" });
+  await page
+    .getByLabel("For what proposition")
+    .fill("bail where the offence carries under seven years");
+  await page.getByRole("button", { name: "Record use" }).click();
+  await expect(shelf.getByText(/bail where the offence carries under seven years/)).toBeVisible();
+  await expect(shelf.getByText("CRL/2026/121")).toBeVisible();
 });

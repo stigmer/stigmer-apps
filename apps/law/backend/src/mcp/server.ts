@@ -12,7 +12,6 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallerIdentity } from "@stigmer/identity";
-import { registerAddCaseAct } from "./tools/add-case-act.js";
 import { registerAddCaseNote } from "./tools/add-case-note.js";
 import { registerAttachDocument } from "./tools/attach-document.js";
 import { registerCaseStory } from "./tools/case-story.js";
@@ -64,7 +63,6 @@ export const FIRM_TOOL_REGISTRARS: readonly ((
   registerFirmOverview,
   registerUpdateTaskStatus,
   registerAddCaseNote,
-  registerAddCaseAct,
   registerRecordCitationUse,
   registerFindCitationUses,
   registerAttachDocument,

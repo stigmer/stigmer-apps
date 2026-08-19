@@ -70,14 +70,14 @@ enum ExtractionState {
 message DocumentSpec {
   // The case this document belongs to — existence enforced by the
   // pipeline's reference check (FAILED_PRECONDITION). EMPTY means the
-  // FIRM LIBRARY (FR-DOC-005): public-record material (bare acts,
-  // standalone citations) that belongs to no matter, visible to
-  // everyone who works cases. Empty is pipeline-enforced to library
-  // categories ONLY (act/judgment), which makes "case-less ⇒ library
-  // material" an invariant the policy keys on. Kept a plain string
-  // (not `optional`): proto3-JSON omits the empty value, so the
-  // stored rows and generated columns read exactly like an absent
-  // field, and every existing `?? ""` call site behaves unchanged.
+  // FIRM LIBRARY (FR-DOC-005): public-record material (standalone
+  // citations) that belongs to no matter, visible to everyone who
+  // works cases. Empty is pipeline-enforced to the library category
+  // ONLY (judgment), which makes "case-less ⇒ library material" an
+  // invariant the policy keys on. Kept a plain string (not
+  // `optional`): proto3-JSON omits the empty value, so the stored
+  // rows and generated columns read exactly like an absent field,
+  // and every existing `?? ""` call site behaves unchanged.
   string case_id = 1;
 
   // Original filename, shown in lists and set as the download name.
@@ -132,11 +132,13 @@ enum DocumentCategory {
   DOCUMENT_CATEGORY_VAKALATNAMA = 6;
   DOCUMENT_CATEGORY_JUDGMENT = 7;
   DOCUMENT_CATEGORY_OTHER = 8;
-  // A bare act's text (FR-DOC-005) — the statutes themselves, filed
-  // once for the whole firm. Case-less BY CONSTRUCTION (bare acts are
-  // inherently firm-level; one pile, no ambiguity — session-27 owner
-  // decision), unlike JUDGMENT which keeps both modes.
-  DOCUMENT_CATEGORY_ACT = 9;
+  // 9 was DOCUMENT_CATEGORY_ACT (bare-act texts, FR-DOC-005) —
+  // removed with the acts feature (owner decision, 2026-08-19).
+  // Reserved, never renumbered: category words are stamped into
+  // persisted rows, so reusing the value would silently relabel any
+  // historical data.
+  reserved 9;
+  reserved "DOCUMENT_CATEGORY_ACT";
 }
 
 message GetDocumentRequest {
@@ -160,9 +162,9 @@ message RecordDocumentExtractionRequest {
 
 message ListDocumentsRequest {
   // The case whose documents are asked for. Required unless category
-  // is JUDGMENT or ACT — the firm-wide collection views (FR-DOC-002:
-  // the knowledge-base collections), still subject to the caller's
-  // case visibility — or unless library_only is set.
+  // is JUDGMENT — the firm-wide collection view (FR-DOC-002: the
+  // knowledge-base collection), still subject to the caller's case
+  // visibility — or unless library_only is set.
   string case_id = 1;
 
   // Defaults to 20 (the contract's page size), capped at 100.

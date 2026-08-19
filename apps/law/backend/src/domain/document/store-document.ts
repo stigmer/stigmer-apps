@@ -82,7 +82,7 @@ export function parseCategoryWord(word: string): DocumentCategory {
   if (typeof value !== "number" || value === DocumentCategory.UNSPECIFIED) {
     throw new ConnectError(
       `Document: unknown category '${word}' (use pleading, application, evidence, ` +
-        `order_judgment, correspondence, vakalatnama, judgment, act, or other)`,
+        `order_judgment, correspondence, vakalatnama, judgment, or other)`,
       Code.InvalidArgument,
     );
   }

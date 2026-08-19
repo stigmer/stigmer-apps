@@ -1,9 +1,9 @@
 /**
- * The Library (FR-CIT-002 + FR-DOC-005): three honest piles (bare
- * acts, the library's citations, judgments filed on matters), the
- * upload front door, the on-demand reliance trail, and Read semantics
- * per pile — library rows open the in-place viewer (?doc=), matter
- * rows deep-link their own case's viewer.
+ * The Library (FR-CIT-002 + FR-DOC-005): two honest piles (the
+ * library's citations, judgments filed on matters), the upload front
+ * door, the on-demand reliance trail, and Read semantics per pile —
+ * library rows open the in-place viewer (?doc=), matter rows
+ * deep-link their own case's viewer.
  */
 
 import { create } from "@bufbuild/protobuf";
@@ -34,10 +34,6 @@ const SUMMARY = create(CaseSummarySchema, {
   caption: "Meridian Textiles vs Sunrise Traders",
 });
 
-const LIBRARY_ACT = create(DocumentSchema, {
-  metadata: { id: "doc_act" },
-  spec: { fileName: "penal-code.pdf", category: DocumentCategory.ACT },
-});
 const LIBRARY_JUDGMENT = create(DocumentSchema, {
   metadata: { id: "doc_lib" },
   spec: { fileName: "kesar-guidelines.pdf", category: DocumentCategory.JUDGMENT },
@@ -56,11 +52,7 @@ function fakeClients() {
     documents: {
       list: vi.fn(async (req: MessageInitShape<typeof ListDocumentsResponseSchema>) => {
         const request = req as unknown as ListDocumentsRequest;
-        const items = request.libraryOnly
-          ? request.category === DocumentCategory.ACT
-            ? [LIBRARY_ACT]
-            : [LIBRARY_JUDGMENT]
-          : [MATTER_JUDGMENT];
+        const items = request.libraryOnly ? [LIBRARY_JUDGMENT] : [MATTER_JUDGMENT];
         return create(ListDocumentsResponseSchema, {
           items,
           totalCount: BigInt(items.length),
@@ -95,13 +87,13 @@ function fakeClients() {
       ),
     },
     files: {
-      uploadLibraryDocument: vi.fn(async () => LIBRARY_ACT),
+      uploadLibraryDocument: vi.fn(async () => LIBRARY_JUDGMENT),
     },
   };
 }
 
-describe("LibraryScreen (the firm's public-record shelf)", () => {
-  it("renders the three piles with the right Read semantics per pile", async () => {
+describe("LibraryScreen (the firm's citation shelf)", () => {
+  it("renders the two piles with the right Read semantics per pile", async () => {
     const clients = fakeClients();
     renderScreen(
       clients as never,
@@ -111,14 +103,11 @@ describe("LibraryScreen (the firm's public-record shelf)", () => {
 
     // findByText per region: each pile's query resolves independently,
     // and the section titles render before their data.
-    const actsPile = await screen.findByRole("region", { name: "Bare acts" });
-    await within(actsPile).findByText("penal-code.pdf");
-    // Library rows open in place (?doc=) — a button, not a case link.
-    expect(within(actsPile).getByRole("button", { name: "Read" })).toBeInTheDocument();
-
-    const shelf = screen.getByRole("region", { name: "Citations in the library" });
+    const shelf = await screen.findByRole("region", { name: "Citations in the library" });
     await within(shelf).findByText("kesar-guidelines.pdf");
     expect(within(shelf).getByText("Firm library")).toBeInTheDocument();
+    // Library rows open in place (?doc=) — a button, not a case link.
+    expect(within(shelf).getByRole("button", { name: "Read" })).toBeInTheDocument();
 
     const onMatters = screen.getByRole("region", { name: "Judgments filed on matters" });
     await within(onMatters).findByText("silverline-award.pdf");
@@ -135,7 +124,7 @@ describe("LibraryScreen (the firm's public-record shelf)", () => {
     expect(await within(shelf).findByText(/under seven years/)).toBeInTheDocument();
   });
 
-  it("uploads through the front door with the chosen shelf", async () => {
+  it("uploads a judgment through the front door", async () => {
     const clients = fakeClients();
     renderScreen(
       clients as never,
@@ -144,17 +133,16 @@ describe("LibraryScreen (the firm's public-record shelf)", () => {
     );
 
     await screen.findByRole("region", { name: "Add to the library" });
-    await userEvent.selectOptions(screen.getByLabelText("Add to the library as"), "act");
-    const file = new File(["%PDF-1.4 fictional act"], "ni-act.pdf", {
+    const file = new File(["%PDF-1.4 fictional judgment"], "bail-guidelines.pdf", {
       type: "application/pdf",
     });
     await userEvent.upload(
-      screen.getByLabelText(/Upload to library/, { selector: "input" }),
+      screen.getByLabelText(/Upload a judgment/, { selector: "input" }),
       file,
     );
 
     await waitFor(() =>
-      expect(clients.files.uploadLibraryDocument).toHaveBeenCalledWith(file, "act"),
+      expect(clients.files.uploadLibraryDocument).toHaveBeenCalledWith(file),
     );
     expect(await screen.findByRole("status")).toHaveTextContent(/added to the library/);
   });

@@ -122,10 +122,9 @@ export function GuideScreen() {
             document and the page.
           </li>
           <li>
-            The Library is the firm&apos;s public-record shelf: bare acts (the statutes&apos; own
-            texts) and citations, uploaded there directly — no matter needed — plus every
-            judgment filed on a matter. Each citation carries where it has been used and for
-            what proposition, and a matter&apos;s Acts tab links straight to the act&apos;s text.
+            The Library is the firm&apos;s citation shelf: judgments the firm relies on,
+            uploaded there directly — no matter needed — plus every judgment filed on a
+            matter. Each citation carries where it has been used and for what proposition.
           </li>
           <li>
             Scanned papers and photos are read automatically where scan reading is set up for the
@@ -158,11 +157,11 @@ export function GuideScreen() {
           </li>
           <li>Find, search, and read the documents on file, quoting the page.</li>
           <li>
-            Record the acts and sections you dictate onto a matter&apos;s frame (it never infers
-            them), answer &ldquo;what does Section 420 say?&rdquo; by quoting the act&apos;s own
-            filed text with its page, record that a judgment was used in a matter, and answer
-            &ldquo;find me a citation for X&rdquo; from the firm&apos;s own library — presenting
-            candidates with their document, page, and past uses for you to judge.
+            Answer &ldquo;which acts apply here?&rdquo; from the matter&apos;s own filed papers
+            (the FIR, the charge sheet), quoting the page — never from its own general
+            knowledge. Record that a judgment was used in a matter, and answer &ldquo;find me a
+            citation for X&rdquo; from the firm&apos;s own library — presenting candidates with
+            their document, page, and past uses for you to judge.
           </li>
           <li>
             File a paper you send it — a photo of a court order on WhatsApp, an attachment in

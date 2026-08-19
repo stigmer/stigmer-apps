@@ -47,7 +47,6 @@ import { useFirmRoster } from "../members/queries.js";
 import { useClient } from "../clients/queries.js";
 import { CaseDeadlines } from "./CaseDeadlines.js";
 import { CaseDiary } from "./CaseDiary.js";
-import { CaseActs } from "./CaseActs.js";
 import { CaseDocuments } from "./CaseDocuments.js";
 import { DocumentViewer } from "./DocumentViewer.js";
 import { CaseForm } from "./CaseForm.js";
@@ -58,7 +57,7 @@ import { CaseNotes } from "./CaseNotes.js";
 import { CaseTasks } from "./CaseTasks.js";
 import { useCase, useCaseMembers, useUpdateCase, useUpdateCaseLifecycle } from "./queries.js";
 
-const TABS = ["Diary", "Deadlines", "Tasks", "Notes", "Documents", "Acts", "Team"] as const;
+const TABS = ["Diary", "Deadlines", "Tasks", "Notes", "Documents", "Team"] as const;
 const PARTNER_TABS = ["Money", "History"] as const;
 type Tab = (typeof TABS)[number] | (typeof PARTNER_TABS)[number];
 
@@ -319,7 +318,6 @@ export function CaseDetailScreen() {
         {tab === "Tasks" && <CaseTasks caseId={id} />}
         {tab === "Notes" && <CaseNotes caseId={id} />}
         {tab === "Documents" && <CaseDocuments caseId={id} />}
-        {tab === "Acts" && <CaseActs caseId={id} />}
         {tab === "Team" && <CaseMembersSection caseId={id} leadMemberId={spec.leadLawyerId} />}
         {tab === "Money" && partner && <CaseMoney caseId={id} />}
         {tab === "History" && partner && <CaseHistory caseId={id} />}

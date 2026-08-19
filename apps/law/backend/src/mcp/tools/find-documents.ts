@@ -39,7 +39,6 @@ const CATEGORIES = [
   "correspondence",
   "vakalatnama",
   "judgment",
-  "act",
   "other",
 ] as const;
 const WIRE_CATEGORY: Record<(typeof CATEGORIES)[number], DocumentCategory> = {
@@ -50,7 +49,6 @@ const WIRE_CATEGORY: Record<(typeof CATEGORIES)[number], DocumentCategory> = {
   correspondence: DocumentCategory.CORRESPONDENCE,
   vakalatnama: DocumentCategory.VAKALATNAMA,
   judgment: DocumentCategory.JUDGMENT,
-  act: DocumentCategory.ACT,
   other: DocumentCategory.OTHER,
 };
 
@@ -65,10 +63,9 @@ export function registerFindDocuments(
       description:
         "List the documents on a matter's file by its file number (newest " +
         "first, optionally narrowed to one category); or — with no file " +
-        "number — the firm-wide collections: category 'judgment' answers " +
-        "the judgment collection (matters + the firm library together), " +
-        "category 'act' answers the bare-act texts in the firm library. " +
-        "Answers include each document's id.",
+        "number — the firm-wide judgment collection: category 'judgment' " +
+        "answers matters + the firm library together. Answers include " +
+        "each document's id.",
       inputSchema: {
         file_number: z
           .string()
@@ -80,30 +77,18 @@ export function registerFindDocuments(
           .optional()
           .describe(
             "Narrow to one kind of paper. 'judgment' alone (no file number) " +
-              "lists the firm-wide judgment collection; 'act' alone lists " +
-              "the firm library's bare-act texts.",
+              "lists the firm-wide judgment collection.",
           ),
       },
       annotations: { readOnlyHint: true },
     },
     gated(NAME, identity, deps.resolveCallerIdentity, async (args, caller) => {
-      if (!args.file_number && args.category !== "judgment" && args.category !== "act") {
+      if (!args.file_number && args.category !== "judgment") {
         // The List operation's own rule, said in tool terms before a
         // round trip is spent discovering it.
         return errorResult(
           "Give a matter's file number, or ask for category 'judgment' " +
-            "(the firm's judgment collection) or 'act' (the library's " +
-            "bare-act texts).",
-        );
-      }
-      if (args.file_number && args.category === "act") {
-        // Acts are firm-library material by construction (FR-DOC-005) —
-        // asking for a matter's acts-on-file is a shape that cannot
-        // exist; the statutory FRAME lives on the case's Acts tab.
-        return errorResult(
-          "Bare acts live in the firm library, not on a matter's file — " +
-            "ask for category 'act' without a file number. For which acts " +
-            "APPLY to the matter, use case_story.",
+            "(the firm's judgment collection).",
         );
       }
 
@@ -132,8 +117,8 @@ export function registerFindDocuments(
       // The judgment collection spans BOTH piles (FR-DOC-005): matters
       // and the firm library — two bounded pages interleaved newest
       // first, never offset-spliced (suggestion-list semantics; the
-      // "(showing …)" line stays honest). ACT is one pile by
-      // construction; a named matter is one pile by definition.
+      // "(showing …)" line stays honest). A named matter is one pile
+      // by definition.
       let items: Document[];
       let totalCount: bigint;
       if (!args.file_number && args.category === "judgment") {
@@ -164,9 +149,7 @@ export function registerFindDocuments(
       const what = args.category ? `${args.category.replace(/_/g, " ")} document` : "document";
       const where = args.file_number
         ? `on ${args.file_number.trim()}`
-        : args.category === "act"
-          ? "in the firm library"
-          : "in the firm's collection";
+        : "in the firm's collection";
       const headline = `${countNoun(totalCount, what)} ${where}`;
 
       if (items.length === 0) {

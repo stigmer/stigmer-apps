@@ -22,9 +22,9 @@ import type { TokenSource } from "./transport.js";
 export interface FilesClient {
   uploadDocument(caseId: string, file: File): Promise<Document>;
   /** The firm library's front door (FR-DOC-005): case-less
-   * public-record material — category is REQUIRED ('act' or
-   * 'judgment'; the server enforces the vocabulary). */
-  uploadLibraryDocument(file: File, category: "act" | "judgment"): Promise<Document>;
+   * public-record material — always category 'judgment', the one
+   * library category (the server enforces the vocabulary). */
+  uploadLibraryDocument(file: File): Promise<Document>;
   downloadDocument(documentId: string): Promise<Blob>;
 }
 
@@ -67,7 +67,7 @@ export function createFilesClient(
       return fromJson(DocumentSchema, await res.json());
     },
 
-    async uploadLibraryDocument(file, category) {
+    async uploadLibraryDocument(file) {
       if (!(ALLOWED_MIME_TYPES as readonly string[]).includes(file.type)) {
         throw new Error(
           `'${file.name}' is not a supported type — upload a PDF, PNG, or JPG (FR-INTEG-001).`,
@@ -84,7 +84,7 @@ export function createFilesClient(
           authorization: await authorization(),
           "content-type": file.type,
           "x-file-name": encodeURIComponent(file.name),
-          "x-document-category": category,
+          "x-document-category": "judgment",
         },
         body: file,
       });

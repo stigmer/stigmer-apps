@@ -33,31 +33,29 @@ export function useJudgmentCollection(page: number) {
   });
 }
 
-/** The FIRM LIBRARY's own pile (case-less rows, FR-DOC-005), newest
- * first, optionally one category (acts vs judgments). */
-export function useLibraryDocuments(category: DocumentCategory, page: number) {
+/** The FIRM LIBRARY's own pile (case-less judgments, FR-DOC-005),
+ * newest first. */
+export function useLibraryDocuments(page: number) {
   const { documents } = useApiClients();
   return useQuery({
-    queryKey: ["library", "shelf", category, page],
+    queryKey: ["library", "shelf", page],
     queryFn: () =>
       documents.list({
         libraryOnly: true,
-        category,
+        category: DocumentCategory.JUDGMENT,
         pageSize: PAGE_SIZE,
         pageOffset: page * PAGE_SIZE,
       }),
   });
 }
 
-/** The library's front door: upload a bare act or a standalone
- * citation, firm-wide. Invalidates the whole ["library"] prefix — a
- * new act also feeds the Acts tab's picker. */
+/** The library's front door: upload a standalone citation, firm-wide.
+ * Invalidates the whole ["library"] prefix. */
 export function useUploadLibraryDocument() {
   const { files } = useApiClients();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { file: File; category: "act" | "judgment" }) =>
-      files.uploadLibraryDocument(input.file, input.category),
+    mutationFn: (input: { file: File }) => files.uploadLibraryDocument(input.file),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["library"] }),
   });
 }

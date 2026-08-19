@@ -64,7 +64,6 @@ import {
   DocumentPageSchema,
   ListDocumentPagesRequestSchema,
 } from "../gen/stigmer/law/documentpage/v1/documentpage_pb.js";
-import { CaseActSchema } from "../gen/stigmer/law/caseact/v1/caseact_pb.js";
 import {
   AnnotationKind,
   DocumentAnnotationSchema,
@@ -521,51 +520,49 @@ describe("document intelligence, end to end", () => {
     expect(textOf(denied)).toMatch(/case members and partners/);
   });
 
-  /* ------------- the statutory frame's verb (FR-ACT-001) ------------- */
-
   /* ------------- the firm library (FR-DOC-005) ------------------------ */
 
-  let libraryActId = "";
+  let libraryJudgmentId = "";
 
-  it("FR-DOC-005: an act uploads to the library case-less — readable by a NON-member, refused to office staff", async () => {
+  it("FR-DOC-005: a judgment uploads to the library case-less — readable by a NON-member, refused to office staff", async () => {
     const uploaded = await uploadLibrary(
       people.lead.email,
-      "penal-code-excerpt.pdf",
-      "act",
+      "cheating-guidelines.pdf",
+      "judgment",
       makeTextPdf([
-        "Section 420. Cheating and dishonestly inducing delivery of property — " +
-          "imprisonment up to seven years, and fine.",
+        "Cheating and dishonestly inducing delivery of property is made out " +
+          "only where deception precedes the delivery.",
       ]),
     );
     expect(uploaded.status).toBe(201);
-    libraryActId = uploaded.json.metadata?.id ?? "";
-    expect(libraryActId).toMatch(/^doc_/);
+    libraryJudgmentId = uploaded.json.metadata?.id ?? "";
+    expect(libraryJudgmentId).toMatch(/^doc_/);
     expect((uploaded.json as { spec?: { caseId?: string } }).spec?.caseId).toBeFalsy();
 
     // The outsider works NEITHER matter, yet the library is theirs —
     // public-record material, the whole point of FR-DOC-005.
     const outsiderView = await runTool("find_documents", people.outsider.email, {
-      category: "act",
+      category: "judgment",
     });
     expect(outsiderView.isError).toBeFalsy();
-    expect(textOf(outsiderView)).toContain("penal-code-excerpt.pdf");
+    expect(textOf(outsiderView)).toContain("cheating-guidelines.pdf");
     expect(textOf(outsiderView)).toContain("Firm library");
 
     // Bytes too: the download route rides the same library policy arm.
-    const download = await fetch(`${base}/files/documents/${libraryActId}/content`, {
+    const download = await fetch(`${base}/files/documents/${libraryJudgmentId}/content`, {
       headers: auth.as(people.outsider.userId).headers,
     });
     expect(download.status).toBe(200);
 
     // Office staff stay outside — the role gate is untouched.
     const staffView = await runTool("find_documents", people.office.email, {
-      category: "act",
+      category: "judgment",
     });
     expect(staffView.isError).toBe(true);
     expect(textOf(staffView)).toMatch(/office staff/i);
   });
 
-  it("FR-DOC-005: the library refuses non-library papers, and matters refuse bare acts", async () => {
+  it("FR-DOC-005: the library refuses non-library papers, and 'act' is no longer a category at all", async () => {
     const evidence = await uploadLibrary(
       people.lead.email,
       "loose-photos.pdf",
@@ -573,17 +570,18 @@ describe("document intelligence, end to end", () => {
       "%PDF-1.4 not library material",
     );
     expect(evidence.status).toBeGreaterThanOrEqual(400);
-    expect(String(evidence.json.message)).toMatch(/acts and judgments/i);
+    expect(String(evidence.json.message)).toMatch(/only judgments/i);
 
-    const actOnMatter = await upload(
+    // The acts feature was removed (owner decision, 2026-08-19):
+    // 'act' must refuse as an unknown word, never silently misfile.
+    const actWord = await uploadLibrary(
       people.lead.email,
-      caseAId,
-      "penal-code-on-a-case.pdf",
+      "penal-code.pdf",
       "act",
-      "%PDF-1.4 acts are firm-level",
+      "%PDF-1.4 acts are gone",
     );
-    expect(actOnMatter.status).toBeGreaterThanOrEqual(400);
-    expect(String(actOnMatter.json.message)).toMatch(/firm-library material/i);
+    expect(actWord.status).toBeGreaterThanOrEqual(400);
+    expect(String(actWord.json.message)).toMatch(/unknown category 'act'/i);
   });
 
   it("FR-DOC-005: the judgment collection answers BOTH piles, each caller only their visibility", async () => {
@@ -616,21 +614,21 @@ describe("document intelligence, end to end", () => {
       query: "dishonestly inducing",
     });
     expect(result.isError).toBeFalsy();
-    expect(textOf(result)).toContain("penal-code-excerpt.pdf");
+    expect(textOf(result)).toContain("cheating-guidelines.pdf");
     expect(textOf(result)).toContain("Firm library");
   });
 
   it("FR-DOC-005: attach_document files to the library, and refuses contradictory destinations", async () => {
     const url = await stageSentFile(
-      "attachments/probe/ni-act-excerpt.pdf",
-      Buffer.from(makeTextPdf(["Section 138. Dishonour of cheque for insufficiency of funds."])),
+      "attachments/probe/bail-guidelines.pdf",
+      Buffer.from(makeTextPdf(["Bail is the rule where the offence carries under seven years."])),
       "application/pdf",
     );
     const filed = await runTool("attach_document", people.lead.email, {
       to_library: true,
       download_url: url,
-      file_name: "ni-act-excerpt.pdf",
-      category: "act",
+      file_name: "bail-guidelines.pdf",
+      category: "judgment",
     });
     expect(filed.isError).toBeFalsy();
     expect(textOf(filed)).toContain("Firm library");
@@ -640,7 +638,7 @@ describe("document intelligence, end to end", () => {
       file_number: FILE_A,
       download_url: url,
       file_name: "x.pdf",
-      category: "act",
+      category: "judgment",
     });
     expect(both.isError).toBe(true);
     expect(textOf(both)).toMatch(/contradict/);
@@ -659,7 +657,7 @@ describe("document intelligence, end to end", () => {
       toolDeps.resources.documentAnnotations.invoke.create(
         create(DocumentAnnotationSchema, {
           spec: {
-            documentId: libraryActId,
+            documentId: libraryJudgmentId,
             caseId: caseAId, // any value — the document itself has none
             page: 1,
             annotationKind: AnnotationKind.REGION,
@@ -672,63 +670,10 @@ describe("document intelligence, end to end", () => {
     ).rejects.toThrow(/library documents aren't supported yet/);
 
     const marks = await toolDeps.resources.documentAnnotations.invoke.list(
-      create(ListDocumentAnnotationsRequestSchema, { documentId: libraryActId }),
+      create(ListDocumentAnnotationsRequestSchema, { documentId: libraryJudgmentId }),
       { id: people.lead.userId, kind: "user" },
     );
     expect(Number(marks.totalCount)).toBe(0);
-  });
-
-  it("FR-ACT-001 (amended): the frame links act texts ONLY — a matter's own papers refuse", async () => {
-    const linked = await toolDeps.resources.caseActs.invoke.create(
-      create(CaseActSchema, {
-        spec: {
-          caseId: caseAId,
-          act: "IPC (linked)",
-          sections: ["420"],
-          actDocumentId: libraryActId,
-        },
-      }),
-      { id: people.lead.userId, kind: "user" },
-    );
-    expect(linked.spec?.actDocumentId).toBe(libraryActId);
-
-    // A matter's own paper (not an act) must refuse as a text link —
-    // uploaded HERE because suite order runs this before the sweep
-    // block seeds its fixtures.
-    const pleading = await upload(
-      people.lead.email,
-      caseAId,
-      "not-an-act.pdf",
-      "pleading",
-      "%PDF-1.4 a matter's own paper",
-    );
-    await expect(
-      toolDeps.resources.caseActs.invoke.create(
-        create(CaseActSchema, {
-          spec: {
-            caseId: caseAId,
-            act: "IPC (mislinked)",
-            actDocumentId: pleading.json.metadata?.id ?? "missing",
-          },
-        }),
-        { id: people.lead.userId, kind: "user" },
-      ),
-    ).rejects.toThrow(/firm library/);
-  });
-
-  it("FR-ACT-001: add_case_act records dictated acts, and the case story recites the frame", async () => {
-    const added = await runTool("add_case_act", people.lead.email, {
-      file_number: FILE_A,
-      act: "IPC",
-      sections: ["420", "468"],
-      note: "the fraud counts",
-    });
-    expect(added.isError).toBeFalsy();
-    expect(textOf(added)).toContain("IPC");
-
-    const story = await runTool("case_story", people.lead.email, { file_number: FILE_A });
-    expect(textOf(story)).toMatch(/Acts & sections/);
-    expect(textOf(story)).toContain("IPC — 420, 468");
   });
 
   it("refuses an unknown web caller with the administrator sentence", async () => {

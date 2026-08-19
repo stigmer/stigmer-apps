@@ -30,7 +30,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file stigmer/law/document/v1/document.proto.
  */
 export const file_stigmer_law_document_v1_document: GenFile = /*@__PURE__*/
-  fileDesc("CiZzdGlnbWVyL2xhdy9kb2N1bWVudC92MS9kb2N1bWVudC5wcm90bxIXc3RpZ21lci5sYXcuZG9jdW1lbnQudjEi3wEKCERvY3VtZW50EhMKC2FwaV92ZXJzaW9uGAEgASgJEgwKBGtpbmQYAiABKAkSOgoIbWV0YWRhdGEYAyABKAsyKC5zdGlnbWVyLnJlc291cmNlYXBpLnYxLlJlc291cmNlTWV0YWRhdGESOwoEc3BlYxgEIAEoCzIlLnN0aWdtZXIubGF3LmRvY3VtZW50LnYxLkRvY3VtZW50U3BlY0IGukgDyAEBEjcKBnN0YXR1cxgFIAEoCzInLnN0aWdtZXIubGF3LmRvY3VtZW50LnYxLkRvY3VtZW50U3RhdHVzImIKDkRvY3VtZW50U3RhdHVzEjwKCmV4dHJhY3Rpb24YASABKA4yKC5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5FeHRyYWN0aW9uU3RhdGUSEgoKcGFnZV9jb3VudBgCIAEoBSKuAgoMRG9jdW1lbnRTcGVjEg8KB2Nhc2VfaWQYASABKAkSHQoJZmlsZV9uYW1lGAIgASgJQgq6SAdyBRABGP8BEkAKCW1pbWVfdHlwZRgDIAEoCUItukgqcihSD2FwcGxpY2F0aW9uL3BkZlIJaW1hZ2UvcG5nUgppbWFnZS9qcGVnEiAKCnNpemVfYnl0ZXMYBCABKANCDLpICSIHGICAwAwgABIbCgpvYmplY3Rfa2V5GAUgASgJQge6SARyAhABEkUKCGNhdGVnb3J5GAYgASgOMikuc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuRG9jdW1lbnRDYXRlZ29yeUIIukgFggECEAESFwoKaGVhcmluZ19pZBgHIAEoCUgAiAEBQg0KC19oZWFyaW5nX2lkIikKEkdldERvY3VtZW50UmVxdWVzdBITCgJpZBgBIAEoCUIHukgEcgIQASKdAQofUmVjb3JkRG9jdW1lbnRFeHRyYWN0aW9uUmVxdWVzdBITCgJpZBgBIAEoCUIHukgEcgIQARJICgpleHRyYWN0aW9uGAIgASgOMiguc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuRXh0cmFjdGlvblN0YXRlQgq6SAeCAQQQASAAEhsKCnBhZ2VfY291bnQYAyABKAVCB7pIBBoCKAAiwAEKFExpc3REb2N1bWVudHNSZXF1ZXN0Eg8KB2Nhc2VfaWQYASABKAkSHAoJcGFnZV9zaXplGAIgASgFQgm6SAYaBBhkKAASHAoLcGFnZV9vZmZzZXQYAyABKAVCB7pIBBoCKAASRQoIY2F0ZWdvcnkYBCABKA4yKS5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5Eb2N1bWVudENhdGVnb3J5Qgi6SAWCAQIQARIUCgxsaWJyYXJ5X29ubHkYBSABKAgiXgoVTGlzdERvY3VtZW50c1Jlc3BvbnNlEjAKBWl0ZW1zGAEgAygLMiEuc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuRG9jdW1lbnQSEwoLdG90YWxfY291bnQYAiABKAMq0wEKD0V4dHJhY3Rpb25TdGF0ZRIgChxFWFRSQUNUSU9OX1NUQVRFX1VOU1BFQ0lGSUVEEAASHAoYRVhUUkFDVElPTl9TVEFURV9QRU5ESU5HEAESHgoaRVhUUkFDVElPTl9TVEFURV9FWFRSQUNURUQQAhIiCh5FWFRSQUNUSU9OX1NUQVRFX05PX1RFWFRfTEFZRVIQAxIbChdFWFRSQUNUSU9OX1NUQVRFX0ZBSUxFRBAEEh8KG0VYVFJBQ1RJT05fU1RBVEVfT0NSX0ZBSUxFRBAFKt8CChBEb2N1bWVudENhdGVnb3J5EiEKHURPQ1VNRU5UX0NBVEVHT1JZX1VOU1BFQ0lGSUVEEAASHgoaRE9DVU1FTlRfQ0FURUdPUllfUExFQURJTkcQARIhCh1ET0NVTUVOVF9DQVRFR09SWV9BUFBMSUNBVElPThACEh4KGkRPQ1VNRU5UX0NBVEVHT1JZX0VWSURFTkNFEAMSJAogRE9DVU1FTlRfQ0FURUdPUllfT1JERVJfSlVER01FTlQQBBIkCiBET0NVTUVOVF9DQVRFR09SWV9DT1JSRVNQT05ERU5DRRAFEiEKHURPQ1VNRU5UX0NBVEVHT1JZX1ZBS0FMQVROQU1BEAYSHgoaRE9DVU1FTlRfQ0FURUdPUllfSlVER01FTlQQBxIbChdET0NVTUVOVF9DQVRFR09SWV9PVEhFUhAIEhkKFURPQ1VNRU5UX0NBVEVHT1JZX0FDVBAJMsACCg9Eb2N1bWVudFNlcnZpY2USVQoDR2V0Eisuc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuR2V0RG9jdW1lbnRSZXF1ZXN0GiEuc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuRG9jdW1lbnQSZQoETGlzdBItLnN0aWdtZXIubGF3LmRvY3VtZW50LnYxLkxpc3REb2N1bWVudHNSZXF1ZXN0Gi4uc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuTGlzdERvY3VtZW50c1Jlc3BvbnNlEm8KEFJlY29yZEV4dHJhY3Rpb24SOC5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5SZWNvcmREb2N1bWVudEV4dHJhY3Rpb25SZXF1ZXN0GiEuc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuRG9jdW1lbnRiBnByb3RvMw", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
+  fileDesc("CiZzdGlnbWVyL2xhdy9kb2N1bWVudC92MS9kb2N1bWVudC5wcm90bxIXc3RpZ21lci5sYXcuZG9jdW1lbnQudjEi3wEKCERvY3VtZW50EhMKC2FwaV92ZXJzaW9uGAEgASgJEgwKBGtpbmQYAiABKAkSOgoIbWV0YWRhdGEYAyABKAsyKC5zdGlnbWVyLnJlc291cmNlYXBpLnYxLlJlc291cmNlTWV0YWRhdGESOwoEc3BlYxgEIAEoCzIlLnN0aWdtZXIubGF3LmRvY3VtZW50LnYxLkRvY3VtZW50U3BlY0IGukgDyAEBEjcKBnN0YXR1cxgFIAEoCzInLnN0aWdtZXIubGF3LmRvY3VtZW50LnYxLkRvY3VtZW50U3RhdHVzImIKDkRvY3VtZW50U3RhdHVzEjwKCmV4dHJhY3Rpb24YASABKA4yKC5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5FeHRyYWN0aW9uU3RhdGUSEgoKcGFnZV9jb3VudBgCIAEoBSKuAgoMRG9jdW1lbnRTcGVjEg8KB2Nhc2VfaWQYASABKAkSHQoJZmlsZV9uYW1lGAIgASgJQgq6SAdyBRABGP8BEkAKCW1pbWVfdHlwZRgDIAEoCUItukgqcihSD2FwcGxpY2F0aW9uL3BkZlIJaW1hZ2UvcG5nUgppbWFnZS9qcGVnEiAKCnNpemVfYnl0ZXMYBCABKANCDLpICSIHGICAwAwgABIbCgpvYmplY3Rfa2V5GAUgASgJQge6SARyAhABEkUKCGNhdGVnb3J5GAYgASgOMikuc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuRG9jdW1lbnRDYXRlZ29yeUIIukgFggECEAESFwoKaGVhcmluZ19pZBgHIAEoCUgAiAEBQg0KC19oZWFyaW5nX2lkIikKEkdldERvY3VtZW50UmVxdWVzdBITCgJpZBgBIAEoCUIHukgEcgIQASKdAQofUmVjb3JkRG9jdW1lbnRFeHRyYWN0aW9uUmVxdWVzdBITCgJpZBgBIAEoCUIHukgEcgIQARJICgpleHRyYWN0aW9uGAIgASgOMiguc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuRXh0cmFjdGlvblN0YXRlQgq6SAeCAQQQASAAEhsKCnBhZ2VfY291bnQYAyABKAVCB7pIBBoCKAAiwAEKFExpc3REb2N1bWVudHNSZXF1ZXN0Eg8KB2Nhc2VfaWQYASABKAkSHAoJcGFnZV9zaXplGAIgASgFQgm6SAYaBBhkKAASHAoLcGFnZV9vZmZzZXQYAyABKAVCB7pIBBoCKAASRQoIY2F0ZWdvcnkYBCABKA4yKS5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5Eb2N1bWVudENhdGVnb3J5Qgi6SAWCAQIQARIUCgxsaWJyYXJ5X29ubHkYBSABKAgiXgoVTGlzdERvY3VtZW50c1Jlc3BvbnNlEjAKBWl0ZW1zGAEgAygLMiEuc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuRG9jdW1lbnQSEwoLdG90YWxfY291bnQYAiABKAMq0wEKD0V4dHJhY3Rpb25TdGF0ZRIgChxFWFRSQUNUSU9OX1NUQVRFX1VOU1BFQ0lGSUVEEAASHAoYRVhUUkFDVElPTl9TVEFURV9QRU5ESU5HEAESHgoaRVhUUkFDVElPTl9TVEFURV9FWFRSQUNURUQQAhIiCh5FWFRSQUNUSU9OX1NUQVRFX05PX1RFWFRfTEFZRVIQAxIbChdFWFRSQUNUSU9OX1NUQVRFX0ZBSUxFRBAEEh8KG0VYVFJBQ1RJT05fU1RBVEVfT0NSX0ZBSUxFRBAFKuECChBEb2N1bWVudENhdGVnb3J5EiEKHURPQ1VNRU5UX0NBVEVHT1JZX1VOU1BFQ0lGSUVEEAASHgoaRE9DVU1FTlRfQ0FURUdPUllfUExFQURJTkcQARIhCh1ET0NVTUVOVF9DQVRFR09SWV9BUFBMSUNBVElPThACEh4KGkRPQ1VNRU5UX0NBVEVHT1JZX0VWSURFTkNFEAMSJAogRE9DVU1FTlRfQ0FURUdPUllfT1JERVJfSlVER01FTlQQBBIkCiBET0NVTUVOVF9DQVRFR09SWV9DT1JSRVNQT05ERU5DRRAFEiEKHURPQ1VNRU5UX0NBVEVHT1JZX1ZBS0FMQVROQU1BEAYSHgoaRE9DVU1FTlRfQ0FURUdPUllfSlVER01FTlQQBxIbChdET0NVTUVOVF9DQVRFR09SWV9PVEhFUhAIIgQICRAJKhVET0NVTUVOVF9DQVRFR09SWV9BQ1QywAIKD0RvY3VtZW50U2VydmljZRJVCgNHZXQSKy5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5HZXREb2N1bWVudFJlcXVlc3QaIS5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5Eb2N1bWVudBJlCgRMaXN0Ei0uc3RpZ21lci5sYXcuZG9jdW1lbnQudjEuTGlzdERvY3VtZW50c1JlcXVlc3QaLi5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5MaXN0RG9jdW1lbnRzUmVzcG9uc2USbwoQUmVjb3JkRXh0cmFjdGlvbhI4LnN0aWdtZXIubGF3LmRvY3VtZW50LnYxLlJlY29yZERvY3VtZW50RXh0cmFjdGlvblJlcXVlc3QaIS5zdGlnbWVyLmxhdy5kb2N1bWVudC52MS5Eb2N1bWVudGIGcHJvdG8z", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
 
 /**
  * @generated from message stigmer.law.document.v1.Document
@@ -107,14 +107,14 @@ export type DocumentSpec = Message<"stigmer.law.document.v1.DocumentSpec"> & {
   /**
    * The case this document belongs to — existence enforced by the
    * pipeline's reference check (FAILED_PRECONDITION). EMPTY means the
-   * FIRM LIBRARY (FR-DOC-005): public-record material (bare acts,
-   * standalone citations) that belongs to no matter, visible to
-   * everyone who works cases. Empty is pipeline-enforced to library
-   * categories ONLY (act/judgment), which makes "case-less ⇒ library
-   * material" an invariant the policy keys on. Kept a plain string
-   * (not `optional`): proto3-JSON omits the empty value, so the
-   * stored rows and generated columns read exactly like an absent
-   * field, and every existing `?? ""` call site behaves unchanged.
+   * FIRM LIBRARY (FR-DOC-005): public-record material (standalone
+   * citations) that belongs to no matter, visible to everyone who
+   * works cases. Empty is pipeline-enforced to the library category
+   * ONLY (judgment), which makes "case-less ⇒ library material" an
+   * invariant the policy keys on. Kept a plain string (not
+   * `optional`): proto3-JSON omits the empty value, so the stored
+   * rows and generated columns read exactly like an absent field,
+   * and every existing `?? ""` call site behaves unchanged.
    *
    * @generated from field: string case_id = 1;
    */
@@ -240,9 +240,9 @@ export const RecordDocumentExtractionRequestSchema: GenMessage<RecordDocumentExt
 export type ListDocumentsRequest = Message<"stigmer.law.document.v1.ListDocumentsRequest"> & {
   /**
    * The case whose documents are asked for. Required unless category
-   * is JUDGMENT or ACT — the firm-wide collection views (FR-DOC-002:
-   * the knowledge-base collections), still subject to the caller's
-   * case visibility — or unless library_only is set.
+   * is JUDGMENT — the firm-wide collection view (FR-DOC-002: the
+   * knowledge-base collection), still subject to the caller's case
+   * visibility — or unless library_only is set.
    *
    * @generated from field: string case_id = 1;
    */
@@ -425,16 +425,6 @@ export enum DocumentCategory {
    * @generated from enum value: DOCUMENT_CATEGORY_OTHER = 8;
    */
   OTHER = 8,
-
-  /**
-   * A bare act's text (FR-DOC-005) — the statutes themselves, filed
-   * once for the whole firm. Case-less BY CONSTRUCTION (bare acts are
-   * inherently firm-level; one pile, no ambiguity — session-27 owner
-   * decision), unlike JUDGMENT which keeps both modes.
-   *
-   * @generated from enum value: DOCUMENT_CATEGORY_ACT = 9;
-   */
-  ACT = 9,
 }
 
 /**

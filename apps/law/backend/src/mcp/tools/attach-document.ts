@@ -38,11 +38,11 @@ export function registerAttachDocument(
     {
       description:
         "File a document someone sent in this conversation into a matter's " +
-        "case file, OR into the firm library (to_library: true — for bare " +
-        "acts and standalone citations, categories 'act'/'judgment' only). " +
-        "Pass the download URL listed beside the attachment in your context " +
-        "— never retype or invent one. Documents are permanent records — " +
-        "confirm the destination, file name, and category before filing.",
+        "case file, OR into the firm library (to_library: true — for " +
+        "standalone citations, category 'judgment' only). Pass the " +
+        "download URL listed beside the attachment in your context — never " +
+        "retype or invent one. Documents are permanent records — confirm " +
+        "the destination, file name, and category before filing.",
       inputSchema: {
         file_number: z
           .string()
@@ -57,8 +57,8 @@ export function registerAttachDocument(
           .optional()
           .describe(
             "File to the FIRM LIBRARY instead of a matter: public-record " +
-              "material (a bare act's text, a standalone citation) that " +
-              "belongs to no case. Categories 'act' and 'judgment' only.",
+              "material (a standalone citation) that belongs to no case. " +
+              "Category 'judgment' only.",
           ),
         download_url: z
           .string()
@@ -77,7 +77,7 @@ export function registerAttachDocument(
           .optional()
           .describe(
             "One of: pleading, application, evidence, order_judgment, " +
-              "correspondence, vakalatnama, judgment, act, other. Omit only " +
+              "correspondence, vakalatnama, judgment, other. Omit only " +
               "when the person cannot say what the paper is.",
           ),
         hearing_id: z
@@ -94,7 +94,7 @@ export function registerAttachDocument(
       if (!args.to_library && !args.file_number) {
         throw new ConnectError(
           "Give the matter's file number, or set to_library for " +
-            "public-record material (bare acts, standalone citations)",
+            "public-record material (standalone citations)",
           Code.InvalidArgument,
         );
       }
