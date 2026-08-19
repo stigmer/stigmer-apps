@@ -19,6 +19,7 @@ import { toJson } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import type {
   AuthorizationPolicy,
+  CallerPrincipal,
   ResourceStore,
 } from "@stigmer/resource-api";
 import type { CallerResolver } from "@stigmer/identity";
@@ -31,9 +32,10 @@ import {
   ALLOWED_MIME_TYPES,
   MAX_DOCUMENT_BYTES,
   parseCategoryWord,
-  storeDocument,
-  type StoreDocumentDeps,
+  type CitationIdentityInput,
+  type StoreDocumentInput,
 } from "../domain/document/store-document.js";
+import type { ObjectStore } from "../objectstore/object-store.js";
 
 const UPLOAD_PATH = /^\/files\/cases\/([A-Za-z0-9_-]+)\/documents$/;
 // The firm library's front door (FR-DOC-005): public-record material
@@ -42,11 +44,19 @@ const UPLOAD_PATH = /^\/files\/cases\/([A-Za-z0-9_-]+)\/documents$/;
 const LIBRARY_UPLOAD_PATH = /^\/files\/library\/documents$/;
 const DOWNLOAD_PATH = /^\/files\/documents\/([A-Za-z0-9_-]+)\/content$/;
 
-export interface FileRouteDeps extends StoreDocumentDeps {
+export interface FileRouteDeps {
   readonly policy: AuthorizationPolicy;
   /** The identity chain's plain-HTTP binding — the same chain Connect uses. */
   readonly caller: CallerResolver["fromHttp"];
   readonly store: ResourceStore;
+  /** Download's streaming read; upload never touches the bucket here. */
+  readonly objectStore: Pick<ObjectStore, "get">;
+  /** The ONE composed store seam (createApp) — this route is a
+   * transport, not a second implementation. */
+  readonly storeDocument: (
+    input: StoreDocumentInput,
+    caller: CallerPrincipal,
+  ) => Promise<Document>;
 }
 
 /**
@@ -142,14 +152,26 @@ async function handleUpload(
   const category = parseCategoryWord(headerValue(req, "x-document-category"));
   const hearingId = headerValue(req, "x-hearing-id") || undefined;
 
+  // Shelf identity for library judgments (DD-012 D2), URI-encoded like
+  // the file name (identity is user text). All optional — the seam
+  // defaults the title from the file name; the Citation is mutable
+  // precisely so a minimal filing can be refined later.
+  const citation: CitationIdentityInput | undefined = caseId
+    ? undefined
+    : {
+        title: decodedHeader(req, "x-citation-title"),
+        court: decodedHeader(req, "x-citation-court"),
+        year: Number(headerValue(req, "x-citation-year")) || 0,
+        citation: decodedHeader(req, "x-citation-string"),
+      };
+
   const body = await readBodyCapped(req);
   if (body.byteLength === 0) {
     throw new ConnectError("Document: the upload body is empty", Code.InvalidArgument);
   }
 
-  const document = await storeDocument(
-    deps,
-    { caseId, fileName, mimeType, bytes: body, category, hearingId },
+  const document = await deps.storeDocument(
+    { caseId, fileName, mimeType, bytes: body, category, hearingId, citation },
     caller,
   );
 
@@ -210,6 +232,19 @@ async function handleDownload(
 function headerValue(req: IncomingMessage, name: string): string {
   const raw = req.headers[name];
   return (Array.isArray(raw) ? raw[0] : raw) ?? "";
+}
+
+/** URI-decoded user-text header (the x-file-name arrangement); a bad
+ * encoding is the caller's mistake, named after the header at fault. */
+function decodedHeader(req: IncomingMessage, name: string): string {
+  try {
+    return decodeURIComponent(headerValue(req, name));
+  } catch {
+    throw new ConnectError(
+      `Document: ${name} header is not valid URI encoding`,
+      Code.InvalidArgument,
+    );
+  }
 }
 
 /**

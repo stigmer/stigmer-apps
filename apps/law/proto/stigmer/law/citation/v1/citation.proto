@@ -1,0 +1,158 @@
+// Citation — the library shelf entry (DD-012 D2): the firm's handle on
+// a judgment it relies on. The immutable Document holds the paper; the
+// Citation beside it holds the CORRECTABLE identity a lawyer recognizes
+// ("Arnesh Kumar vs State of Bihar, SC 2014, AIR 2014 SC 2756") and the
+// shelf membership itself — the Library screen lists Citations, one
+// kind, one query, honest pagination (the store's filter grammar is
+// AND-only by declaration, so a "case-less OR flagged" document query
+// cannot exist).
+//
+// MUTABLE by contract, unlike its paper: identity is human-entered and
+// error-prone, and a typo must not be permanent (documents have no
+// update RPC — putting identity there was rejected for exactly that
+// reason). Corrections are updates; there is no delete (the shelf
+// persists; a retired state is a named deferral).
+//
+// One entry per paper: document_id is the natural key, so a duplicate
+// filing answers ALREADY_EXISTS from the database itself (the
+// DocumentPage arrangement).
+syntax = "proto3";
+
+package stigmer.law.citation.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message Citation {
+  string api_version = 1;
+  string kind = 2;
+  // System-managed; created_by/created_at are who put the entry on the
+  // shelf, and when.
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  CitationSpec spec = 4 [(buf.validate.field).required = true];
+  CitationStatus status = 5;
+}
+
+message CitationSpec {
+  // The paper this entry describes — must exist, be case-less, and
+  // carry category JUDGMENT (pipeline-enforced: the shelf lists only
+  // library papers). Immutable across updates: identity corrections
+  // edit the words, never re-point the entry at a different paper.
+  string document_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // The case name as the firm cites it — the recognition handle every
+  // list renders. Required: a shelf entry nobody can recognize is not
+  // an entry ("bail-order-final2.pdf" is exactly the failure this
+  // field exists to end).
+  string title = 2 [(buf.validate.field).string = {
+    min_len: 1,
+    max_len: 300
+  }];
+
+  // The court, as cited ("Supreme Court", "AP High Court"). Optional —
+  // identity starts minimal (a WhatsApp filing knows only the file
+  // name) and is refined later, which is why the spec is mutable.
+  string court = 3 [(buf.validate.field).string.max_len = 200];
+
+  // The judgment's year; 0 = not recorded yet.
+  int32 year = 4 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 2100
+  }];
+
+  // The reporter or neutral citation string ("AIR 2014 SC 2756",
+  // "2014 INSC 463") — how lawyers search and cite.
+  string citation = 5 [(buf.validate.field).string.max_len = 200];
+
+  // Provenance when the paper was PROMOTED from a matter (the copy
+  // filed in the matter stays the case's record; the shelf copy is the
+  // firm's). Set together by the promote operation, never by hand:
+  // the case for the human-readable tag, the source document for the
+  // one-promotion-per-paper rule.
+  string promoted_from_case_id = 6;
+  string promoted_from_document_id = 7;
+}
+
+message CitationStatus {
+  // Display facts derived on read, page-shaped (the CitationUse
+  // status precedent) — every consumer renders the paper's file name,
+  // and a promoted entry names its source matter.
+  string document_file_name = 1;
+  string promoted_from_file_number = 2;
+}
+
+message GetCitationRequest {
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message ListCitationsRequest {
+  // Defaults to 20, capped at 100. Newest first — the shelf grows at
+  // the front.
+  int32 page_size = 1 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 100
+  }];
+  int32 page_offset = 2 [(buf.validate.field).int32.gte = 0];
+}
+
+message ListCitationsResponse {
+  // Newest first (see the request's page_size comment).
+  repeated Citation items = 1;
+  int64 total_count = 2;
+}
+
+message SearchCitationsRequest {
+  // Case-insensitive substring, matched against title AND citation
+  // string (two searchText arms merged under a cap — the sanctioned
+  // suggestion-list shape, never offset-spliced).
+  string query = 1 [(buf.validate.field).string.min_len = 1];
+  // Defaults to 8, capped at 20 (a suggestion list, not a report).
+  int32 limit = 2 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 20
+  }];
+}
+
+message SearchCitationsResponse {
+  repeated Citation items = 1;
+}
+
+// Put a judgment already FILED ON A MATTER onto the library shelf:
+// the server copies the bytes to a library object, files a case-less
+// JUDGMENT document through the full create pipeline, and creates the
+// Citation with promotion provenance. The caller must be able to work
+// the source case; one promotion per paper (a second answers
+// ALREADY_EXISTS). No bytes ride this RPC — the copy is server-side.
+message PromoteCitationRequest {
+  // The case-bound JUDGMENT document to promote.
+  string source_document_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // The identity for the new shelf entry (same rules as CitationSpec).
+  string title = 2 [(buf.validate.field).string = {
+    min_len: 1,
+    max_len: 300
+  }];
+  string court = 3 [(buf.validate.field).string.max_len = 200];
+  int32 year = 4 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 2100
+  }];
+  string citation = 5 [(buf.validate.field).string.max_len = 200];
+}
+
+service CitationService {
+  // File a shelf entry for an existing case-less library judgment
+  // (the upload choreography's second half; also the recovery path
+  // for a library paper whose entry failed to write).
+  rpc Create(Citation) returns (Citation);
+  // Correct the identity words. document_id and promotion provenance
+  // are immutable (pipeline-enforced).
+  rpc Update(Citation) returns (Citation);
+  rpc Get(GetCitationRequest) returns (Citation);
+  // The shelf, newest first.
+  rpc List(ListCitationsRequest) returns (ListCitationsResponse);
+  // Identity search for the citing flow and the Library search box.
+  rpc Search(SearchCitationsRequest) returns (SearchCitationsResponse);
+  // Promote a matter's judgment onto the shelf (see the request).
+  rpc Promote(PromoteCitationRequest) returns (Citation);
+}

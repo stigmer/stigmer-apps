@@ -140,6 +140,13 @@ export function DocumentViewer(props: {
   documentId: string;
   /** 1-based page to open at (the assistant's citation unit). */
   page?: number;
+  /**
+   * The matter this reading happens FROM (the case Citations tab
+   * passes its case). On a LIBRARY document it picks the mark layer
+   * (DD-012 D2): present = case-badged, absent = firm-wide. A
+   * matter's own paper ignores it — its marks always carry its case.
+   */
+  caseContext?: string;
   onClose: () => void;
 }) {
   const doc = useDocument(props.documentId);
@@ -153,7 +160,8 @@ export function DocumentViewer(props: {
   const readerController = useRef<PdfReaderController | null>(null);
 
   const fileName = doc.data?.spec?.fileName ?? "Document";
-  const caseId = doc.data?.spec?.caseId ?? "";
+  const isLibrary = doc.isSuccess && !doc.data?.spec?.caseId;
+  const caseId = doc.data?.spec?.caseId || (isLibrary ? (props.caseContext ?? "") : "");
   const isPdf = doc.data?.spec?.mimeType === "application/pdf";
   const annotationItems = annotations.data?.items;
 
@@ -286,6 +294,7 @@ export function DocumentViewer(props: {
               <AnnotationsPanel
                 documentId={props.documentId}
                 caseId={caseId}
+                library={isLibrary}
                 draft={draft}
                 onDraftDone={() => setDraft(null)}
                 focusedMark={focusedMark}

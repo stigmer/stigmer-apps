@@ -220,6 +220,21 @@ export function documentCategoryLabel(category: DocumentCategory): string {
   return DOCUMENT_CATEGORY_LABELS[category] ?? "Other";
 }
 
+/** The shelf entry's secondary line: "Supreme Court, 2014 — AIR 2014
+ * SC 2756" from whichever identity facts are recorded (all optional;
+ * an empty string when only the title exists). One renderer for every
+ * surface that shows a citation (DD-012 cross-surface coherence). */
+export function citationFacts(spec: {
+  court?: string;
+  year?: number;
+  citation?: string;
+}): string {
+  const place = [spec.court, spec.year && spec.year > 0 ? String(spec.year) : ""]
+    .filter(Boolean)
+    .join(", ");
+  return [place, spec.citation].filter(Boolean).join(" — ");
+}
+
 const CLIENT_KIND_LABELS: Record<ClientKind, string> = {
   [ClientKind.UNSPECIFIED]: "Individual",
   [ClientKind.INDIVIDUAL]: "Individual",

@@ -20,7 +20,6 @@ import { startOcrSweep } from "./domain/document/ocr-sweep.js";
 import { registerDeactivationHandler } from "./domain/firmmember/deactivation-handler.js";
 import { registerTaskAssignmentHandler } from "./domain/notification/task-assignment-handler.js";
 import { startReminderSweep } from "./domain/reminders/sweep.js";
-import { storeDocument } from "./domain/document/store-document.js";
 import { createFileRoutes } from "./files/file-routes.js";
 import { fetchRemoteDocument } from "./files/remote-fetch.js";
 import { createMcpHttpServer } from "./mcp/transport.js";
@@ -125,20 +124,11 @@ export function createFirmServers(
         store: deps.store,
         policy: app.policy,
         // attach_document's byte legs: the guarded fetch (production
-        // posture — no private networks), and the same store core the
-        // upload route rides.
+        // posture — no private networks), and the ONE composed store
+        // seam (createApp) the upload route rides too — a paper filed
+        // over WhatsApp gets its shelf entry the same way.
         fetchDocument: (url) => fetchRemoteDocument(url),
-        storeDocument: (input, caller) =>
-          storeDocument(
-            {
-              objectStore: deps.objectStore,
-              createDocument: app.resources.documents.invoke.create as NonNullable<
-                typeof app.resources.documents.invoke.create
-              >,
-            },
-            input,
-            caller,
-          ),
+        storeDocument: app.storeDocument,
         // Scan-reading honesty: enabled means the sweep will actually
         // run (config present AND interval on) — staged-but-disabled
         // must still read as "cannot read scans" (DD-009).
@@ -151,6 +141,7 @@ export function createFirmServers(
 function assembleApp(deps: BackendDeps): App {
   const app = createApp({
     store: deps.store,
+    objectStore: deps.objectStore,
     caller: deps.auth.resolver.fromConnect,
     authz: deps.authz,
     credentials: deps.credentials,
@@ -256,9 +247,7 @@ function buildWebServer(app: App, deps: BackendDeps): http.Server {
     caller: deps.auth.resolver.fromHttp,
     store: deps.store,
     objectStore: deps.objectStore,
-    createDocument: app.resources.documents.invoke.create as NonNullable<
-      typeof app.resources.documents.invoke.create
-    >,
+    storeDocument: app.storeDocument,
   });
 
   // Login/Refresh/Logout/WhoAmI — identity-level, mounted beside the

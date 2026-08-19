@@ -20,6 +20,7 @@ import { AuditEntryService } from "../gen/stigmer/law/auditentry/v1/auditentry_p
 import { CaseService } from "../gen/stigmer/law/case/v1/case_pb.js";
 import { CaseMemberService } from "../gen/stigmer/law/casemember/v1/casemember_pb.js";
 import { CaseNoteService } from "../gen/stigmer/law/casenote/v1/casenote_pb.js";
+import { CitationService } from "../gen/stigmer/law/citation/v1/citation_pb.js";
 import { CitationUseService } from "../gen/stigmer/law/citationuse/v1/citationuse_pb.js";
 import { ClientService } from "../gen/stigmer/law/client/v1/client_pb.js";
 import { DeadlineService } from "../gen/stigmer/law/deadline/v1/deadline_pb.js";
@@ -37,7 +38,8 @@ import { UserService } from "../gen/stigmer/identity/user/v1/user_pb.js";
 
 export interface ApiClients {
   readonly cases: Client<typeof CaseService>;
-  /** The matter's statutory frame (FR-ACT-001) — manual entry. */
+  /** The library shelf entries (DD-012 D2) — correctable identity. */
+  readonly citations: Client<typeof CitationService>;
   /** The reliance trail on the judgment library (FR-CIT-001) — append-only. */
   readonly citationUses: Client<typeof CitationUseService>;
   readonly caseMembers: Client<typeof CaseMemberService>;
@@ -68,6 +70,7 @@ export interface ApiClients {
 export function createApiClients(transport: Transport, files: FilesClient): ApiClients {
   return {
     cases: createClient(CaseService, transport),
+    citations: createClient(CitationService, transport),
     citationUses: createClient(CitationUseService, transport),
     caseMembers: createClient(CaseMemberService, transport),
     hearings: createClient(HearingService, transport),
