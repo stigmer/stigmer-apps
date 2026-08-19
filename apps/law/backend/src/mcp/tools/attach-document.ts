@@ -38,15 +38,28 @@ export function registerAttachDocument(
     {
       description:
         "File a document someone sent in this conversation into a matter's " +
-        "case file. Pass the download URL listed beside the attachment in " +
-        "your context — never retype or invent one. Documents are permanent " +
-        "case records — confirm the matter, file name, and category before " +
-        "filing.",
+        "case file, OR into the firm library (to_library: true — for bare " +
+        "acts and standalone citations, categories 'act'/'judgment' only). " +
+        "Pass the download URL listed beside the attachment in your context " +
+        "— never retype or invent one. Documents are permanent records — " +
+        "confirm the destination, file name, and category before filing.",
       inputSchema: {
         file_number: z
           .string()
           .min(1)
-          .describe("The firm's file number for the matter, e.g. 'CS/2026/041'."),
+          .optional()
+          .describe(
+            "The firm's file number for the matter, e.g. 'CS/2026/041'. " +
+              "Omit when filing to the library (to_library).",
+          ),
+        to_library: z
+          .boolean()
+          .optional()
+          .describe(
+            "File to the FIRM LIBRARY instead of a matter: public-record " +
+              "material (a bare act's text, a standalone citation) that " +
+              "belongs to no case. Categories 'act' and 'judgment' only.",
+          ),
         download_url: z
           .string()
           .min(1)
@@ -64,8 +77,8 @@ export function registerAttachDocument(
           .optional()
           .describe(
             "One of: pleading, application, evidence, order_judgment, " +
-              "correspondence, vakalatnama, judgment, other. Omit only when the " +
-              "person cannot say what the paper is.",
+              "correspondence, vakalatnama, judgment, act, other. Omit only " +
+              "when the person cannot say what the paper is.",
           ),
         hearing_id: z
           .string()
@@ -77,7 +90,24 @@ export function registerAttachDocument(
       // on the unattended WhatsApp surface (the add_case_note precedent).
     },
     gated(NAME, identity, deps.resolveCallerIdentity, async (args, caller) => {
-      const matter = await caseByFileNumber(deps.resources, caller.principal, args.file_number);
+      // Exactly one destination: a matter, or the firm library.
+      if (!args.to_library && !args.file_number) {
+        throw new ConnectError(
+          "Give the matter's file number, or set to_library for " +
+            "public-record material (bare acts, standalone citations)",
+          Code.InvalidArgument,
+        );
+      }
+      if (args.to_library && args.file_number) {
+        throw new ConnectError(
+          "to_library and file_number contradict each other — a paper is " +
+            "filed to a matter OR to the firm library",
+          Code.InvalidArgument,
+        );
+      }
+      const matter = args.file_number
+        ? await caseByFileNumber(deps.resources, caller.principal, args.file_number)
+        : undefined;
       const category = parseCategoryWord(args.category ?? "");
 
       // The role gate, before any outbound byte moves (the pipeline
@@ -96,7 +126,10 @@ export function registerAttachDocument(
       const fetched = await deps.fetchDocument(args.download_url);
       const document = await deps.storeDocument(
         {
-          caseId: matter.metadata?.id ?? "",
+          // undefined = the firm library; the pipeline's libraryIntegrity
+          // step enforces the library-categories rule with its own
+          // user-facing sentence.
+          caseId: matter?.metadata?.id,
           fileName: args.file_name,
           mimeType: fetched.mimeType,
           bytes: fetched.bytes,
@@ -107,8 +140,8 @@ export function registerAttachDocument(
       );
 
       return textResult(
-        `Filed: ${documentLine(document, matter.spec?.fileNumber)}`,
-        documentRecord(document, matter.spec?.fileNumber),
+        `Filed: ${documentLine(document, matter?.spec?.fileNumber)}`,
+        documentRecord(document, matter?.spec?.fileNumber),
       );
     }),
   );

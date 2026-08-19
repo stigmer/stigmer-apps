@@ -214,6 +214,7 @@ const DOCUMENT_CATEGORY_LABELS: Record<DocumentCategory, string> = {
   [DocumentCategory.VAKALATNAMA]: "Vakalatnama",
   [DocumentCategory.JUDGMENT]: "Judgment",
   [DocumentCategory.OTHER]: "Other",
+  [DocumentCategory.ACT]: "Bare act",
 };
 
 export function documentCategoryLabel(category: DocumentCategory): string {

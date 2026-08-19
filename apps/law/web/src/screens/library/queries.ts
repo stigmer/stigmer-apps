@@ -16,7 +16,10 @@ import {
 } from "../../gen/stigmer/law/citationuse/v1/citationuse_pb.js";
 import { DocumentCategory } from "../../gen/stigmer/law/document/v1/document_pb.js";
 
-/** The judgment collection, newest first (the list contract). */
+/** Judgments FILED ON MATTERS (the case-bound collection view,
+ * FR-DOC-002), newest first — one of the Library screen's two honest
+ * piles (the other is the case-less firm library below; two queries by
+ * design, never offset-spliced — FR-DOC-005). */
 export function useJudgmentCollection(page: number) {
   const { documents } = useApiClients();
   return useQuery({
@@ -27,6 +30,35 @@ export function useJudgmentCollection(page: number) {
         pageSize: PAGE_SIZE,
         pageOffset: page * PAGE_SIZE,
       }),
+  });
+}
+
+/** The FIRM LIBRARY's own pile (case-less rows, FR-DOC-005), newest
+ * first, optionally one category (acts vs judgments). */
+export function useLibraryDocuments(category: DocumentCategory, page: number) {
+  const { documents } = useApiClients();
+  return useQuery({
+    queryKey: ["library", "shelf", category, page],
+    queryFn: () =>
+      documents.list({
+        libraryOnly: true,
+        category,
+        pageSize: PAGE_SIZE,
+        pageOffset: page * PAGE_SIZE,
+      }),
+  });
+}
+
+/** The library's front door: upload a bare act or a standalone
+ * citation, firm-wide. Invalidates the whole ["library"] prefix — a
+ * new act also feeds the Acts tab's picker. */
+export function useUploadLibraryDocument() {
+  const { files } = useApiClients();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { file: File; category: "act" | "judgment" }) =>
+      files.uploadLibraryDocument(input.file, input.category),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["library"] }),
   });
 }
 

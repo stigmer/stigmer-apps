@@ -366,6 +366,18 @@ export function createFirmPolicy(
             ? ALLOW
             : deny("Office staff do not view case content");
         }
+        if (kind === "Document" && !caseId) {
+          // The FIRM LIBRARY arm (FR-DOC-005) — the ONE deliberate
+          // exception to canTouchCaseContent's fail-closed missing-case
+          // default (partners-only): a case-less document is library
+          // material BY INVARIANT (the create pipeline refuses
+          // case-less rows outside the library categories —
+          // document-resource.ts libraryIntegrity), public-record and
+          // readable by everyone who works cases.
+          return (await onFirm(member, "case_workers"))
+            ? ALLOW
+            : deny("Office staff do not view case content");
+        }
         return (await canTouchCaseContent(member, caseId))
           ? ALLOW
           : deny("Only case members and partners may work this matter");
@@ -394,6 +406,13 @@ export function createFirmPolicy(
             : deny("Office staff do not view case content");
         }
         if (operation === "get") {
+          if (!caseId) {
+            // Library pages inherit their document's case-lessness —
+            // the same FR-DOC-005 arm as the Document branch above.
+            return (await onFirm(member, "case_workers"))
+              ? ALLOW
+              : deny("Office staff do not view case content");
+          }
           return (await canTouchCaseContent(member, caseId))
             ? ALLOW
             : deny("Only case members and partners may view case content");

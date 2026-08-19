@@ -14,6 +14,7 @@ import {
   ListCaseActsResponseSchema,
   type CaseAct,
 } from "../../../gen/stigmer/law/caseact/v1/caseact_pb.js";
+import { ListDocumentsResponseSchema } from "../../../gen/stigmer/law/document/v1/document_pb.js";
 import { renderScreen } from "../../../test-support/render.js";
 import { CaseActs } from "../CaseActs.js";
 
@@ -25,6 +26,8 @@ const FRAME: CaseAct[] = [
       act: "Indian Penal Code",
       sections: ["420", "468"],
       note: "the fraud counts",
+      // Linked to its text in the firm library (FR-DOC-005).
+      actDocumentId: "doc_act",
     },
   }),
   create(CaseActSchema, {
@@ -43,10 +46,16 @@ function fakeCaseActs(items: CaseAct[] = FRAME) {
   };
 }
 
+/** The act-text picker's library query (empty shelf keeps tests focused
+ * on the frame; the link renders from the row's own spec). */
+const emptyDocuments = {
+  list: vi.fn(async () => create(ListDocumentsResponseSchema, { items: [], totalCount: 0n })),
+};
+
 describe("CaseActs (the statutory frame, FR-ACT-001)", () => {
   it("renders the register with sections and notes, in the server's order", async () => {
     renderScreen(
-      { caseActs: fakeCaseActs() as never },
+      { caseActs: fakeCaseActs() as never, documents: emptyDocuments as never },
       [{ path: "/", element: <CaseActs caseId="case_1" /> }],
       "/",
     );
@@ -57,12 +66,17 @@ describe("CaseActs (the statutory frame, FR-ACT-001)", () => {
     expect(screen.getByText("Negotiable Instruments Act")).toBeInTheDocument();
     // Manual entry is stated on the surface itself.
     expect(screen.getByText(/entered by the team/)).toBeInTheDocument();
+    // The linked act reads its text in the library (FR-DOC-005); the
+    // unlinked one offers no dead link.
+    const readLinks = screen.getAllByRole("link", { name: "Read the Act" });
+    expect(readLinks).toHaveLength(1);
+    expect(readLinks[0]).toHaveAttribute("href", "/library?doc=doc_act");
   });
 
   it("adds an act with comma-separated sections parsed to a list", async () => {
     const caseActs = fakeCaseActs([]);
     renderScreen(
-      { caseActs: caseActs as never },
+      { caseActs: caseActs as never, documents: emptyDocuments as never },
       [{ path: "/", element: <CaseActs caseId="case_1" /> }],
       "/",
     );
@@ -90,7 +104,7 @@ describe("CaseActs (the statutory frame, FR-ACT-001)", () => {
   it("corrects an entry in place — the edit form is the whole correction story", async () => {
     const caseActs = fakeCaseActs();
     renderScreen(
-      { caseActs: caseActs as never },
+      { caseActs: caseActs as never, documents: emptyDocuments as never },
       [{ path: "/", element: <CaseActs caseId="case_1" /> }],
       "/",
     );

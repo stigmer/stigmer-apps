@@ -69,8 +69,16 @@ enum ExtractionState {
 
 message DocumentSpec {
   // The case this document belongs to — existence enforced by the
-  // pipeline's reference check (FAILED_PRECONDITION).
-  string case_id = 1 [(buf.validate.field).string.min_len = 1];
+  // pipeline's reference check (FAILED_PRECONDITION). EMPTY means the
+  // FIRM LIBRARY (FR-DOC-005): public-record material (bare acts,
+  // standalone citations) that belongs to no matter, visible to
+  // everyone who works cases. Empty is pipeline-enforced to library
+  // categories ONLY (act/judgment), which makes "case-less ⇒ library
+  // material" an invariant the policy keys on. Kept a plain string
+  // (not `optional`): proto3-JSON omits the empty value, so the
+  // stored rows and generated columns read exactly like an absent
+  // field, and every existing `?? ""` call site behaves unchanged.
+  string case_id = 1;
 
   // Original filename, shown in lists and set as the download name.
   string file_name = 2 [(buf.validate.field).string = {
@@ -106,7 +114,9 @@ message DocumentSpec {
 
   // The hearing this document belongs to, when it belongs to one — an
   // order to the hearing it was pronounced at, a filing to the listing
-  // it served. Optional; existence checked when set.
+  // it served. Optional; existence checked when set. Refused on
+  // library documents (a hearing reference without a case is
+  // meaningless).
   optional string hearing_id = 7;
 }
 
@@ -122,6 +132,11 @@ enum DocumentCategory {
   DOCUMENT_CATEGORY_VAKALATNAMA = 6;
   DOCUMENT_CATEGORY_JUDGMENT = 7;
   DOCUMENT_CATEGORY_OTHER = 8;
+  // A bare act's text (FR-DOC-005) — the statutes themselves, filed
+  // once for the whole firm. Case-less BY CONSTRUCTION (bare acts are
+  // inherently firm-level; one pile, no ambiguity — session-27 owner
+  // decision), unlike JUDGMENT which keeps both modes.
+  DOCUMENT_CATEGORY_ACT = 9;
 }
 
 message GetDocumentRequest {
@@ -144,10 +159,10 @@ message RecordDocumentExtractionRequest {
 }
 
 message ListDocumentsRequest {
-  // The case whose documents are asked for. Required unless category is
-  // JUDGMENT — the one firm-wide document view (FR-DOC-002: the
-  // knowledge-base collection), still subject to the caller's case
-  // visibility.
+  // The case whose documents are asked for. Required unless category
+  // is JUDGMENT or ACT — the firm-wide collection views (FR-DOC-002:
+  // the knowledge-base collections), still subject to the caller's
+  // case visibility — or unless library_only is set.
   string case_id = 1;
 
   // Defaults to 20 (the contract's page size), capped at 100.
@@ -159,6 +174,12 @@ message ListDocumentsRequest {
 
   // Narrow to one category (a case's orders, the judgment collection).
   DocumentCategory category = 4 [(buf.validate.field).enum.defined_only = true];
+
+  // Only the FIRM LIBRARY's documents (case-less rows, FR-DOC-005) —
+  // the Library screen's own pile, distinct from the case-bound
+  // collection views so no consumer ever needs offset-merged
+  // pagination across the two. Composes with category.
+  bool library_only = 5;
 }
 
 message ListDocumentsResponse {

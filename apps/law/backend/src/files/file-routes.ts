@@ -31,14 +31,18 @@ import {
   ALLOWED_MIME_TYPES,
   MAX_DOCUMENT_BYTES,
   parseCategoryWord,
-  storeCaseDocument,
-  type StoreCaseDocumentDeps,
+  storeDocument,
+  type StoreDocumentDeps,
 } from "../domain/document/store-document.js";
 
 const UPLOAD_PATH = /^\/files\/cases\/([A-Za-z0-9_-]+)\/documents$/;
+// The firm library's front door (FR-DOC-005): public-record material
+// (acts, standalone citations) with no owning matter. Same core, same
+// policy, no case segment.
+const LIBRARY_UPLOAD_PATH = /^\/files\/library\/documents$/;
 const DOWNLOAD_PATH = /^\/files\/documents\/([A-Za-z0-9_-]+)\/content$/;
 
-export interface FileRouteDeps extends StoreCaseDocumentDeps {
+export interface FileRouteDeps extends StoreDocumentDeps {
   readonly policy: AuthorizationPolicy;
   /** The identity chain's plain-HTTP binding — the same chain Connect uses. */
   readonly caller: CallerResolver["fromHttp"];
@@ -64,6 +68,13 @@ export function createFileRoutes(deps: FileRouteDeps): (
       return true;
     }
 
+    if (req.method === "POST" && LIBRARY_UPLOAD_PATH.test(path)) {
+      // caseId undefined = the firm library; every invariant (library
+      // categories only, no hearing link) is the create pipeline's.
+      void handleUpload(deps, req, res, undefined).catch((err) => sendError(res, err));
+      return true;
+    }
+
     const download = req.method === "GET" ? DOWNLOAD_PATH.exec(path) : null;
     if (download) {
       void handleDownload(deps, req, res, download[1] as string).catch((err) =>
@@ -80,7 +91,7 @@ async function handleUpload(
   deps: FileRouteDeps,
   req: IncomingMessage,
   res: ServerResponse,
-  caseId: string,
+  caseId: string | undefined,
 ): Promise<void> {
   const caller = await deps.caller(req);
   if (!caller) {
@@ -136,7 +147,7 @@ async function handleUpload(
     throw new ConnectError("Document: the upload body is empty", Code.InvalidArgument);
   }
 
-  const document = await storeCaseDocument(
+  const document = await storeDocument(
     deps,
     { caseId, fileName, mimeType, bytes: body, category, hearingId },
     caller,

@@ -43,10 +43,12 @@ export function registerSearchDocuments(
     {
       description:
         "Search the text of the firm's documents (the pages the system has " +
-        "extracted) for an exact word or phrase, across every case the " +
-        "caller can see or within one matter. Matching is literal — if a " +
-        "word finds nothing, try a synonym or a shorter root (e.g. " +
-        "'limitation' not 'time-barred'). " +
+        "extracted) for an exact word or phrase — across every case the " +
+        "caller can see AND the firm library (bare acts, standalone " +
+        "citations), or within one matter. This is how to answer 'what " +
+        "does Section 420 say?': search the act's text, then read the " +
+        "cited page. Matching is literal — if a word finds nothing, try a " +
+        "synonym or a shorter root (e.g. 'limitation' not 'time-barred'). " +
         (deps.ocrEnabled
           ? "Scanned documents and photos become searchable a few minutes " +
             "after upload, once the system has read them. "
@@ -83,7 +85,7 @@ export function registerSearchDocuments(
 
       const where = args.file_number
         ? `on ${args.file_number.trim()}`
-        : "across your visible cases";
+        : "across your visible cases and the firm library";
       if (pages.length === 0) {
         return textResult(
           `No document pages match "${args.query}" ${where}. Matching is ` +
@@ -105,7 +107,11 @@ export function registerSearchDocuments(
 
       const hits = pages.map((page) => {
         const document = documents.get(page.spec?.documentId ?? "");
-        const fileNumber = cases.get(page.spec?.caseId ?? "")?.spec?.fileNumber ?? "";
+        // A case-less page is firm-library material (FR-DOC-005) —
+        // cite the library where a matter's number would go.
+        const fileNumber = page.spec?.caseId
+          ? (cases.get(page.spec.caseId)?.spec?.fileNumber ?? "")
+          : "Firm library";
         return {
           snippet: snippetAround(page.spec?.text ?? "", args.query),
           file_name: document?.spec?.fileName ?? "(unknown document)",

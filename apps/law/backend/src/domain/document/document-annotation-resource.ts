@@ -69,7 +69,15 @@ export function documentAnnotationResource(deps: {
       const spec = (ctx.newState as DocumentAnnotation).spec;
       if (ctx.caller && spec?.documentId) {
         const document = await documentOrRefuse(spec.documentId);
-        await deps.guards.assertCaseContent(ctx.caller, document.spec?.caseId ?? "");
+        if (!document.spec?.caseId) {
+          // Library documents (FR-DOC-005) — a NAMED deferral, refused
+          // in the user's words: marks are case-team records, and a
+          // firm-wide mark visibility model has not been designed yet.
+          throw failedPrecondition(
+            "Marks on library documents aren't supported yet — marks live on a matter's own papers",
+          );
+        }
+        await deps.guards.assertCaseContent(ctx.caller, document.spec.caseId);
       }
     },
   };
@@ -139,7 +147,16 @@ export function documentAnnotationResource(deps: {
           if (!document) {
             throw invalidArgument(`Document '${ctx.input.documentId}' not found`);
           }
-          await deps.guards.assertCaseContent(ctx.caller, document.spec?.caseId ?? "");
+          if (!document.spec?.caseId) {
+            // Library documents carry no marks by contract (create
+            // refuses, FR-DOC-005 deferral) — the honest empty page,
+            // so the shared viewer renders cleanly on /library.
+            return create(ListDocumentAnnotationsResponseSchema, {
+              items: [],
+              totalCount: 0n,
+            });
+          }
+          await deps.guards.assertCaseContent(ctx.caller, document.spec.caseId);
 
           const { items, totalCount } = await deps.store.list("DocumentAnnotation", {
             limit: ctx.input.pageSize > 0 ? Math.min(ctx.input.pageSize, 100) : 20,

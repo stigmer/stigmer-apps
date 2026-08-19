@@ -151,10 +151,21 @@ export function useAddCaseAct(caseId: string) {
   const { caseActs } = useApiClients();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { act: string; sections: string[]; note: string }) =>
+    mutationFn: (input: {
+      act: string;
+      sections: string[];
+      note: string;
+      actDocumentId?: string;
+    }) =>
       caseActs.create(
         create(CaseActSchema, {
-          spec: { caseId, act: input.act, sections: input.sections, note: input.note },
+          spec: {
+            caseId,
+            act: input.act,
+            sections: input.sections,
+            note: input.note,
+            actDocumentId: input.actDocumentId || undefined,
+          },
         }),
       ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cases", "acts", caseId] }),

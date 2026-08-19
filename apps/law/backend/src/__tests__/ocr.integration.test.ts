@@ -79,7 +79,7 @@ import {
   runOcrSweepOnce,
   type OcrBackoff,
 } from "../domain/document/ocr-sweep.js";
-import { storeCaseDocument } from "../domain/document/store-document.js";
+import { storeDocument } from "../domain/document/store-document.js";
 import { fetchRemoteDocument } from "../files/remote-fetch.js";
 import { createDocumentAiProvider } from "../ocr/document-ai.js";
 import type { OcrProvider } from "../ocr/provider.js";
@@ -486,7 +486,7 @@ describe("the OCR sweep against a fake Document AI (DD-009)", () => {
       fetchDocument: (url) => fetchRemoteDocument(url, { allowPrivateNetworks: true }),
       ocrEnabled: false,
       storeDocument: (input, caller) =>
-        storeCaseDocument(
+        storeDocument(
           {
             objectStore,
             createDocument: toolApp.resources.documents.invoke.create as NonNullable<
