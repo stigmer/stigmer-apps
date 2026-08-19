@@ -1,0 +1,98 @@
+// CitationUse — a record that the firm USED a judgment from its
+// library in a matter, and for what proposition (DD-011 Workstream B /
+// FR-CIT-001): "Arnesh Kumar guidelines — applied in CRL/2026/107 for
+// anticipatory bail". This is the metadata that makes the library
+// compound: the judgment collection (Document category JUDGMENT,
+// FR-DOC-002) holds the papers; citation uses hold the firm's own
+// experience with them.
+//
+// A linking resource BESIDE the Document, never fields on it:
+// documents are immutable by contract (no update RPC exists), and
+// uses accrue over time. Append-only like the mark it is modeled on
+// (DocumentAnnotation): create and list are the entire operation set;
+// who recorded a use and when come from the envelope metadata.
+syntax = "proto3";
+
+package stigmer.law.citationuse.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message CitationUse {
+  string api_version = 1;
+  string kind = 2;
+  // System-managed; the pipeline overwrites whatever a client sends.
+  // created_by/created_at are the use's attribution — who recorded
+  // that the firm relied on this judgment, and when.
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  CitationUseSpec spec = 4 [(buf.validate.field).required = true];
+  CitationUseStatus status = 5;
+}
+
+message CitationUseSpec {
+  // The judgment relied on — must exist AND carry category JUDGMENT
+  // (pipeline-enforced, FAILED_PRECONDITION): the library stays one
+  // coherent pile (owner decision, session 27: reuse the collection,
+  // never a parallel category).
+  string document_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // The matter it was used in. The caller must be able to work this
+  // case's content; the judgment itself must be visible to the caller
+  // (a use is recorded by someone who could read both sides).
+  string case_id = 2 [(buf.validate.field).string.min_len = 1];
+
+  // What it was used FOR, in the lawyer's words — the sentence a
+  // colleague reads years later to decide whether this precedent
+  // fits: "bail where the offence carries under seven years".
+  string proposition = 3 [(buf.validate.field).string = {
+    min_len: 1,
+    max_len: 500
+  }];
+}
+
+message CitationUseStatus {
+  // Display facts derived on read, page-shaped (the Task
+  // caseFileNumber precedent) — lawyers speak in file numbers and
+  // document names, and every consumer renders both.
+  string case_file_number = 1;
+  string document_file_name = 2;
+}
+
+message ListCitationUsesRequest {
+  // Exactly three sanctioned shapes:
+  //   case_id set      — the matter's citations ("what did we rely on
+  //                      here?"); case content, membership-gated.
+  //   document_id set  — everywhere this judgment was used ("has this
+  //                      precedent worked for us?"); narrowed to the
+  //                      caller's visible cases.
+  //   neither          — the firm's recent uses across the caller's
+  //                      visible cases (the Library screen's feed).
+  // Setting both answers the intersection (this judgment, this case).
+  string case_id = 1;
+  string document_id = 2;
+
+  // Defaults to 20, capped at 100. Newest first — recent reliance is
+  // the interesting end of the trail.
+  int32 page_size = 3 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 100
+  }];
+  int32 page_offset = 4 [(buf.validate.field).int32.gte = 0];
+}
+
+message ListCitationUsesResponse {
+  // Newest first (see the request's page_size comment).
+  repeated CitationUse items = 1;
+  int64 total_count = 2;
+}
+
+service CitationUseService {
+  // Record that a judgment was used in a matter, for a proposition.
+  // Case members and partners on the using case; the judgment must
+  // exist, be a JUDGMENT-collection document, and be visible to the
+  // caller.
+  rpc Create(CitationUse) returns (CitationUse);
+  // List uses: by case, by document, or the caller's visible recent
+  // trail. Never wider than the caller's case visibility.
+  rpc List(ListCitationUsesRequest) returns (ListCitationUsesResponse);
+}

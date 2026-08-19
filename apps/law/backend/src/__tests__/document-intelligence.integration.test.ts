@@ -424,6 +424,89 @@ describe("document intelligence, end to end", () => {
     expect(textOf(result)).toMatch(/judgment/);
   });
 
+  /* ------------- the citation library (FR-CIT-001) ------------------- */
+
+  it("FR-CIT-001: a use is recorded against a library judgment and answers from both directions", async () => {
+    const uploaded = await upload(
+      people.lead.email,
+      caseBId,
+      "kesar-v-state-bail-order.pdf",
+      "judgment",
+      "%PDF-1.4 bail order text",
+    );
+    const judgmentId = uploaded.json.metadata?.id ?? "";
+    expect(judgmentId).not.toBe("");
+
+    const recorded = await runTool("record_citation_use", people.lead.email, {
+      document_id: judgmentId,
+      file_number: FILE_A,
+      proposition: "bail where the offence carries under seven years",
+    });
+    expect(recorded.isError).toBeFalsy();
+    expect(textOf(recorded)).toContain(FILE_A);
+
+    // By matter: "what did we rely on here?"
+    const byCase = await runTool("find_citation_uses", people.lead.email, {
+      file_number: FILE_A,
+    });
+    expect(textOf(byCase)).toContain("kesar-v-state-bail-order.pdf");
+    expect(textOf(byCase)).toContain("under seven years");
+
+    // By judgment: "has this precedent worked for us?"
+    const byDocument = await runTool("find_citation_uses", people.lead.email, {
+      document_id: judgmentId,
+    });
+    expect(textOf(byDocument)).toContain(FILE_A);
+  });
+
+  it("FR-CIT-001: only judgment-collection documents can be cited — the library stays one pile", async () => {
+    const evidence = await upload(
+      people.lead.email,
+      caseAId,
+      "site-photos.pdf",
+      "evidence",
+      "%PDF-1.4 photos",
+    );
+    const result = await runTool("record_citation_use", people.lead.email, {
+      document_id: evidence.json.metadata?.id ?? "",
+      file_number: FILE_A,
+      proposition: "should be refused",
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/judgment collection/);
+  });
+
+  it("FR-CIT-001: the reliance trail is never wider than the caller's case visibility", async () => {
+    // The outsider works neither matter: the trail answers empty for
+    // them, and recording on someone else's matter is refused.
+    const trail = await runTool("find_citation_uses", people.outsider.email, {});
+    expect(trail.isError).toBeFalsy();
+    expect(textOf(trail)).not.toContain("kesar-v-state-bail-order.pdf");
+
+    const denied = await runTool("find_citation_uses", people.outsider.email, {
+      file_number: FILE_A,
+    });
+    expect(denied.isError).toBe(true);
+    expect(textOf(denied)).toMatch(/case members and partners/);
+  });
+
+  /* ------------- the statutory frame's verb (FR-ACT-001) ------------- */
+
+  it("FR-ACT-001: add_case_act records dictated acts, and the case story recites the frame", async () => {
+    const added = await runTool("add_case_act", people.lead.email, {
+      file_number: FILE_A,
+      act: "IPC",
+      sections: ["420", "468"],
+      note: "the fraud counts",
+    });
+    expect(added.isError).toBeFalsy();
+    expect(textOf(added)).toContain("IPC");
+
+    const story = await runTool("case_story", people.lead.email, { file_number: FILE_A });
+    expect(textOf(story)).toMatch(/Acts & sections/);
+    expect(textOf(story)).toContain("IPC — 420, 468");
+  });
+
   it("refuses an unknown web caller with the administrator sentence", async () => {
     const result = await runTool("find_documents", "nobody@firm.example", {
       file_number: FILE_A,

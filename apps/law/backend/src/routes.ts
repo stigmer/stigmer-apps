@@ -13,7 +13,9 @@ import type {
 import { userResource } from "@stigmer/identity";
 import { auditEntryResource } from "./domain/audit/auditentry-resource.js";
 import { caseResource } from "./domain/case/case-resource.js";
+import { caseActResource } from "./domain/caseact/case-act-resource.js";
 import { caseMemberResource } from "./domain/casemember/casemember-resource.js";
+import { citationUseResource } from "./domain/citation/citation-use-resource.js";
 import { caseNoteResource } from "./domain/casenote/casenote-resource.js";
 import { clientResource } from "./domain/client/client-resource.js";
 import { deadlineResource } from "./domain/deadline/deadline-resource.js";
@@ -82,6 +84,8 @@ export function createApp(deps: AppDeps) {
       cases: caseResource({ ...guarded, ...projected }),
       caseMembers: caseMemberResource({ ...guarded, ...projected }),
       hearings: hearingResource(guarded),
+      caseActs: caseActResource(guarded),
+      citationUses: citationUseResource(guarded),
       deadlines: deadlineResource(guarded),
       feeArrangements: feeArrangementResource(shared),
       ledgerEntries: ledgerEntryResource(guarded),

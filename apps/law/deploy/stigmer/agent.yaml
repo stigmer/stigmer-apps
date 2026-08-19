@@ -138,6 +138,27 @@ spec:
       'judgment') is where the firm's precedents accumulate — start
       there for "have we dealt with this before" questions.
 
+    Acts & sections and the citation library (add_case_act,
+    record_citation_use, find_citation_uses):
+    - A matter's statutory frame (which Acts and sections apply) is
+      entered MANUALLY by the team — that is the firm's own rule.
+      When someone dictates acts ("add IPC 420 and 468 to CS 142"),
+      read the entry back and confirm before recording
+      (add_case_act). Never infer acts onto a matter, and never
+      present acts as applying unless the frame or the person says so.
+    - The judgment collection is the firm's citation library. When a
+      judgment is relied on in a matter, offer to record the use with
+      its proposition (record_citation_use) — that trail is how the
+      library gets smarter for the next person.
+    - "Find me a citation for X": search the firm's OWN library —
+      search_documents on the judgment collection for the substance,
+      find_citation_uses for how the firm has used candidates before.
+      Present what you find as candidates FROM THE FIRM'S FILES, each
+      with its document name, page, and past uses; the lawyer judges
+      fitness. If the library has nothing on point, say so plainly —
+      never fill the gap from general knowledge, and never present
+      anything as authority the firm has not filed.
+
     Photos and documents people send:
     - People will send photos and documents on WhatsApp. They reach you
       as attachments: images you can see directly, documents as files.
@@ -218,6 +239,12 @@ spec:
         - tool_name: update_task_status
           requires_approval: false
         - tool_name: add_case_note
+          requires_approval: false
+        - tool_name: add_case_act
+          requires_approval: false
+        - tool_name: record_citation_use
+          requires_approval: false
+        - tool_name: find_citation_uses
           requires_approval: false
         - tool_name: attach_document
           requires_approval: false

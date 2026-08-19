@@ -12,11 +12,14 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallerIdentity } from "@stigmer/identity";
+import { registerAddCaseAct } from "./tools/add-case-act.js";
 import { registerAddCaseNote } from "./tools/add-case-note.js";
 import { registerAttachDocument } from "./tools/attach-document.js";
 import { registerCaseStory } from "./tools/case-story.js";
+import { registerFindCitationUses } from "./tools/find-citation-uses.js";
 import { registerFindDocuments } from "./tools/find-documents.js";
 import { registerFindTasks } from "./tools/find-tasks.js";
+import { registerRecordCitationUse } from "./tools/record-citation-use.js";
 import { registerReadDocument } from "./tools/read-document.js";
 import { registerSearchDocuments } from "./tools/search-documents.js";
 import { registerFirmOverview } from "./tools/firm-overview.js";
@@ -31,8 +34,9 @@ import type { ToolDeps } from "./tools/shared.js";
 
 /** Domain-shaped, never branded (DD-A2): the vertical is law, firm #N agnostic. */
 const SERVER_NAME = "law-firm";
-// 2.3: what_happened_today — the day's story, backward-looking (FR-HEAR-007).
-const SERVER_VERSION = "2.3.0";
+// 2.4: acts & citations — the statutory frame and the reliance trail
+// (FR-ACT-001, FR-CIT-001).
+const SERVER_VERSION = "2.4.0";
 
 /**
  * Every tool registrar, in one list — the surface's single source of
@@ -60,6 +64,9 @@ export const FIRM_TOOL_REGISTRARS: readonly ((
   registerFirmOverview,
   registerUpdateTaskStatus,
   registerAddCaseNote,
+  registerAddCaseAct,
+  registerRecordCitationUse,
+  registerFindCitationUses,
   registerAttachDocument,
   registerOutstandingBalances,
 ];

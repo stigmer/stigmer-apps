@@ -16,6 +16,7 @@ import { ClientCreateScreen } from "./screens/clients/ClientCreateScreen.js";
 import { ClientDetailScreen } from "./screens/clients/ClientDetailScreen.js";
 import { ClientListScreen } from "./screens/clients/ClientListScreen.js";
 import { GuideScreen } from "./screens/guide/GuideScreen.js";
+import { LibraryScreen } from "./screens/library/LibraryScreen.js";
 import { InboxScreen } from "./screens/inbox/InboxScreen.js";
 import { RosterScreen } from "./screens/members/RosterScreen.js";
 import { MoneyScreen } from "./screens/money/MoneyScreen.js";
@@ -70,6 +71,7 @@ export function createAppRouter() {
             { path: "/clients/new", element: <ClientCreateScreen /> },
             { path: "/clients/:id", element: <ClientDetailScreen /> },
             { path: "/money", element: <MoneyScreen /> },
+            { path: "/library", element: <LibraryScreen /> },
             { path: "/members", element: <RosterScreen /> },
             { path: "/inbox", element: <InboxScreen /> },
             { path: "/guide", element: <GuideScreen /> },

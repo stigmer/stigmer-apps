@@ -1,0 +1,103 @@
+// CaseAct — one Act on a matter's statutory frame, with the sections
+// invoked under it (DD-011 Workstream B / FR-ACT-001): "IPC — 420,
+// 468". A criminal matter can carry a hundred of these, which is why
+// the frame is a child resource of Case and never a repeated Case
+// field (a spec that large would ride every case version write, and
+// the case's update policy is narrower than who enters acts).
+//
+// MANUAL ENTRY IS THE CONTRACT (the client's own explicit decision):
+// a human identifies the acts and enters them; the system stores
+// facts. The FR-DEAD-003 boundary extends here verbatim — the system
+// never computes a legal consequence, a punishment range, or a forum
+// from an act. Facts in, facts out.
+//
+// Corrections are UPDATES (owner decision, session 27): a wrongly
+// entered act is edited into the right one. No delete exists — the
+// store port has none, and strike-through machinery waits for the
+// first firm that asks.
+syntax = "proto3";
+
+// Package convention: `stigmer.<domain>.<resource>.v1` pairs with
+// apiVersion `<domain>.stigmer.ai/v1`; the domain is "law" (DD-A2).
+package stigmer.law.caseact.v1;
+
+import "buf/validate/validate.proto";
+import "stigmer/resourceapi/v1/resource.proto";
+
+message CaseAct {
+  string api_version = 1;
+  string kind = 2;
+  // System-managed; the pipeline overwrites whatever a client sends.
+  stigmer.resourceapi.v1.ResourceMetadata metadata = 3;
+  CaseActSpec spec = 4 [(buf.validate.field).required = true];
+}
+
+message CaseActSpec {
+  string case_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // The Act's name as the firm cites it — free text ("Indian Penal
+  // Code, 1860", "IPC", "NI Act"): India has over a hundred thousand
+  // statutes across subjects and states, so an enum or registry is
+  // impossible and a normalization layer would be a rules engine in
+  // disguise.
+  string act = 2 [(buf.validate.field).string = {
+    min_len: 1,
+    max_len: 200
+  }];
+
+  // The sections invoked under this Act, one entry per section, in
+  // the firm's own notation ("420", "34 r/w 120B"). One ROW per Act
+  // with its sections together is how the FIR reads and how the team
+  // recites the frame. The cap is a sanity bound, not a domain limit.
+  repeated string sections = 3 [(buf.validate.field).repeated = {
+    max_items: 100,
+    items: {
+      string: {
+        min_len: 1,
+        max_len: 50
+      }
+    }
+  }];
+
+  // Why this act is on the frame, in the lawyer's words — optional
+  // ("the fraud counts", "invoked by the opposing side").
+  string note = 4 [(buf.validate.field).string.max_len = 1000];
+}
+
+message GetCaseActRequest {
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message ListCaseActsRequest {
+  // The statutory frame is always read per matter.
+  string case_id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // Defaults to 20, capped at 100. Ordered by act name ascending —
+  // a frame of a hundred acts reads as a sorted register, not as an
+  // entry diary.
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 0,
+    lte: 100
+  }];
+  int32 page_offset = 3 [(buf.validate.field).int32.gte = 0];
+}
+
+message ListCaseActsResponse {
+  // Act name ascending (see the request's page_size comment).
+  repeated CaseAct items = 1;
+  int64 total_count = 2;
+}
+
+service CaseActService {
+  // Add an Act to a matter's statutory frame. Case members (clerks
+  // included — registry data entry, the diary precedent; owner
+  // decision session 27) and partners; the case must exist.
+  rpc Create(CaseAct) returns (CaseAct);
+  // Correct an entry (act name, sections, note) — the corrections
+  // model. Same audience as Create.
+  rpc Update(CaseAct) returns (CaseAct);
+  // Get one entry. Case content: members and partners only.
+  rpc Get(GetCaseActRequest) returns (CaseAct);
+  // List a matter's statutory frame, act name ascending.
+  rpc List(ListCaseActsRequest) returns (ListCaseActsResponse);
+}

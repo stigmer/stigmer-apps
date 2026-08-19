@@ -43,6 +43,9 @@ async function createMatterWithDocuments(page: Page, fileNumber: string) {
   await page.getByLabel("Client", { exact: true }).fill("Theta Mills");
   await page.getByRole("button", { name: "Add a new client" }).click();
   await page.getByRole("button", { name: "Add client" }).click();
+  // Wait for the client to BIND to the form before proceeding — the
+  // createMatter flake's fix (cases.spec, session 28).
+  await expect(page.getByRole("button", { name: "Change client" })).toBeVisible();
   await page.getByLabel("File number").fill(fileNumber);
   await page.getByLabel("Our client is the").selectOption({ label: "Plaintiff" });
   await page.getByLabel("Opposing party 1 name").fill("Sunrise Traders");

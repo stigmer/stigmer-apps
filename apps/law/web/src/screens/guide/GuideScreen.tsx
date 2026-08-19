@@ -122,6 +122,11 @@ export function GuideScreen() {
             document and the page.
           </li>
           <li>
+            Judgments filed anywhere in the practice (category &ldquo;judgment&rdquo;) also appear
+            together in the Library — the firm&apos;s own citation collection, with where each
+            judgment has been used and for what proposition.
+          </li>
+          <li>
             Scanned papers and photos are read automatically where scan reading is set up for the
             firm — it takes a few minutes after upload. The assistant and search say honestly, per
             document, what can and cannot be read.
@@ -151,6 +156,12 @@ export function GuideScreen() {
             and waits for your yes before writing.
           </li>
           <li>Find, search, and read the documents on file, quoting the page.</li>
+          <li>
+            Record the acts and sections you dictate onto a matter&apos;s frame (it never infers
+            them), record that a judgment was used in a matter, and answer &ldquo;find me a
+            citation for X&rdquo; from the firm&apos;s own library — presenting candidates with
+            their document, page, and past uses for you to judge.
+          </li>
           <li>
             File a paper you send it — a photo of a court order on WhatsApp, an attachment in
             Ask AI — into the matter&apos;s case file, after confirming the matter and the

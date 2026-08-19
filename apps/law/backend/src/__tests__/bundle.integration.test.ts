@@ -202,9 +202,11 @@ describe("the bundled artifact", () => {
     const body = (await listed.json()) as { result?: { tools?: { name: string }[] } };
     expect(body.result?.tools?.map((t) => t.name).sort()).toEqual(
       [
+        "add_case_act",
         "add_case_note",
         "attach_document",
         "case_story",
+        "find_citation_uses",
         "find_documents",
         "find_tasks",
         "firm_overview",
@@ -212,6 +214,7 @@ describe("the bundled artifact", () => {
         "my_deadlines",
         "outstanding_balances",
         "read_document",
+        "record_citation_use",
         "record_hearing_outcome",
         "search_documents",
         "upcoming_hearings",
