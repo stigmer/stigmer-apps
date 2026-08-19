@@ -116,14 +116,20 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium-shell
 
-      - name: Install Playwright browsers
+      # Download and apt are SEPARATE steps with hard timeouts on
+      # purpose: on 2026-08-19 the combined install hung silently for
+      # 10-13 minutes on GitHub's runners (historical baseline: ~27s),
+      # and a single opaque step could not say which half was stuck. A
+      # hang now fails in bounded time and names its culprit.
+      - name: Install Playwright headless shell
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps --only-shell chromium
+        timeout-minutes: 5
+        run: npx playwright install --only-shell chromium
 
       - name: Install Playwright system dependencies
-        # Browsers restored from cache still need the OS libraries —
-        # apt-only, no download; the fast path.
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        # Needed on the cache-hit path too — the cache carries only
+        # browser binaries, never OS libraries.
+        timeout-minutes: 5
         run: npx playwright install-deps chromium
 
       - name: Web E2E
