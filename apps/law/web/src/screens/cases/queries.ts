@@ -22,6 +22,12 @@ import {
 import { RoleOnCase } from "../../gen/stigmer/law/casemember/v1/casemember_pb.js";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import {
+  type CaseAct,
+  CaseActSchema,
+  type CaseActSpec,
+  CaseActSpecSchema,
+} from "../../gen/stigmer/law/caseact/v1/caseact_pb.js";
+import {
   DocumentAnnotationSchema,
   type DocumentAnnotationSpecSchema,
 } from "../../gen/stigmer/law/documentannotation/v1/documentannotation_pb.js";
@@ -126,6 +132,46 @@ export function useAddCaseNote(caseId: string) {
   return useMutation({
     mutationFn: (content: string) => caseNotes.create({ spec: { caseId, content } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cases", "notes", caseId] }),
+  });
+}
+
+/* ------------------------ acts & sections ---------------------------- */
+
+/** The matter's statutory frame (FR-ACT-001), act name ascending. */
+export function useCaseActs(caseId: string, page: number) {
+  const { caseActs } = useApiClients();
+  return useQuery({
+    queryKey: ["cases", "acts", caseId, page],
+    queryFn: () =>
+      caseActs.list({ caseId, pageSize: PAGE_SIZE, pageOffset: page * PAGE_SIZE }),
+  });
+}
+
+export function useAddCaseAct(caseId: string) {
+  const { caseActs } = useApiClients();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { act: string; sections: string[]; note: string }) =>
+      caseActs.create(
+        create(CaseActSchema, {
+          spec: { caseId, act: input.act, sections: input.sections, note: input.note },
+        }),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cases", "acts", caseId] }),
+  });
+}
+
+/** The corrections model (session 27): a wrong entry is edited, never
+ * deleted. Full-spec replacement like every update (D10). */
+export function useUpdateCaseAct(caseId: string) {
+  const { caseActs } = useApiClients();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { readonly existing: CaseAct; readonly spec: CaseActSpec }) =>
+      caseActs.update(
+        create(CaseActSchema, { metadata: input.existing.metadata, spec: input.spec }),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cases", "acts", caseId] }),
   });
 }
 

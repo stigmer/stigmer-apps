@@ -133,6 +133,9 @@ test("accessibility: no serious or critical axe violations on any screen", async
   await page.goto("/clients");
   await scan("clients");
 
+  await page.goto("/library");
+  await scan("library");
+
   await page.goto("/money");
   await scan("money");
 

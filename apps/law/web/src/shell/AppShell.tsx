@@ -28,6 +28,7 @@ import {
   ListChecks,
   LogOut,
   PanelLeft,
+  Scale,
   Users,
 } from "lucide-react";
 import { AskAiButton } from "../assistant/AskAiButton.js";
@@ -140,6 +141,12 @@ export function AppShell() {
                 Money
               </NavLink>
             )}
+            {/* The judgment collection (FR-CIT-002) — firm-wide by
+                design, visibility-scoped server-side like every list. */}
+            <NavLink to="/library" className={navClass} onClick={onNavigate}>
+              <Scale className="size-4" aria-hidden="true" />
+              Library
+            </NavLink>
             <NavLink to="/members" className={navClass} onClick={onNavigate}>
               <Building2 className="size-4" aria-hidden="true" />
               The firm

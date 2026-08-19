@@ -35,6 +35,10 @@ import {
   ForumKind,
 } from "../gen/stigmer/law/case/v1/case_pb.js";
 import {
+  CaseActSchema,
+  CaseActService,
+} from "../gen/stigmer/law/caseact/v1/caseact_pb.js";
+import {
   CaseMemberSchema,
   CaseMemberService,
   RoleOnCase,
@@ -113,6 +117,7 @@ describe("the rebuilt firm, end to end", () => {
   let audit: Client<typeof AuditEntryService>;
   let firmMembers: Client<typeof FirmMemberService>;
   let tasks: Client<typeof TaskService>;
+  let caseActs: Client<typeof CaseActService>;
 
   // The firm: user ids (tokens) and FirmMember ids (person references).
   const people = {
@@ -162,6 +167,7 @@ describe("the rebuilt firm, end to end", () => {
     audit = createClient(AuditEntryService, transport);
     firmMembers = createClient(FirmMemberService, transport);
     tasks = createClient(TaskService, transport);
+    caseActs = createClient(CaseActService, transport);
 
     // Seed the firm through the operator path (FR-AUTH-002): a User is
     // not staff until a FirmMember profile exists (fail-closed).
@@ -393,6 +399,59 @@ describe("the rebuilt firm, end to end", () => {
       auth.as(people.mp.userId),
     );
     expect(entered.items.map((d) => d.spec?.title)).toContain("File written statement");
+  });
+
+  /* ------------- the statutory frame (FR-ACT-001) -------------------- */
+
+  it("FR-ACT-001: the clerk enters an act with its sections — registry entry, the diary precedent", async () => {
+    const entered = await caseActs.create(
+      create(CaseActSchema, {
+        spec: {
+          caseId,
+          act: "Negotiable Instruments Act",
+          sections: ["138", "141"],
+          note: "the cheque counts",
+        },
+      }),
+      auth.as(people.clerk.userId),
+    );
+    expect(entered.spec?.sections).toEqual(["138", "141"]);
+  });
+
+  it("FR-ACT-001: the frame lists as a register — act name ascending, whoever entered what", async () => {
+    await caseActs.create(
+      create(CaseActSchema, {
+        spec: { caseId, act: "Indian Penal Code", sections: ["420", "34 r/w 120B"] },
+      }),
+      auth.as(people.associate.userId),
+    );
+    const frame = await caseActs.list({ caseId }, auth.as(people.mp.userId));
+    const names = frame.items.map((a) => a.spec?.act);
+    expect(names).toEqual(["Indian Penal Code", "Negotiable Instruments Act"]);
+  });
+
+  it("FR-ACT-001: corrections are updates — a wrong entry is edited, never deleted", async () => {
+    const frame = await caseActs.list({ caseId }, auth.as(people.clerk.userId));
+    const wrong = frame.items.find((a) => a.spec?.act === "Indian Penal Code");
+    wrong!.spec!.sections = ["420", "468", "34 r/w 120B"];
+    const corrected = await caseActs.update(wrong!, auth.as(people.clerk.userId));
+    expect(corrected.spec?.sections).toContain("468");
+  });
+
+  it("FR-ACT-001: the frame is case content — a non-member and office staff are refused", async () => {
+    await expectCode(
+      caseActs.list({ caseId }, auth.as(people.associate2.userId)),
+      Code.PermissionDenied,
+      /case members and partners/,
+    );
+    await expectCode(
+      caseActs.create(
+        create(CaseActSchema, { spec: { caseId, act: "IPC" } }),
+        auth.as(people.staff.userId),
+      ),
+      Code.PermissionDenied,
+      /office staff/i,
+    );
   });
 
   /* ------------- work waiting for an owner (FR-TASK-002) ------------ */

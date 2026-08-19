@@ -22,6 +22,8 @@ import { PostgresResourceStore } from "@stigmer/resource-api/postgres";
 import { identityStoreKinds } from "@stigmer/identity/postgres";
 import { AuditEntrySchema } from "./gen/stigmer/law/auditentry/v1/auditentry_pb.js";
 import { CaseSchema } from "./gen/stigmer/law/case/v1/case_pb.js";
+import { CaseActSchema } from "./gen/stigmer/law/caseact/v1/caseact_pb.js";
+import { CitationUseSchema } from "./gen/stigmer/law/citationuse/v1/citationuse_pb.js";
 import { CaseMemberSchema } from "./gen/stigmer/law/casemember/v1/casemember_pb.js";
 import { CaseNoteSchema } from "./gen/stigmer/law/casenote/v1/casenote_pb.js";
 import { ClientSchema } from "./gen/stigmer/law/client/v1/client_pb.js";
@@ -84,6 +86,25 @@ export function createResourceStore(pool: pg.Pool): ResourceStore {
         caseId: "case_id",
         memberId: "member_id",
         active: "active",
+        createdAt: "created_at",
+      },
+    },
+    CaseAct: {
+      schema: CaseActSchema,
+      table: "case_acts",
+      columns: {
+        caseId: "case_id",
+        // The frame lists sorted by act name (the register contract).
+        act: "act",
+        createdAt: "created_at",
+      },
+    },
+    CitationUse: {
+      schema: CitationUseSchema,
+      table: "citation_uses",
+      columns: {
+        caseId: "case_id",
+        documentId: "document_id",
         createdAt: "created_at",
       },
     },

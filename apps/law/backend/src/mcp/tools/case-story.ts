@@ -11,6 +11,10 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallerIdentity } from "@stigmer/identity";
 import { z } from "zod";
 import { ClientRole, ForumKind } from "../../gen/stigmer/law/case/v1/case_pb.js";
+import {
+  ListCaseActsRequestSchema,
+  type CaseAct,
+} from "../../gen/stigmer/law/caseact/v1/caseact_pb.js";
 import { ListCaseNotesRequestSchema } from "../../gen/stigmer/law/casenote/v1/casenote_pb.js";
 import type { CaseNote } from "../../gen/stigmer/law/casenote/v1/casenote_pb.js";
 import {
@@ -74,7 +78,7 @@ export function registerCaseStory(
       const theCase = await caseByFileNumber(deps.resources, caller.principal, args.file_number);
       const caseId = theCase.metadata?.id ?? "";
 
-      const [hearings, deadlines, notes, documents] = await Promise.all([
+      const [hearings, deadlines, notes, documents, acts] = await Promise.all([
         deps.resources.hearings.invoke.list(
           create(ListHearingsRequestSchema, { caseId, pageSize: 100 }),
           caller.principal,
@@ -89,6 +93,10 @@ export function registerCaseStory(
         ),
         deps.resources.documents.invoke.list(
           create(ListDocumentsRequestSchema, { caseId, pageSize: 5 }),
+          caller.principal,
+        ),
+        deps.resources.caseActs.invoke.list(
+          create(ListCaseActsRequestSchema, { caseId, pageSize: 100 }),
           caller.principal,
         ),
       ]);
@@ -128,8 +136,20 @@ export function registerCaseStory(
         .map((d, i) => `${i + 1}. ${documentLine(d)}`)
         .join("\n");
 
+      // The statutory frame (FR-ACT-001): compact — one line per act,
+      // sections inline, the way the FIR reads.
+      const actLines = (acts.items as CaseAct[])
+        .map(
+          (a) =>
+            `- ${a.spec?.act}${a.spec?.sections.length ? ` — ${a.spec.sections.join(", ")}` : ""}${a.spec?.note ? ` (${a.spec.note})` : ""}`,
+        )
+        .join("\n");
+
       const sections = [
         header,
+        acts.items.length > 0
+          ? `Acts & sections (${countNoun(acts.totalCount, "act")}):\n${actLines}`
+          : "",
         diary ? `Recent hearings (newest first):\n${diary}` : "No hearings recorded yet.",
         deadlines.items.length > 0
           ? `Open deadlines (${countNoun(deadlines.totalCount, "deadline")}):\n${deadlineLines}`
