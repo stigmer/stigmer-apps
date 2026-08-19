@@ -1,61 +1,83 @@
 /**
- * Library data access (FR-CIT-001/002): the firm-wide judgment
- * collection (the ONE case-less document list the contract allows —
- * FR-DOC-002, still visibility-scoped server-side) and the reliance
- * trail beside it. Everything keys under ["library"]; recording a use
- * invalidates the prefix.
+ * Library data access (FR-CIT-002 + DD-012 D2): the citation SHELF —
+ * one query over the Citation resource (identity + provenance, the
+ * papers behind it derived server-side) — plus identity search, the
+ * upload front door with identity, identity corrections, and the
+ * reliance trail. Everything keys under ["library"]; recording a use
+ * or filing invalidates the prefix.
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { create } from "@bufbuild/protobuf";
 import { useApiClients } from "../../api/clients.js";
+import type { CitationIdentity } from "../../api/files.js";
 import { PAGE_SIZE } from "../../lib/contract.js";
+import {
+  type Citation,
+  type CitationSpec,
+  CitationSchema,
+} from "../../gen/stigmer/law/citation/v1/citation_pb.js";
 import {
   CitationUseSchema,
   type CitationUseSpec,
 } from "../../gen/stigmer/law/citationuse/v1/citationuse_pb.js";
-import { DocumentCategory } from "../../gen/stigmer/law/document/v1/document_pb.js";
 
-/** Judgments FILED ON MATTERS (the case-bound collection view,
- * FR-DOC-002), newest first — one of the Library screen's two honest
- * piles (the other is the case-less firm library below; two queries by
- * design, never offset-spliced — FR-DOC-005). */
-export function useJudgmentCollection(page: number) {
-  const { documents } = useApiClients();
-  return useQuery({
-    queryKey: ["library", "judgments", page],
-    queryFn: () =>
-      documents.list({
-        category: DocumentCategory.JUDGMENT,
-        pageSize: PAGE_SIZE,
-        pageOffset: page * PAGE_SIZE,
-      }),
-  });
-}
-
-/** The FIRM LIBRARY's own pile (case-less judgments, FR-DOC-005),
- * newest first. */
-export function useLibraryDocuments(page: number) {
-  const { documents } = useApiClients();
+/** The shelf, newest first — ListCitations IS the library screen. */
+export function useShelf(page: number) {
+  const { citations } = useApiClients();
   return useQuery({
     queryKey: ["library", "shelf", page],
     queryFn: () =>
-      documents.list({
-        libraryOnly: true,
-        category: DocumentCategory.JUDGMENT,
-        pageSize: PAGE_SIZE,
-        pageOffset: page * PAGE_SIZE,
-      }),
+      citations.list({ pageSize: PAGE_SIZE, pageOffset: page * PAGE_SIZE }),
   });
 }
 
-/** The library's front door: upload a standalone citation, firm-wide.
- * Invalidates the whole ["library"] prefix. */
+/** Identity search (title + citation string), a suggestion list. */
+export function useShelfSearch(query: string) {
+  const { citations } = useApiClients();
+  const trimmed = query.trim();
+  return useQuery({
+    queryKey: ["library", "shelfSearch", trimmed],
+    queryFn: () => citations.search({ query: trimmed }),
+    enabled: trimmed.length >= 1,
+  });
+}
+
+/** Page-text search across the firm's documents (the assistant's
+ * search_documents pipeline, firm-wide arm) — the Library search box's
+ * second half: identity finds the entry, text finds the passage. */
+export function useLibraryTextSearch(query: string) {
+  const { documentPages } = useApiClients();
+  const trimmed = query.trim();
+  return useQuery({
+    queryKey: ["library", "textSearch", trimmed],
+    queryFn: () => documentPages.search({ query: trimmed, caseId: "" }),
+    enabled: trimmed.length >= 2,
+  });
+}
+
+/** The library's front door: upload a judgment with its identity,
+ * firm-wide. Invalidates the whole ["library"] prefix. */
 export function useUploadLibraryDocument() {
   const { files } = useApiClients();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { file: File }) => files.uploadLibraryDocument(input.file),
+    mutationFn: (input: { file: File; identity?: CitationIdentity }) =>
+      files.uploadLibraryDocument(input.file, input.identity),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["library"] }),
+  });
+}
+
+/** Identity corrections (DD-012 D2): the entry is mutable so a typo is
+ * never permanent. Full-spec replacement like every update (D10). */
+export function useCorrectCitation() {
+  const { citations } = useApiClients();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { readonly existing: Citation; readonly spec: CitationSpec }) =>
+      citations.update(
+        create(CitationSchema, { metadata: input.existing.metadata, spec: input.spec }),
+      ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["library"] }),
   });
 }

@@ -269,6 +269,19 @@ export function createFirmPolicy(
           : deny("The client register is visible to lawyers only");
       }
 
+      case "Citation": {
+        // The library shelf (DD-012 D2) — firm-level like Client, but
+        // scoped to everyone who works cases: shelf entries describe
+        // library documents, and their visibility must equal their
+        // papers' (the FR-DOC-005 library arm). Writes are equally
+        // wide by design — the shelf compounds because anyone on case
+        // work can file, refine, or promote; Promote's source-case
+        // membership is the pipeline's own guard, not a role matter.
+        return (await onFirm(member, "case_workers"))
+          ? ALLOW
+          : deny("Office staff do not view case content");
+      }
+
       case "Case": {
         switch (operation) {
           case "create":
@@ -363,14 +376,18 @@ export function createFirmPolicy(
             ? ALLOW
             : deny("Office staff do not view case content");
         }
-        if (kind === "Document" && !caseId) {
+        if ((kind === "Document" || kind === "DocumentAnnotation") && !caseId) {
           // The FIRM LIBRARY arm (FR-DOC-005) — the ONE deliberate
           // exception to canTouchCaseContent's fail-closed missing-case
           // default (partners-only): a case-less document is library
           // material BY INVARIANT (the create pipeline refuses
-          // case-less rows outside the library categories —
+          // case-less rows outside the library category —
           // document-resource.ts libraryIntegrity), public-record and
-          // readable by everyone who works cases.
+          // readable by everyone who works cases. A case-less
+          // DocumentAnnotation is the FIRM LAYER of a library mark
+          // (DD-012 D2) — same invariant chain: its pipeline verifies
+          // the empty case is legitimate (library documents only), so
+          // the same read rule applies.
           return (await onFirm(member, "case_workers"))
             ? ALLOW
             : deny("Office staff do not view case content");

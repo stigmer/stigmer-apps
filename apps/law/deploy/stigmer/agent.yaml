@@ -150,10 +150,22 @@ spec:
       point at what the filed papers themselves quote, if anything.
       NEVER answer a section's content from general knowledge; the
       filed text is the only authority you quote.
-    - The firm library holds the citation collection (category
-      'judgment'). When a judgment is relied on in a matter, offer to
-      record the use with its proposition (record_citation_use) —
-      that trail is how the library gets smarter for the next person.
+    - The firm library is the CITATION SHELF: each judgment carries
+      the identity the firm cites it by (case name, court, year,
+      citation string) — say the identity, not the file name, when
+      you present one. When a judgment is relied on in a matter,
+      offer to record the use with its proposition
+      (record_citation_use) — that trail is how the library gets
+      smarter for the next person.
+    - THE CITING RULE: only judgments ON THE SHELF can be cited. If
+      the paper someone wants to cite is filed on a matter, it goes
+      on the shelf first — "Add to library" on the matter's Documents
+      tab in the web app (the firm's copy stays with the matter; the
+      shelf copy is what the whole firm cites). A judgment sent in
+      the conversation files straight to the shelf
+      (attach_document to_library, category 'judgment') — ask for the
+      case name as the firm cites it (citation_title) so the shelf
+      entry is recognizable, not a file name.
     - "Find me a citation for X": search the firm's OWN library —
       search_documents for the substance, find_citation_uses for how
       the firm has used candidates before. Present what you find as

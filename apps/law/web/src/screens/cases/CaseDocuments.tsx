@@ -6,6 +6,21 @@
  * (bearer fetch → triggered save; a bare link would arrive at the
  * server with no identity).
  *
+ * CATEGORY (DD-012 session): the picker beside Upload names what kind
+ * of paper is being filed (the header the backend always accepted but
+ * the web never sent — every earlier upload landed uncategorized), and
+ * the chips re-query the list server-side per category — a real filter
+ * on the store's registered column, never a client-side sieve over one
+ * page. Legacy uncategorized rows render the Other label and appear
+ * under All (an UNSPECIFIED row cannot match the OTHER chip — the
+ * proto's honest-bucket rule; they thin out as papers are re-filed).
+ *
+ * A judgment on the file can be PROMOTED to the library shelf
+ * (DD-012 D2): the row's "Add to library" takes the citation identity
+ * and the server copies the paper case-less — deliberately widening it
+ * to the whole firm, which is why the act asks for the identity a
+ * colleague will recognize.
+ *
  * The search box rides the same Search pipeline as the assistant's
  * search_documents verb (FR-DOC-004), scoped to this matter; a typed
  * query swaps the list for page-cited hits (the register's pattern),
@@ -15,22 +30,42 @@
  * case-content rule Search enforces.
  */
 
-import { useRef, useState } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ConnectError } from "@connectrpc/connect";
 import { useApiClients } from "../../api/clients.js";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
+import { Badge } from "../../components/Badge.js";
 import { Button, buttonClass } from "../../components/Button.js";
-import { FormError, InlineInput } from "../../components/Field.js";
+import { FormError, InlineInput, Input, Label, Select } from "../../components/Field.js";
 import { Pagination } from "../../components/Pagination.js";
-import type { Document } from "../../gen/stigmer/law/document/v1/document_pb.js";
+import {
+  DocumentCategory,
+  type Document,
+} from "../../gen/stigmer/law/document/v1/document_pb.js";
+import { documentCategoryLabel } from "../../lib/format.js";
 import { snippetParts } from "../../lib/snippet.js";
 import {
   useCaseDocumentNames,
   useCaseDocumentSearch,
   useCaseDocuments,
+  usePromoteToLibrary,
   useUploadDocuments,
 } from "./queries.js";
+
+/** The upload vocabulary: the byte route's category words beside their
+ * enum (store-document.ts parseCategoryWord) — one source for the
+ * picker and the chips. */
+const CATEGORIES: readonly { word: string; value: DocumentCategory }[] = [
+  { word: "pleading", value: DocumentCategory.PLEADING },
+  { word: "application", value: DocumentCategory.APPLICATION },
+  { word: "evidence", value: DocumentCategory.EVIDENCE },
+  { word: "order_judgment", value: DocumentCategory.ORDER_JUDGMENT },
+  { word: "correspondence", value: DocumentCategory.CORRESPONDENCE },
+  { word: "vakalatnama", value: DocumentCategory.VAKALATNAMA },
+  { word: "judgment", value: DocumentCategory.JUDGMENT },
+  { word: "other", value: DocumentCategory.OTHER },
+];
 
 function formatSize(bytes: bigint): string {
   const n = Number(bytes);
@@ -97,21 +132,120 @@ function DocumentSearchResults(props: {
   );
 }
 
+/** The promote form (DD-012 D2): the identity a colleague recognizes,
+ * asked for at the moment of sharing — title required (the shelf's
+ * own rule), the rest refinable later on the Library screen. */
+function PromoteForm(props: {
+  document: Document;
+  onPromoted: () => void;
+  onCancel: () => void;
+}) {
+  const promote = usePromoteToLibrary();
+  const [title, setTitle] = useState("");
+  const [court, setCourt] = useState("");
+  const [year, setYear] = useState("");
+  const [citation, setCitation] = useState("");
+  const [error, setError] = useState<string | undefined>();
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(undefined);
+    try {
+      await promote.mutateAsync({
+        sourceDocumentId: props.document.metadata?.id ?? "",
+        title: title.trim(),
+        court: court.trim(),
+        year: Number(year) || 0,
+        citation: citation.trim(),
+      });
+      props.onPromoted();
+    } catch (err) {
+      setError(ConnectError.from(err).rawMessage);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={(e) => void onSubmit(e)}
+      aria-label="Add to library"
+      className="mt-2 w-full rounded-card border border-line p-3"
+    >
+      <p className="mb-2 text-xs text-ink-muted">
+        A copy goes on the firm&apos;s citation shelf, readable by everyone who works
+        cases. The matter&apos;s own copy stays here, unchanged.
+      </p>
+      <Label htmlFor="promote-title">Case name (as the firm cites it)</Label>
+      <Input
+        id="promote-title"
+        required
+        maxLength={300}
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Arnesh Kumar vs State of Bihar"
+      />
+      <div className="flex flex-wrap gap-2">
+        <div className="flex-1 basis-40">
+          <Label htmlFor="promote-court">Court</Label>
+          <Input
+            id="promote-court"
+            maxLength={200}
+            value={court}
+            onChange={(e) => setCourt(e.target.value)}
+          />
+        </div>
+        <div className="w-24">
+          <Label htmlFor="promote-year">Year</Label>
+          <Input
+            id="promote-year"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={4}
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+          />
+        </div>
+        <div className="flex-1 basis-40">
+          <Label htmlFor="promote-citation">Citation</Label>
+          <Input
+            id="promote-citation"
+            maxLength={200}
+            value={citation}
+            onChange={(e) => setCitation(e.target.value)}
+            placeholder="AIR 2014 SC 2756"
+          />
+        </div>
+      </div>
+      <FormError message={error} />
+      <div className="mt-1 flex gap-2">
+        <Button type="submit" variant="primary" disabled={promote.isPending}>
+          {promote.isPending ? "Adding…" : "Add to library"}
+        </Button>
+        <Button onClick={props.onCancel}>Cancel</Button>
+      </div>
+    </form>
+  );
+}
+
 export function CaseDocuments(props: { caseId: string }) {
   const [page, setPage] = useState(0);
   const [query, setQuery] = useState("");
-  const documents = useCaseDocuments(props.caseId, page);
+  // UNSPECIFIED = the All chip (no server filter).
+  const [filter, setFilter] = useState<DocumentCategory>(DocumentCategory.UNSPECIFIED);
+  const documents = useCaseDocuments(props.caseId, page, filter);
   const upload = useUploadDocuments(props.caseId);
   const { files } = useApiClients();
   const fileInput = useRef<HTMLInputElement>(null);
+  const [uploadCategory, setUploadCategory] = useState("");
   const [actionError, setActionError] = useState<string | undefined>();
+  const [promotingId, setPromotingId] = useState<string | undefined>();
+  const [confirmation, setConfirmation] = useState<string | undefined>();
   const [, setSearchParams] = useSearchParams();
 
   async function onPicked(picked: FileList | null) {
     if (!picked || picked.length === 0) return;
     setActionError(undefined);
     try {
-      await upload.mutateAsync([...picked]);
+      await upload.mutateAsync({ picked: [...picked], category: uploadCategory || undefined });
     } catch (err) {
       // The failed file's own sentence (mime/size pre-check or the
       // server's answer); already-uploaded files of the batch stay.
@@ -160,9 +294,24 @@ export function CaseDocuments(props: { caseId: string }) {
 
   return (
     <section aria-label="Documents" className="mt-6">
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
         <h2 className="text-sm font-semibold">Documents</h2>
-        <div>
+        <div className="flex items-end gap-2">
+          <div>
+            <Label htmlFor="upload-category">Filing as</Label>
+            <Select
+              id="upload-category"
+              value={uploadCategory}
+              onChange={(e) => setUploadCategory(e.target.value)}
+            >
+              <option value="">Uncategorized</option>
+              {CATEGORIES.map(({ word, value }) => (
+                <option key={word} value={word}>
+                  {documentCategoryLabel(value)}
+                </option>
+              ))}
+            </Select>
+          </div>
           <input
             ref={fileInput}
             type="file"
@@ -192,17 +341,52 @@ export function CaseDocuments(props: { caseId: string }) {
       />
 
       <FormError message={actionError} />
+      {confirmation && (
+        <p role="status" className="mb-2 text-sm text-ok">
+          {confirmation}
+        </p>
+      )}
 
       {query.length > 0 ? (
         <DocumentSearchResults caseId={props.caseId} query={query} onOpen={onOpenHit} />
       ) : (
         <>
+          <div role="group" aria-label="Filter by category" className="mb-3 flex flex-wrap gap-1">
+            <Button
+              variant={filter === DocumentCategory.UNSPECIFIED ? "primary" : undefined}
+              onClick={() => {
+                setFilter(DocumentCategory.UNSPECIFIED);
+                setPage(0);
+              }}
+            >
+              All
+            </Button>
+            {CATEGORIES.map(({ word, value }) => (
+              <Button
+                key={word}
+                variant={filter === value ? "primary" : undefined}
+                onClick={() => {
+                  setFilter(value);
+                  setPage(0);
+                }}
+              >
+                {documentCategoryLabel(value)}
+              </Button>
+            ))}
+          </div>
+
           {documents.isPending && <Loading label="Loading documents…" />}
           {documents.isError && (
             <ErrorState error={documents.error} onRetry={() => void documents.refetch()} />
           )}
           {documents.isSuccess && documents.data.items.length === 0 && (
-            <EmptyState title="No documents yet">
+            <EmptyState
+              title={
+                filter === DocumentCategory.UNSPECIFIED
+                  ? "No documents yet"
+                  : `No ${documentCategoryLabel(filter).toLowerCase()} papers`
+              }
+            >
               Petitions, orders, and evidence uploaded here stay with the case.
             </EmptyState>
           )}
@@ -215,11 +399,36 @@ export function CaseDocuments(props: { caseId: string }) {
                     className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-3 py-1.5 last:border-b-0"
                   >
                     <span className="flex-1 basis-48 font-medium">{doc.spec?.fileName}</span>
+                    <Badge>{documentCategoryLabel(doc.spec?.category ?? DocumentCategory.UNSPECIFIED)}</Badge>
                     <span className="text-xs text-ink-faint">
                       {formatSize(doc.spec?.sizeBytes ?? 0n)}
                     </span>
                     <Button onClick={() => onView(doc)}>View</Button>
                     <Button onClick={() => void onDownload(doc)}>Download</Button>
+                    {doc.spec?.category === DocumentCategory.JUDGMENT && (
+                      <Button
+                        onClick={() => {
+                          setConfirmation(undefined);
+                          setPromotingId((current) =>
+                            current === doc.metadata?.id ? undefined : doc.metadata?.id,
+                          );
+                        }}
+                      >
+                        Add to library
+                      </Button>
+                    )}
+                    {promotingId === doc.metadata?.id && (
+                      <PromoteForm
+                        document={doc}
+                        onCancel={() => setPromotingId(undefined)}
+                        onPromoted={() => {
+                          setPromotingId(undefined);
+                          setConfirmation(
+                            `“${doc.spec?.fileName}” is on the library shelf — the whole firm can cite it now.`,
+                          );
+                        }}
+                      />
+                    )}
                   </li>
                 ))}
               </ul>

@@ -75,13 +75,19 @@ message DocumentAnnotationSpec {
   // pipeline's reference check (FAILED_PRECONDITION).
   string document_id = 1 [(buf.validate.field).string.min_len = 1];
 
-  // Denormalized from the owning Document at create time — safe
-  // because documents are immutable (the case link can never change),
-  // and load-bearing: it is what the policy's case-content rule reads
-  // without a store hop (the DocumentPage precedent). Client-supplied,
-  // so the pipeline VERIFIES it against the referenced document and
-  // refuses a mismatch — denormalized, never trusted.
-  string case_id = 2 [(buf.validate.field).string.min_len = 1];
+  // The mark's case scope — client-supplied, pipeline-VERIFIED, never
+  // trusted, and load-bearing for the policy's case-content rule (the
+  // DocumentPage precedent, no store hop).
+  //
+  // On a CASE-BOUND document it must match the document's case (the
+  // original denormalization — safe because documents are immutable).
+  // On a LIBRARY document (DD-012 D2, lifting the FR-DOC-005
+  // deferral) it is the mark's LAYER: empty = FIRM knowledge, visible
+  // to everyone who works cases (the library read rule — "this is the
+  // operative ratio"); a case id = a mark made while working that
+  // matter, case-team visible and badged with it. Plain string like
+  // DocumentSpec.case_id: proto3-JSON omits the empty value.
+  string case_id = 2;
 
   // 1-based page the mark anchors to, as a lawyer cites it. Marks are
   // single-page by contract (DD-010): a cross-page selection is
@@ -142,11 +148,14 @@ message ListDocumentAnnotationsResponse {
 
 service DocumentAnnotationService {
   // Add a mark with a comment to a document. The referenced document
-  // must exist, the submitted case_id must match its case, and the
-  // caller must be able to work the case's content (case members and
-  // partners; office staff refused).
+  // must exist; on a matter's paper the submitted case_id must match
+  // its case and the caller must be able to work it; on a library
+  // paper case_id picks the LAYER (empty = firm knowledge; a case the
+  // caller can work = case-badged). Office staff refused everywhere.
   rpc Create(DocumentAnnotation) returns (DocumentAnnotation);
-  // List a document's marks, oldest first. Case content: a mark is
-  // never more visible than its document.
+  // List a document's marks, oldest first. On a matter's paper: case
+  // content, a mark never more visible than its document. On a
+  // library paper: the firm layer for every case worker, case-badged
+  // marks only where the caller can work the badge's matter.
   rpc List(ListDocumentAnnotationsRequest) returns (ListDocumentAnnotationsResponse);
 }

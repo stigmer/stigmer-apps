@@ -589,6 +589,7 @@ describe("the rebuilt firm, end to end", () => {
     // production assembly of runSweepOnce's dependencies.
     const sweepApp = createApp({
       store,
+      objectStore: memoryObjectStore(),
       caller: auth.kit.resolver.fromConnect,
       authz: engine,
       credentials: createPgCredentialStore(pool),

@@ -46,6 +46,7 @@ import { isPartnerRole, useMyRole } from "../../session/use-firm-member.js";
 import { useFirmRoster } from "../members/queries.js";
 import { useClient } from "../clients/queries.js";
 import { CaseDeadlines } from "./CaseDeadlines.js";
+import { CaseCitations } from "./CaseCitations.js";
 import { CaseDiary } from "./CaseDiary.js";
 import { CaseDocuments } from "./CaseDocuments.js";
 import { DocumentViewer } from "./DocumentViewer.js";
@@ -57,7 +58,7 @@ import { CaseNotes } from "./CaseNotes.js";
 import { CaseTasks } from "./CaseTasks.js";
 import { useCase, useCaseMembers, useUpdateCase, useUpdateCaseLifecycle } from "./queries.js";
 
-const TABS = ["Diary", "Deadlines", "Tasks", "Notes", "Documents", "Team"] as const;
+const TABS = ["Diary", "Deadlines", "Tasks", "Notes", "Documents", "Citations", "Team"] as const;
 const PARTNER_TABS = ["Money", "History"] as const;
 type Tab = (typeof TABS)[number] | (typeof PARTNER_TABS)[number];
 
@@ -183,13 +184,17 @@ export function CaseDetailScreen() {
 
   function onCloseDocument() {
     // Replace, not push: opening PUSHED, so open→close leaves history
-    // exactly where it started; landing on the Documents tab keeps a
-    // deep-linked close from dropping the reader onto the Diary.
+    // exactly where it started; landing on a documents-bearing tab
+    // keeps a deep-linked close from dropping the reader onto the
+    // Diary. Citations keeps its own ground (its Read opened the
+    // paper); everything else lands on Documents.
     setSearchParams(
       (params) => {
         params.delete("doc");
         params.delete("page");
-        params.set("tab", "Documents");
+        if (params.get("tab") !== "Citations") {
+          params.set("tab", "Documents");
+        }
         return params;
       },
       { replace: true },
@@ -217,6 +222,11 @@ export function CaseDetailScreen() {
       <DocumentViewer
         documentId={viewedDocumentId}
         page={documentPage}
+        // A LIBRARY judgment opened from this matter (the Citations
+        // tab's Read) marks in THIS case's context — the case-badged
+        // layer (DD-012 D2). The document's own case always wins for
+        // the matter's papers.
+        caseContext={id}
         onClose={onCloseDocument}
       />
     );
@@ -318,6 +328,7 @@ export function CaseDetailScreen() {
         {tab === "Tasks" && <CaseTasks caseId={id} />}
         {tab === "Notes" && <CaseNotes caseId={id} />}
         {tab === "Documents" && <CaseDocuments caseId={id} />}
+        {tab === "Citations" && <CaseCitations caseId={id} />}
         {tab === "Team" && <CaseMembersSection caseId={id} leadMemberId={spec.leadLawyerId} />}
         {tab === "Money" && partner && <CaseMoney caseId={id} />}
         {tab === "History" && partner && <CaseHistory caseId={id} />}

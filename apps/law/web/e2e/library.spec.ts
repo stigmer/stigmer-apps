@@ -1,9 +1,11 @@
 /**
- * The firm library (FR-DOC-005 + FR-CIT-002): the citation shelf's
- * front door and the reliance-trail loop — upload a judgment to the
- * library, read it in the library's own viewer, and record where the
- * firm used it. Real bytes through the real library route; the pdfjs
- * reader asserts actual page content (the T12 discipline).
+ * The citation shelf, end to end (FR-CIT-002 + DD-012 D2): file a
+ * judgment with its identity through the front door, read it in the
+ * library's own viewer, then walk the CASE-FIRST citing flow — a
+ * matter's Citations tab, shelf search by the name a lawyer says,
+ * proposition, recorded trail on both sides. Real bytes through the
+ * real library route; the pdfjs reader asserts actual page content
+ * (the T12 discipline).
  */
 
 import { expect, test, type Page } from "@playwright/test";
@@ -42,44 +44,67 @@ async function createMatter(page: Page, fileNumber: string, clientName: string) 
   await expect(page.getByRole("heading", { name: fileNumber })).toBeVisible();
 }
 
-test("upload a judgment, read it in the library, record where the firm used it", async ({ page }) => {
+test("file a judgment with identity, read it on the shelf, cite it from a matter", async ({ page }) => {
   await signIn(page);
 
-  // A matter to record the use against, created first so the shelf's
-  // "Record a use" picker has it.
+  // A matter to cite from, created first.
   await createMatter(page, "CRL/2026/121", "Zeta Traders");
 
-  // The front door: upload real bytes to the citation shelf.
+  // The front door: identity beside the bytes (DD-012 D2).
   await page.goto("/library");
+  await page
+    .getByLabel("Case name (as the firm cites it)")
+    .fill("Fictional Guidelines vs State");
+  await page.getByLabel("Citation").fill("AIR 2099 SC 1");
   await page
     .locator("#library-upload")
     .setInputFiles([
       { name: "fictional-guidelines.pdf", mimeType: "application/pdf", buffer: JUDGMENT_PDF },
     ]);
-  await expect(page.getByRole("status")).toContainText("added to the library");
+  await expect(page.getByRole("status")).toContainText("on the shelf");
 
-  const shelf = page.getByRole("region", { name: "Citations in the library" });
-  await expect(shelf.getByText("fictional-guidelines.pdf")).toBeVisible();
+  // The shelf leads with the IDENTITY, the file name is small print.
+  const shelf = page.getByRole("region", { name: "Citations on the shelf" });
+  await expect(shelf.getByText("Fictional Guidelines vs State")).toBeVisible();
+  await expect(shelf.getByText(/AIR 2099 SC 1/)).toBeVisible();
 
   // Read opens the shared viewer IN PLACE (?doc=) and renders the
   // judgment's actual text — the whole point of the library.
-  await shelf.getByRole("button", { name: "Read" }).click();
+  await shelf.getByRole("button", { name: "Read" }).first().click();
   const reader = page.getByRole("region", { name: "fictional-guidelines.pdf", exact: true });
   await expect(reader).toBeVisible();
   expect(page.url()).toContain("/library?");
   await expect(reader.getByText(/offence carries under seven years/)).toBeVisible();
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(shelf.getByText("fictional-guidelines.pdf")).toBeVisible();
+  await expect(shelf.getByText("Fictional Guidelines vs State")).toBeVisible();
 
-  // The reliance trail (FR-CIT-002): record a use against the matter
-  // and see it in the trail.
-  await shelf.getByRole("button", { name: "Where we used it" }).click();
-  await shelf.getByRole("button", { name: "Record a use" }).click();
-  await page.getByLabel("Used in").selectOption({ label: "CRL/2026/121" });
+  // The CASE-FIRST citing flow (DD-012 D2): from the matter, search
+  // the shelf by the name a lawyer says, pick, state the proposition.
+  await page.goto("/cases");
+  await page.getByRole("link", { name: /CRL\/2026\/121/ }).click();
+  await page.getByRole("button", { name: "Citations" }).click();
+  await page.getByRole("button", { name: "Cite a judgment" }).click();
+  await page.getByLabel(/Find it on the firm's shelf/).fill("Fictional");
+  await expect(page.getByText("Fictional Guidelines vs State")).toBeVisible();
+  await page.getByRole("button", { name: "Cite this" }).click();
   await page
     .getByLabel("For what proposition")
     .fill("bail where the offence carries under seven years");
-  await page.getByRole("button", { name: "Record use" }).click();
-  await expect(shelf.getByText(/bail where the offence carries under seven years/)).toBeVisible();
+  await page.getByRole("button", { name: "Record the citation" }).click();
+
+  // The matter's trail carries it…
+  const citations = page.getByRole("region", { name: "Citations" });
+  await expect(citations.getByText("fictional-guidelines.pdf")).toBeVisible();
+  await expect(
+    citations.getByText(/bail where the offence carries under seven years/),
+  ).toBeVisible();
+
+  // …and the Library's reverse view answers the same fact
+  // (cross-surface coherence: one trail, two doors).
+  await page.goto("/library");
+  await shelf.getByRole("button", { name: "Where we used it" }).first().click();
   await expect(shelf.getByText("CRL/2026/121")).toBeVisible();
+  await expect(
+    shelf.getByText(/bail where the offence carries under seven years/),
+  ).toBeVisible();
 });

@@ -1,6 +1,7 @@
 import type { ConnectRouter } from "@connectrpc/connect";
 import type {
   CallerExtractor,
+  CallerPrincipal,
   ResourceEventPublisher,
   ResourceStore,
 } from "@stigmer/resource-api";
@@ -11,9 +12,11 @@ import type {
   RefreshTokenStore,
 } from "@stigmer/identity";
 import { userResource } from "@stigmer/identity";
+import type { Citation } from "./gen/stigmer/law/citation/v1/citation_pb.js";
 import { auditEntryResource } from "./domain/audit/auditentry-resource.js";
 import { caseResource } from "./domain/case/case-resource.js";
 import { caseMemberResource } from "./domain/casemember/casemember-resource.js";
+import { citationResource } from "./domain/citation/citation-resource.js";
 import { citationUseResource } from "./domain/citation/citation-use-resource.js";
 import { caseNoteResource } from "./domain/casenote/casenote-resource.js";
 import { clientResource } from "./domain/client/client-resource.js";
@@ -21,6 +24,10 @@ import { deadlineResource } from "./domain/deadline/deadline-resource.js";
 import { documentAnnotationResource } from "./domain/document/document-annotation-resource.js";
 import { documentPageResource } from "./domain/document/document-page-resource.js";
 import { documentResource } from "./domain/document/document-resource.js";
+import {
+  storeDocument,
+  type StoreDocumentInput,
+} from "./domain/document/store-document.js";
 import { firmMemberResource } from "./domain/firmmember/firmmember-resource.js";
 import { hearingResource } from "./domain/hearing/hearing-resource.js";
 import { feeArrangementResource } from "./domain/money/feearrangement-resource.js";
@@ -29,9 +36,13 @@ import { notificationResource } from "./domain/notification/notification-resourc
 import { taskResource } from "./domain/task/task-resource.js";
 import { taskCommentResource } from "./domain/taskcomment/taskcomment-resource.js";
 import { createFirmPolicy } from "./domain/authz/policy.js";
+import type { ObjectStore } from "./objectstore/object-store.js";
 
 export interface AppDeps {
   readonly store: ResourceStore;
+  /** The document bucket — the domain's byte port, composed here into
+   * the ONE storeDocument seam every transport (and Promote) shares. */
+  readonly objectStore: ObjectStore;
   /** The one caller seam (T04a): the identity chain's Connect binding. */
   readonly caller: CallerExtractor;
   /** The FGA engine the policy consults and the tuple-sync steps write
@@ -68,9 +79,46 @@ export function createApp(deps: AppDeps) {
   // The three kinds whose rows project into tuples carry the engine for
   // their same-request sync steps (DD-003 D1a).
   const projected = { authz: deps.authz };
+
+  // The ONE composed storeDocument seam (store-document.ts doctrine:
+  // "every byte transport composes THIS function") — shared by the
+  // upload route, attach_document, and Citation.Promote. Two-phase
+  // wiring closes a deliberate cycle: storeDocument files each library
+  // judgment's shelf entry through the Citation pipeline, and the
+  // Citation resource composes storeDocument for Promote. The seam
+  // object is dereferenced at call time, so completing it right after
+  // construction is safe — and createApp never returns it incomplete.
+  const documents = documentResource(guarded);
+  const citationCreate: {
+    fn?: (input: Citation, caller: CallerPrincipal) => Promise<Citation>;
+  } = {};
+  const composedStoreDocument = (input: StoreDocumentInput, caller: CallerPrincipal) =>
+    storeDocument(
+      {
+        objectStore: deps.objectStore,
+        createDocument: documents.invoke.create as NonNullable<
+          typeof documents.invoke.create
+        >,
+        createCitation: (c, p) => citationCreate.fn!(c, p),
+      },
+      input,
+      caller,
+    );
+  const citations = citationResource({
+    ...guarded,
+    promotion: {
+      readObject: (key) => deps.objectStore.get(key),
+      storeLibraryJudgment: composedStoreDocument,
+    },
+  });
+  citationCreate.fn = citations.invoke.create as NonNullable<
+    typeof citations.invoke.create
+  >;
+
   return {
     policy: firm.policy,
     guards: firm.guards,
+    storeDocument: composedStoreDocument,
     resources: {
       users: userResource({
         ...shared,
@@ -83,6 +131,7 @@ export function createApp(deps: AppDeps) {
       cases: caseResource({ ...guarded, ...projected }),
       caseMembers: caseMemberResource({ ...guarded, ...projected }),
       hearings: hearingResource(guarded),
+      citations,
       citationUses: citationUseResource(guarded),
       deadlines: deadlineResource(guarded),
       feeArrangements: feeArrangementResource(shared),
@@ -91,7 +140,7 @@ export function createApp(deps: AppDeps) {
       notifications: notificationResource(shared),
       caseNotes: caseNoteResource(guarded),
       taskComments: taskCommentResource(guarded),
-      documents: documentResource(guarded),
+      documents,
       documentAnnotations: documentAnnotationResource(guarded),
       documentPages: documentPageResource(guarded),
       auditEntries: auditEntryResource(shared),

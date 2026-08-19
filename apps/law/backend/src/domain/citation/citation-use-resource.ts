@@ -6,10 +6,13 @@
  * come from the envelope metadata.
  *
  * Three invariants field validation cannot express live here as steps:
- * the referenced document must carry category JUDGMENT (the library is
- * ONE pile — owner decision session 27), the caller must be able to
- * READ that judgment (a use is recorded by someone who read both
- * sides), and the caller must be able to WORK the using case.
+ * the cited paper must be ON THE LIBRARY SHELF — a case-less JUDGMENT
+ * with its Citation entry (DD-012 D2: "you cite from the shelf; if
+ * it's not there, put it there first", which is what keeps the
+ * reliance trail on ONE document id per paper forever), the caller
+ * must be able to READ that judgment (a use is recorded by someone
+ * who read both sides), and the caller must be able to WORK the
+ * using case.
  */
 
 import { create } from "@bufbuild/protobuf";
@@ -87,8 +90,8 @@ export function citationUseResource(deps: {
     },
   };
 
-  /** The judgment-side invariants (module header): category JUDGMENT,
-   * and readable by the caller — checked through the same policy the
+  /** The judgment-side invariants (module header): shelf-listed, and
+   * readable by the caller — checked through the same policy the
    * document's own reads enforce (one policy, N enforcement points). */
   const judgmentIntegrity: PipelineStep<WriteContext<CitationUse>> = {
     name: "verify-cited-judgment",
@@ -101,10 +104,20 @@ export function citationUseResource(deps: {
       if (!document) {
         throw failedPrecondition(`Referenced document '${spec.documentId}' not found`);
       }
-      if (document.spec?.category !== DocumentCategory.JUDGMENT) {
+      // The shelf rule (DD-012 D2): case-less JUDGMENT with its
+      // Citation entry. The upload choreography files both together,
+      // so the entry lookup is the honest membership test — and its
+      // absence names the recovery (a matter's own judgment is
+      // promoted, a half-filed library paper gets its entry).
+      if (
+        document.spec?.caseId ||
+        document.spec?.category !== DocumentCategory.JUDGMENT ||
+        !(await deps.store.getByNaturalKey("Citation", spec.documentId))
+      ) {
         throw failedPrecondition(
-          "Only documents in the judgment collection can be cited — file the " +
-            "judgment with category 'judgment' first",
+          "Only judgments on the library shelf can be cited — add the " +
+            "judgment to the library first (upload it, or promote it from " +
+            "its matter)",
         );
       }
       if (ctx.caller) {

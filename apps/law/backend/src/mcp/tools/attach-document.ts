@@ -84,6 +84,36 @@ export function registerAttachDocument(
           .string()
           .optional()
           .describe("A hearing id from a previous read, when the paper belongs to one."),
+        citation_title: z
+          .string()
+          .max(300)
+          .optional()
+          .describe(
+            "Library filings only: the judgment's case name as the firm " +
+              "cites it (e.g. 'Arnesh Kumar vs State of Bihar'). Ask for " +
+              "it — a shelf entry named after a PDF file helps nobody; " +
+              "omitted, the file name stands in until someone refines it.",
+          ),
+        citation_court: z
+          .string()
+          .max(200)
+          .optional()
+          .describe("Library filings only: the court, as cited."),
+        citation_year: z
+          .number()
+          .int()
+          .min(0)
+          .max(2100)
+          .optional()
+          .describe("Library filings only: the judgment's year."),
+        citation_string: z
+          .string()
+          .max(200)
+          .optional()
+          .describe(
+            "Library filings only: the reporter or neutral citation, e.g. " +
+              "'AIR 2014 SC 2756'.",
+          ),
       },
       // No destructiveHint (filing adds a record, nothing is lost) — and
       // an untrue hint would approval-gate this tool into a silent skip
@@ -127,7 +157,7 @@ export function registerAttachDocument(
       const document = await deps.storeDocument(
         {
           // undefined = the firm library; the pipeline's libraryIntegrity
-          // step enforces the library-categories rule with its own
+          // step enforces the library-category rule with its own
           // user-facing sentence.
           caseId: matter?.metadata?.id,
           fileName: args.file_name,
@@ -135,6 +165,14 @@ export function registerAttachDocument(
           bytes: fetched.bytes,
           category,
           hearingId: args.hearing_id,
+          citation: args.to_library
+            ? {
+                title: args.citation_title,
+                court: args.citation_court,
+                year: args.citation_year,
+                citation: args.citation_string,
+              }
+            : undefined,
         },
         caller.principal,
       );

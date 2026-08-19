@@ -36,6 +36,10 @@ import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import type { CallerPrincipal } from "@stigmer/resource-api";
 import {
+  type Citation,
+  CitationSchema,
+} from "../../gen/stigmer/law/citation/v1/citation_pb.js";
+import {
   type Document,
   DocumentCategory,
   DocumentSchema,
@@ -58,6 +62,27 @@ export const ALLOWED_MIME_TYPES: ReadonlySet<string> = new Set([
 export interface StoreDocumentDeps {
   readonly objectStore: ObjectStore;
   readonly createDocument: (input: Document, caller: CallerPrincipal) => Promise<Document>;
+  /**
+   * The shelf-entry pipeline (DD-012 D2): every library judgment gets
+   * its Citation companion HERE, in the one seam all byte transports
+   * compose — choreographing it in any single transport would let the
+   * others file shelf-less judgments.
+   */
+  readonly createCitation: (input: Citation, caller: CallerPrincipal) => Promise<Citation>;
+}
+
+/** The shelf entry's identity, captured at filing time (all optional —
+ * a WhatsApp filing may know only the file name; the Citation is
+ * mutable precisely so identity can be refined later). */
+export interface CitationIdentityInput {
+  readonly title?: string;
+  readonly court?: string;
+  readonly year?: number;
+  readonly citation?: string;
+  /** Set ONLY by the promote operation (both together): provenance
+   * and the one-promotion-per-paper key. */
+  readonly promotedFromCaseId?: string;
+  readonly promotedFromDocumentId?: string;
 }
 
 export interface StoreDocumentInput {
@@ -68,6 +93,16 @@ export interface StoreDocumentInput {
   readonly bytes: Buffer;
   readonly category: DocumentCategory;
   readonly hearingId?: string;
+  /** Shelf identity for library judgments; ignored for case filings. */
+  readonly citation?: CitationIdentityInput;
+}
+
+/** "bail-guidelines.pdf" → "bail-guidelines" — the minimal recognition
+ * handle when the filer gave no title (refined later; Citation.title
+ * is required, and an empty shelf line would defeat the field). */
+export function defaultCitationTitle(fileName: string): string {
+  const stem = fileName.replace(/\.[A-Za-z0-9]+$/, "").trim();
+  return stem || fileName;
 }
 
 /** "vakalatnama" → the enum; empty → unspecified; anything else is a
@@ -116,8 +151,9 @@ export async function storeDocument(
     : `library/documents/${randomUUID()}`;
   await deps.objectStore.put(objectKey, input.bytes, input.mimeType);
 
+  let document: Document;
   try {
-    return await deps.createDocument(
+    document = await deps.createDocument(
       create(DocumentSchema, {
         spec: {
           caseId: input.caseId ?? "",
@@ -140,4 +176,30 @@ export async function storeDocument(
     });
     throw err;
   }
+
+  if (!input.caseId && input.category === DocumentCategory.JUDGMENT) {
+    // The shelf entry (DD-012 D2): a library judgment IS a citation,
+    // so the companion rides the same choreography — after the row,
+    // through the Citation pipeline, as the same caller. THROWS on
+    // failure: the paper is filed either way (documents cannot be
+    // rolled back — no delete exists), but a silent shelf gap would
+    // hide the judgment from the Library screen; the loud error tells
+    // the filer, and Citation.Create is the documented recovery for
+    // exactly this half-filed state.
+    await deps.createCitation(
+      create(CitationSchema, {
+        spec: {
+          documentId: document.metadata?.id ?? "",
+          title: input.citation?.title?.trim() || defaultCitationTitle(input.fileName),
+          court: input.citation?.court ?? "",
+          year: input.citation?.year ?? 0,
+          citation: input.citation?.citation ?? "",
+          promotedFromCaseId: input.citation?.promotedFromCaseId ?? "",
+          promotedFromDocumentId: input.citation?.promotedFromDocumentId ?? "",
+        },
+      }),
+      caller,
+    );
+  }
+  return document;
 }

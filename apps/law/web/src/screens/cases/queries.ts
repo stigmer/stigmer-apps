@@ -21,6 +21,7 @@ import {
 } from "../../gen/stigmer/law/case/v1/case_pb.js";
 import { RoleOnCase } from "../../gen/stigmer/law/casemember/v1/casemember_pb.js";
 import type { MessageInitShape } from "@bufbuild/protobuf";
+import { DocumentCategory } from "../../gen/stigmer/law/document/v1/document_pb.js";
 import {
   DocumentAnnotationSchema,
   type DocumentAnnotationSpecSchema,
@@ -131,12 +132,17 @@ export function useAddCaseNote(caseId: string) {
 
 /* ----------------------------- documents ----------------------------- */
 
-export function useCaseDocuments(caseId: string, page: number) {
+export function useCaseDocuments(caseId: string, page: number, category?: DocumentCategory) {
   const { documents } = useApiClients();
   return useQuery({
-    queryKey: ["cases", "documents", caseId, page],
+    queryKey: ["cases", "documents", caseId, page, category ?? 0],
     queryFn: () =>
-      documents.list({ caseId, pageSize: PAGE_SIZE, pageOffset: page * PAGE_SIZE }),
+      documents.list({
+        caseId,
+        category: category ?? DocumentCategory.UNSPECIFIED,
+        pageSize: PAGE_SIZE,
+        pageOffset: page * PAGE_SIZE,
+      }),
   });
 }
 
@@ -238,19 +244,69 @@ export function useDocumentsById(ids: readonly string[]) {
   });
 }
 
-/** Multi-file upload = repeated create (FR-CASE-005 AC10), sequential. */
+/** Multi-file upload = repeated create (FR-CASE-005 AC10), sequential.
+ * The picked category rides every file of the batch — the picker names
+ * one kind of paper per upload act, which is how a clerk files. */
 export function useUploadDocuments(caseId: string) {
   const { files } = useApiClients();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (picked: readonly File[]) => {
-      for (const file of picked) {
-        await files.uploadDocument(caseId, file);
+    mutationFn: async (input: { picked: readonly File[]; category?: string }) => {
+      for (const file of input.picked) {
+        await files.uploadDocument(caseId, file, input.category);
       }
     },
     // The case's derived document_count changed too — one prefix covers
     // the documents list AND every case read.
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cases"] }),
+  });
+}
+
+/* ----------------------- citations (the shelf) ----------------------- */
+
+/** The matter's reliance trail (FR-CIT-001), newest first — the
+ * Citations tab's list. */
+export function useCaseCitationUses(caseId: string, page: number) {
+  const { citationUses } = useApiClients();
+  return useQuery({
+    queryKey: ["cases", "citationUses", caseId, page],
+    queryFn: () =>
+      citationUses.list({ caseId, pageSize: PAGE_SIZE, pageOffset: page * PAGE_SIZE }),
+  });
+}
+
+/** Record a use from the case side — the case-first citing flow's
+ * final act. Invalidates both the matter's trail and the library's. */
+export function useCiteJudgment(caseId: string) {
+  const { citationUses } = useApiClients();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { documentId: string; proposition: string }) =>
+      citationUses.create({
+        spec: { caseId, documentId: input.documentId, proposition: input.proposition },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["cases", "citationUses", caseId] });
+      void queryClient.invalidateQueries({ queryKey: ["library"] });
+    },
+  });
+}
+
+/** Promote a matter's judgment onto the shelf (DD-012 D2): the server
+ * copies the bytes, files the case-less paper, and writes the entry
+ * with provenance — one act, whole-firm visibility, deliberately. */
+export function usePromoteToLibrary() {
+  const { citations } = useApiClients();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      sourceDocumentId: string;
+      title: string;
+      court: string;
+      year: number;
+      citation: string;
+    }) => citations.promote(input),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["library"] }),
   });
 }
 
