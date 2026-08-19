@@ -41,6 +41,26 @@ export function useUnrecordedHearings() {
   });
 }
 
+/** The day's story (FR-HEAR-007): outcomes recorded on this firm
+ * calendar day, newest first. */
+export function useOutcomesRecordedOn(day: string) {
+  const { hearings } = useApiClients();
+  return useQuery({
+    queryKey: ["hearings", "recordedOn", day],
+    queryFn: () => hearings.list({ recordedOn: day, pageSize: 20 }),
+  });
+}
+
+/** The day's story (FR-HEAR-007): hearings put on the board this firm
+ * calendar day — auto-scheduled by an outcome or entered directly. */
+export function useHearingsScheduledOn(day: string) {
+  const { hearings } = useApiClients();
+  return useQuery({
+    queryKey: ["hearings", "scheduledOn", day],
+    queryFn: () => hearings.list({ scheduledOn: day, pageSize: 20 }),
+  });
+}
+
 /**
  * The diary (FR-HEAR-003): the server orders ascending; the diary reads
  * newest first, so the page reverses client-side — presentation order,

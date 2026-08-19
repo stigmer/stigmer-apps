@@ -216,6 +216,7 @@ describe("the bundled artifact", () => {
         "search_documents",
         "upcoming_hearings",
         "update_task_status",
+        "what_happened_today",
       ].sort(),
     );
   });

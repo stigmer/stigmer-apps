@@ -95,6 +95,9 @@ export function createResourceStore(pool: pg.Pool): ResourceStore {
         date: "date",
         outcomeKind: "outcome_kind",
         createdAt: "created_at",
+        // The story-of-the-day predicate (FR-HEAR-007): outcomes
+        // recorded on a firm calendar day.
+        recordedAt: "recorded_at",
       },
     },
     Deadline: {

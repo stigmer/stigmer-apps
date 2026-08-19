@@ -142,6 +142,11 @@ export function GuideScreen() {
             hearings, deadlines, and (for partners) outstanding balances.
           </li>
           <li>
+            Answer &ldquo;what happened today?&rdquo; — outcomes recorded today with their next
+            dates, new hearings on the board, new deadlines, and open tasks still waiting for an
+            owner.
+          </li>
+          <li>
             Record a hearing outcome, update a task, or add a case note — it reads the entry back
             and waits for your yes before writing.
           </li>

@@ -16,6 +16,9 @@ import { useApiClients } from "../../api/clients.js";
 import { PAGE_SIZE } from "../../lib/contract.js";
 import {
   type Task,
+  // Aliased: this module's own TaskListFilter interface predates the
+  // proto enum of the same name.
+  TaskListFilter as ProtoTaskListFilter,
   TaskSchema,
   type TaskSpec,
   TaskSpecSchema,
@@ -40,6 +43,18 @@ export function useTaskList(filter: TaskListFilter, page: number) {
         assigneeId: filter.assigneeId ?? "",
         caseId: filter.caseId ?? "",
       }),
+  });
+}
+
+/** Work waiting for an owner (FR-TASK-002): open tasks with no
+ * assignee, firm-shaped visibility (the contract's rule — an unassigned
+ * task has no "mine" to default to). */
+export function useUnassignedOpenTasks() {
+  const { tasks } = useApiClients();
+  return useQuery({
+    queryKey: ["tasks", "unassigned"],
+    queryFn: () =>
+      tasks.list({ unassignedOnly: true, filter: ProtoTaskListFilter.OPEN, pageSize: 20 }),
   });
 }
 
