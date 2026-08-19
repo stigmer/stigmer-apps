@@ -24,18 +24,20 @@ import {
 
 /**
  * A case's fee arrangement — at most one exists; "none yet" is a normal
- * answer (the form starts blank), so NotFound resolves to undefined
- * instead of surfacing as an error.
+ * answer (the form starts blank), so NotFound resolves to null instead of
+ * surfacing as an error. null, never undefined: TanStack Query rejects a
+ * query that resolves undefined ("<key> data is undefined"), so undefined
+ * would turn the normal answer back into an error state.
  */
 export function useFeeArrangement(caseId: string) {
   const { feeArrangements } = useApiClients();
   return useQuery({
     queryKey: ["money", "fee", caseId],
-    queryFn: async (): Promise<FeeArrangement | undefined> => {
+    queryFn: async (): Promise<FeeArrangement | null> => {
       try {
         return await feeArrangements.get({ caseId });
       } catch (err) {
-        if (ConnectError.from(err).code === Code.NotFound) return undefined;
+        if (ConnectError.from(err).code === Code.NotFound) return null;
         throw err;
       }
     },
@@ -47,7 +49,10 @@ export function useSaveFeeArrangement() {
   const { feeArrangements } = useApiClients();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { readonly existing?: FeeArrangement; readonly spec: FeeArrangementSpec }) =>
+    mutationFn: (input: {
+      readonly existing?: FeeArrangement | null;
+      readonly spec: FeeArrangementSpec;
+    }) =>
       input.existing
         ? feeArrangements.update(
             create(FeeArrangementSchema, { metadata: input.existing.metadata, spec: input.spec }),
