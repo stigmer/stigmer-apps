@@ -21,6 +21,10 @@ import type { TokenSource } from "./transport.js";
 
 export interface FilesClient {
   uploadDocument(caseId: string, file: File): Promise<Document>;
+  /** The firm library's front door (FR-DOC-005): case-less
+   * public-record material — category is REQUIRED ('act' or
+   * 'judgment'; the server enforces the vocabulary). */
+  uploadLibraryDocument(file: File, category: "act" | "judgment"): Promise<Document>;
   downloadDocument(documentId: string): Promise<Blob>;
 }
 
@@ -54,6 +58,33 @@ export function createFilesClient(
           // headers are ASCII, so the client URI-encodes and the server
           // decodes (the byte-route contract).
           "x-file-name": encodeURIComponent(file.name),
+        },
+        body: file,
+      });
+      if (!res.ok) {
+        throw new Error(await errorMessage(res));
+      }
+      return fromJson(DocumentSchema, await res.json());
+    },
+
+    async uploadLibraryDocument(file, category) {
+      if (!(ALLOWED_MIME_TYPES as readonly string[]).includes(file.type)) {
+        throw new Error(
+          `'${file.name}' is not a supported type — upload a PDF, PNG, or JPG (FR-INTEG-001).`,
+        );
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        throw new Error(
+          `'${file.name}' is larger than the 25 MB limit — split or compress it.`,
+        );
+      }
+      const res = await fetchImpl(`${baseUrl}/files/library/documents`, {
+        method: "POST",
+        headers: {
+          authorization: await authorization(),
+          "content-type": file.type,
+          "x-file-name": encodeURIComponent(file.name),
+          "x-document-category": category,
         },
         body: file,
       });

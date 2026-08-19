@@ -20,7 +20,7 @@ import { startOcrSweep } from "./domain/document/ocr-sweep.js";
 import { registerDeactivationHandler } from "./domain/firmmember/deactivation-handler.js";
 import { registerTaskAssignmentHandler } from "./domain/notification/task-assignment-handler.js";
 import { startReminderSweep } from "./domain/reminders/sweep.js";
-import { storeCaseDocument } from "./domain/document/store-document.js";
+import { storeDocument } from "./domain/document/store-document.js";
 import { createFileRoutes } from "./files/file-routes.js";
 import { fetchRemoteDocument } from "./files/remote-fetch.js";
 import { createMcpHttpServer } from "./mcp/transport.js";
@@ -129,7 +129,7 @@ export function createFirmServers(
         // upload route rides.
         fetchDocument: (url) => fetchRemoteDocument(url),
         storeDocument: (input, caller) =>
-          storeCaseDocument(
+          storeDocument(
             {
               objectStore: deps.objectStore,
               createDocument: app.resources.documents.invoke.create as NonNullable<

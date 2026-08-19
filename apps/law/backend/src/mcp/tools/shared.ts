@@ -23,7 +23,7 @@ import type {
   ResourceStore,
 } from "@stigmer/resource-api";
 import type {
-  CaseDocumentInput,
+  StoreDocumentInput,
 } from "../../domain/document/store-document.js";
 import type { FetchedDocument } from "../../files/remote-fetch.js";
 import type { Case } from "../../gen/stigmer/law/case/v1/case_pb.js";
@@ -64,7 +64,7 @@ export interface ToolDeps {
    */
   readonly fetchDocument: (url: string) => Promise<FetchedDocument>;
   readonly storeDocument: (
-    input: CaseDocumentInput,
+    input: StoreDocumentInput,
     caller: CallerPrincipal,
   ) => Promise<Document>;
   /**
@@ -199,9 +199,16 @@ export function deadlineLine(deadline: Deadline, fileNumber?: string): string {
 
 /** One document as a register line: what the paper is, then the record
  * facts. The upload day comes from metadata (documents are immutable —
- * created IS the only date they have). */
+ * created IS the only date they have). A case-less document is firm
+ * library material (FR-DOC-005) and says so where a matter's number
+ * would go; an omitted fileNumber on a CASE document means the matter
+ * is implied by the question, so nothing renders. */
 export function documentLine(document: Document, fileNumber?: string): string {
-  const caseRef = fileNumber ? `${fileNumber} — ` : "";
+  const caseRef = fileNumber
+    ? `${fileNumber} — `
+    : document.spec?.caseId
+      ? ""
+      : "Firm library — ";
   const uploaded = document.metadata?.createdAt?.seconds;
   const day = uploaded
     ? formatDate(new Date(Number(uploaded) * 1000).toISOString().slice(0, 10))
@@ -219,6 +226,7 @@ export function documentRecord(document: Document, fileNumber?: string): Record<
     file_name: document.spec?.fileName,
     category: formatCategory(document.spec?.category ?? 0),
     file_number: fileNumber,
+    in_library: !document.spec?.caseId,
     size_bytes: Number(document.spec?.sizeBytes ?? 0n),
     hearing_id: document.spec?.hearingId || undefined,
   };

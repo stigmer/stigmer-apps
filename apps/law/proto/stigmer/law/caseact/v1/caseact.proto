@@ -62,6 +62,14 @@ message CaseActSpec {
   // Why this act is on the frame, in the lawyer's words — optional
   // ("the fraud counts", "invoked by the opposing side").
   string note = 4 [(buf.validate.field).string.max_len = 1000];
+
+  // The Act's TEXT in the firm library (FR-DOC-005 / FR-ACT-001 as
+  // amended): a link to the ACT-category document, so "IPC 420" on a
+  // case is one click from Section 420 itself — for people and for
+  // the assistant. Optional (the frame is entrable before the text is
+  // filed); when set, the pipeline enforces the reference exists AND
+  // is an ACT-category document.
+  optional string act_document_id = 5;
 }
 
 message GetCaseActRequest {

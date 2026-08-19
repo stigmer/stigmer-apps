@@ -103,13 +103,18 @@ export function documentPageResource(deps: {
           // Membership is the DOCUMENT's rule: pages inherit their
           // document's case, so the guard checks the case the document
           // names — a page can never be more visible than its document.
+          // A case-less document is FIRM LIBRARY material (FR-DOC-005
+          // invariant): readable by every case worker, which the
+          // authorize() above already enforced — no membership to assert.
           const document = (await deps.store.getById("Document", ctx.input.documentId)) as
             | Document
             | undefined;
           if (!document) {
             throw invalidArgument(`Document '${ctx.input.documentId}' not found`);
           }
-          await deps.guards.assertCaseContent(ctx.caller, document.spec?.caseId ?? "");
+          if (document.spec?.caseId) {
+            await deps.guards.assertCaseContent(ctx.caller, document.spec.caseId);
+          }
 
           // Bounded fetch + numeric sort (see the header's ordering
           // note); page_size/page_offset slice the sorted whole.
@@ -145,28 +150,43 @@ export function documentPageResource(deps: {
           // named (membership asserted), otherwise the caller's whole
           // visible case set — firm-wide only when the policy says the
           // caller sees everything (partners).
-          let scope: Record<string, string | { in: string[] }> = {};
+          const limit = ctx.input.limit > 0 ? Math.min(ctx.input.limit, 20) : 8;
           if (ctx.input.caseId) {
             await deps.guards.assertCaseContent(ctx.caller, ctx.input.caseId);
-            scope = { caseId: ctx.input.caseId };
-          } else {
-            const member = await deps.guards.requireMember(ctx.caller);
-            const visible = await deps.guards.visibleCaseIds(member);
-            if (visible !== undefined) {
-              scope = { caseId: { in: [...visible] } };
-            }
+            const items = await deps.store.searchText("DocumentPage", "text", ctx.input.query, limit, {
+              caseId: ctx.input.caseId,
+            });
+            return create(SearchDocumentPagesResponseSchema, {
+              items: items as DocumentPage[],
+            });
           }
 
-          const limit = ctx.input.limit > 0 ? Math.min(ctx.input.limit, 20) : 8;
-          const items = await deps.store.searchText(
-            "DocumentPage",
-            "text",
-            ctx.input.query,
-            limit,
-            scope,
-          );
+          const member = await deps.guards.requireMember(ctx.caller);
+          const visible = await deps.guards.visibleCaseIds(member);
+          if (visible === undefined) {
+            // Partners: no case filter — case-bound AND library pages in
+            // one query (an absent-case row passes an absent filter).
+            const items = await deps.store.searchText("DocumentPage", "text", ctx.input.query, limit);
+            return create(SearchDocumentPagesResponseSchema, {
+              items: items as DocumentPage[],
+            });
+          }
+
+          // Members: two arms — their visible cases AND the firm
+          // library (case-less pages, FR-DOC-005). The filter grammar
+          // is AND-only by design, so "in set OR absent" is two queries;
+          // searchText answers unpaginated suggestion lists, so the
+          // merge is a plain cap, never offset splicing.
+          const [caseHits, libraryHits] = await Promise.all([
+            deps.store.searchText("DocumentPage", "text", ctx.input.query, limit, {
+              caseId: { in: [...visible] },
+            }),
+            deps.store.searchText("DocumentPage", "text", ctx.input.query, limit, {
+              caseId: { absent: true },
+            }),
+          ]);
           return create(SearchDocumentPagesResponseSchema, {
-            items: items as DocumentPage[],
+            items: [...caseHits, ...libraryHits].slice(0, limit) as DocumentPage[],
           });
         },
       }),

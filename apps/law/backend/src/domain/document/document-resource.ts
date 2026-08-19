@@ -26,6 +26,7 @@ import {
   defineResource,
   getOperation,
   invalidArgument,
+  failedPrecondition,
   referencesExistStep,
 } from "@stigmer/resource-api";
 import {
@@ -97,13 +98,24 @@ export function documentResource(deps: {
             throw invalidArgument("caller required");
           }
 
-          let scope: Record<string, string | { in: string[] }> = {};
-          if (ctx.input.caseId) {
+          let scope: Record<string, string | { in: string[] } | { absent: true }> = {};
+          if (ctx.input.libraryOnly || ctx.input.category === DocumentCategory.ACT) {
+            // The firm library (FR-DOC-005): case-less rows are library
+            // material by the create invariant, readable by every case
+            // worker — the authorize() above IS the whole gate, no
+            // visibility scoping applies. ACT lands here even unasked:
+            // acts are case-less by construction, so their only view is
+            // the library view.
+            scope = { caseId: { absent: true } };
+          } else if (ctx.input.caseId) {
             await deps.guards.assertCaseContent(ctx.caller, ctx.input.caseId);
             scope = { caseId: ctx.input.caseId };
           } else if (ctx.input.category === DocumentCategory.JUDGMENT) {
-            // The knowledge-base collection (FR-DOC-002): firm-wide for
-            // partners, member cases only for everyone else.
+            // The knowledge-base collection (FR-DOC-002): CASE-BOUND
+            // judgments — firm-wide for partners, member cases only for
+            // everyone else. Library judgments live behind library_only
+            // (two honest piles; consumers merge without pagination —
+            // FR-DOC-005).
             const member = await deps.guards.requireMember(ctx.caller);
             const visible = await deps.guards.visibleCaseIds(member);
             if (visible !== undefined) {
@@ -111,8 +123,9 @@ export function documentResource(deps: {
             }
           } else {
             throw invalidArgument(
-              "Documents are listed per case (case_id), or firm-wide for the " +
-                "judgment collection (category JUDGMENT)",
+              "Documents are listed per case (case_id), firm-wide for the " +
+                "judgment collection (category JUDGMENT), or from the firm " +
+                "library (library_only / category ACT)",
             );
           }
 
@@ -142,6 +155,7 @@ export function documentResource(deps: {
       // guard below apply to the person, never to "system".
       create: {
         beforePersist: [
+          libraryIntegrity,
           membershipOnWrite(deps),
           referencesExistStep<Document>(deps.store, [
             { kind: "Case", label: "case", get: (d) => d.spec?.caseId || undefined },
@@ -153,9 +167,52 @@ export function documentResource(deps: {
   });
 }
 
+/** The set of categories that may live in the FIRM LIBRARY (case-less,
+ * FR-DOC-005): public-record material only. Exported so the policy's
+ * comments and future transports can cite one source. */
+const LIBRARY_CATEGORIES: ReadonlySet<DocumentCategory> = new Set([
+  DocumentCategory.ACT,
+  DocumentCategory.JUDGMENT,
+]);
+
+/**
+ * The library invariants (FR-DOC-005) — what makes "case-less ⇒
+ * library material" TRUE, which the policy's read arm then relies on:
+ * a case-less document must carry a library category and no hearing
+ * link (a hearing without a case is meaningless), and an ACT is
+ * case-less BY CONSTRUCTION (bare acts are firm-level; one pile —
+ * session-27 owner decision).
+ */
+const libraryIntegrity: PipelineStep<WriteContext<Document>> = {
+  name: "verify-library-shape",
+  execute(ctx) {
+    const spec = (ctx.newState as Document).spec;
+    if (!spec) return;
+    if (!spec.caseId) {
+      if (!LIBRARY_CATEGORIES.has(spec.category)) {
+        throw failedPrecondition(
+          "Only acts and judgments can be filed to the firm library — " +
+            "every other paper belongs to a matter (give its case)",
+        );
+      }
+      if (spec.hearingId) {
+        throw invalidArgument(
+          "A library document cannot reference a hearing — hearings belong to matters",
+        );
+      }
+    } else if (spec.category === DocumentCategory.ACT) {
+      throw failedPrecondition(
+        "Bare acts are firm-library material — file them to the library, not to a matter",
+      );
+    }
+  },
+};
+
 /** Documents are case content: the uploader must be a member of the
  * case (or a partner) — the create-input check the authorize slot
- * cannot make (policy.ts, rule shapes). */
+ * cannot make (policy.ts, rule shapes). Library documents skip it by
+ * shape: no case, no membership to assert (the role gate in the
+ * policy's create rule still applies). */
 function membershipOnWrite(deps: {
   guards: PolicyGuards;
 }): PipelineStep<WriteContext<Document>> {

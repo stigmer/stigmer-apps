@@ -39,6 +39,7 @@ const CATEGORIES = [
   "correspondence",
   "vakalatnama",
   "judgment",
+  "act",
   "other",
 ] as const;
 const WIRE_CATEGORY: Record<(typeof CATEGORIES)[number], DocumentCategory> = {
@@ -49,6 +50,7 @@ const WIRE_CATEGORY: Record<(typeof CATEGORIES)[number], DocumentCategory> = {
   correspondence: DocumentCategory.CORRESPONDENCE,
   vakalatnama: DocumentCategory.VAKALATNAMA,
   judgment: DocumentCategory.JUDGMENT,
+  act: DocumentCategory.ACT,
   other: DocumentCategory.OTHER,
 };
 
@@ -62,10 +64,11 @@ export function registerFindDocuments(
     {
       description:
         "List the documents on a matter's file by its file number (newest " +
-        "first, optionally narrowed to one category), or — with category " +
-        "'judgment' and no file number — the firm's whole judgment " +
-        "collection across the caller's visible cases. Answers include " +
-        "each document's id.",
+        "first, optionally narrowed to one category); or — with no file " +
+        "number — the firm-wide collections: category 'judgment' answers " +
+        "the judgment collection (matters + the firm library together), " +
+        "category 'act' answers the bare-act texts in the firm library. " +
+        "Answers include each document's id.",
       inputSchema: {
         file_number: z
           .string()
@@ -77,18 +80,30 @@ export function registerFindDocuments(
           .optional()
           .describe(
             "Narrow to one kind of paper. 'judgment' alone (no file number) " +
-              "lists the firm-wide judgment collection.",
+              "lists the firm-wide judgment collection; 'act' alone lists " +
+              "the firm library's bare-act texts.",
           ),
       },
       annotations: { readOnlyHint: true },
     },
     gated(NAME, identity, deps.resolveCallerIdentity, async (args, caller) => {
-      if (!args.file_number && args.category !== "judgment") {
+      if (!args.file_number && args.category !== "judgment" && args.category !== "act") {
         // The List operation's own rule, said in tool terms before a
         // round trip is spent discovering it.
         return errorResult(
-          "Give a matter's file number, or ask for category 'judgment' to " +
-            "see the firm-wide judgment collection.",
+          "Give a matter's file number, or ask for category 'judgment' " +
+            "(the firm's judgment collection) or 'act' (the library's " +
+            "bare-act texts).",
+        );
+      }
+      if (args.file_number && args.category === "act") {
+        // Acts are firm-library material by construction (FR-DOC-005) —
+        // asking for a matter's acts-on-file is a shape that cannot
+        // exist; the statutory FRAME lives on the case's Acts tab.
+        return errorResult(
+          "Bare acts live in the firm library, not on a matter's file — " +
+            "ask for category 'act' without a file number. For which acts " +
+            "APPLY to the matter, use case_story.",
         );
       }
 
@@ -100,17 +115,48 @@ export function registerFindDocuments(
           .metadata?.id ?? "";
       }
 
-      const page = await deps.resources.documents.invoke.list(
-        create(ListDocumentsRequestSchema, {
-          caseId,
-          category: args.category ? WIRE_CATEGORY[args.category] : DocumentCategory.UNSPECIFIED,
-          pageSize: 20,
-        }),
-        caller.principal,
-      );
-      const items = page.items as Document[];
+      const category = args.category
+        ? WIRE_CATEGORY[args.category]
+        : DocumentCategory.UNSPECIFIED;
+      const listPage = (init: { caseId?: string; libraryOnly?: boolean }) =>
+        deps.resources.documents.invoke.list(
+          create(ListDocumentsRequestSchema, {
+            caseId: init.caseId ?? "",
+            libraryOnly: init.libraryOnly ?? false,
+            category,
+            pageSize: 20,
+          }),
+          caller.principal,
+        );
 
-      // The firm-wide view spans cases, so every line names its matter.
+      // The judgment collection spans BOTH piles (FR-DOC-005): matters
+      // and the firm library — two bounded pages interleaved newest
+      // first, never offset-spliced (suggestion-list semantics; the
+      // "(showing …)" line stays honest). ACT is one pile by
+      // construction; a named matter is one pile by definition.
+      let items: Document[];
+      let totalCount: bigint;
+      if (!args.file_number && args.category === "judgment") {
+        const [onMatters, inLibrary] = await Promise.all([
+          listPage({}),
+          listPage({ libraryOnly: true }),
+        ]);
+        items = ([...onMatters.items, ...inLibrary.items] as Document[])
+          .sort(
+            (a, b) =>
+              Number(b.metadata?.createdAt?.seconds ?? 0n) -
+              Number(a.metadata?.createdAt?.seconds ?? 0n),
+          )
+          .slice(0, 20);
+        totalCount = onMatters.totalCount + inLibrary.totalCount;
+      } else {
+        const page = await listPage({ caseId });
+        items = page.items as Document[];
+        totalCount = page.totalCount;
+      }
+
+      // The firm-wide views span cases, so every line names its matter
+      // (documentLine says "Firm library" where a document has none).
       const fileNumberOf = args.file_number
         ? () => undefined
         : await fileNumbersByCaseId(deps.store, items.map((d) => d.spec?.caseId ?? ""));
@@ -118,8 +164,10 @@ export function registerFindDocuments(
       const what = args.category ? `${args.category.replace(/_/g, " ")} document` : "document";
       const where = args.file_number
         ? `on ${args.file_number.trim()}`
-        : "in the firm's collection";
-      const headline = `${countNoun(page.totalCount, what)} ${where}`;
+        : args.category === "act"
+          ? "in the firm library"
+          : "in the firm's collection";
+      const headline = `${countNoun(totalCount, what)} ${where}`;
 
       if (items.length === 0) {
         return textResult(`${headline}.`);
@@ -128,12 +176,10 @@ export function registerFindDocuments(
         (d, i) => `${i + 1}. ${documentLine(d, fileNumberOf(d.spec?.caseId))}`,
       );
       const more =
-        page.totalCount > BigInt(items.length)
-          ? `\n(showing the ${items.length} newest)`
-          : "";
+        totalCount > BigInt(items.length) ? `\n(showing the ${items.length} newest)` : "";
       return textResult(`${headline}:\n${lines.join("\n")}${more}`, {
         documents: items.map((d) => documentRecord(d, fileNumberOf(d.spec?.caseId))),
-        total_count: Number(page.totalCount),
+        total_count: Number(totalCount),
       });
     }),
   );

@@ -37,7 +37,11 @@ message DocumentPageSpec {
   // and load-bearing: it is the column the visibility filter scopes
   // content search by, INSIDE the store query (the searchText filter
   // seam), so an out-of-scope page can never occupy a result slot.
-  string case_id = 2 [(buf.validate.field).string.min_len = 1];
+  // Denormalized from the owning Document; EMPTY when the document is
+  // firm-library material (FR-DOC-005) — pages inherit the document's
+  // case-lessness, and the search/list arms treat absent-case pages as
+  // library content readable by every case worker.
+  string case_id = 2;
 
   // 1-based page number, as a lawyer cites it.
   int32 page = 3 [(buf.validate.field).int32.gte = 1];

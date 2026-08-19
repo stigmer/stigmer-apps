@@ -1,10 +1,13 @@
 /**
- * The one implementation of "store a file as a case document" — every
+ * The one implementation of "store a file as a firm document" — every
  * byte transport composes THIS function, none re-performs its steps.
  * Extracted from the upload route when the assistant's attach_document
  * verb became the third way bytes arrive (browser upload, agent
  * hand-off; a future channel is the fourth), because the invariants
- * below are cross-transport and must not fork:
+ * below are cross-transport and must not fork. A document belongs to a
+ * case OR to the firm library (FR-DOC-005: case-less public-record
+ * material — the library-category invariant lives in the resource's
+ * own pipeline steps, not here):
  *
  * - The object is uploaded BEFORE the row is created, so the only
  *   possible inconsistency is an invisible unreferenced object — a
@@ -16,9 +19,9 @@
  *   (document-resource.ts beforePersist) apply to the person, never to
  *   the transport.
  * - The object key follows the contract's `cases/{case_id}/documents/…`
- *   shape; the leaf is a fresh UUID rather than the row id, which does
- *   not exist until the pipeline creates it — uniqueness is the
- *   property that matters.
+ *   shape (`library/documents/…` for the firm library); the leaf is a
+ *   fresh UUID rather than the row id, which does not exist until the
+ *   pipeline creates it — uniqueness is the property that matters.
  *
  * Transports keep their own EARLIEST-POINT checks in front of this
  * (the upload route pre-authorizes before reading the body; the
@@ -52,13 +55,14 @@ export const ALLOWED_MIME_TYPES: ReadonlySet<string> = new Set([
   "image/jpeg",
 ]);
 
-export interface StoreCaseDocumentDeps {
+export interface StoreDocumentDeps {
   readonly objectStore: ObjectStore;
   readonly createDocument: (input: Document, caller: CallerPrincipal) => Promise<Document>;
 }
 
-export interface CaseDocumentInput {
-  readonly caseId: string;
+export interface StoreDocumentInput {
+  /** Empty/absent = the firm library (FR-DOC-005). */
+  readonly caseId?: string;
   readonly fileName: string;
   readonly mimeType: string;
   readonly bytes: Buffer;
@@ -78,16 +82,16 @@ export function parseCategoryWord(word: string): DocumentCategory {
   if (typeof value !== "number" || value === DocumentCategory.UNSPECIFIED) {
     throw new ConnectError(
       `Document: unknown category '${word}' (use pleading, application, evidence, ` +
-        `order_judgment, correspondence, vakalatnama, judgment, or other)`,
+        `order_judgment, correspondence, vakalatnama, judgment, act, or other)`,
       Code.InvalidArgument,
     );
   }
   return value as DocumentCategory;
 }
 
-export async function storeCaseDocument(
-  deps: StoreCaseDocumentDeps,
-  input: CaseDocumentInput,
+export async function storeDocument(
+  deps: StoreDocumentDeps,
+  input: StoreDocumentInput,
   caller: CallerPrincipal,
 ): Promise<Document> {
   if (!ALLOWED_MIME_TYPES.has(input.mimeType)) {
@@ -107,14 +111,16 @@ export async function storeCaseDocument(
     );
   }
 
-  const objectKey = `cases/${input.caseId}/documents/${randomUUID()}`;
+  const objectKey = input.caseId
+    ? `cases/${input.caseId}/documents/${randomUUID()}`
+    : `library/documents/${randomUUID()}`;
   await deps.objectStore.put(objectKey, input.bytes, input.mimeType);
 
   try {
     return await deps.createDocument(
       create(DocumentSchema, {
         spec: {
-          caseId: input.caseId,
+          caseId: input.caseId ?? "",
           fileName: input.fileName,
           mimeType: input.mimeType,
           sizeBytes: BigInt(input.bytes.byteLength),

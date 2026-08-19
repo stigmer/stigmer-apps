@@ -23,6 +23,7 @@ import {
   createOperation,
   customOperation,
   defineResource,
+  failedPrecondition,
   getOperation,
   invalidArgument,
   referencesExistStep,
@@ -37,6 +38,10 @@ import {
   type ListCaseActsResponse,
   ListCaseActsResponseSchema,
 } from "../../gen/stigmer/law/caseact/v1/caseact_pb.js";
+import {
+  DocumentCategory,
+  type Document,
+} from "../../gen/stigmer/law/document/v1/document_pb.js";
 import type { PolicyGuards } from "../authz/policy.js";
 
 export function caseActResource(deps: {
@@ -48,7 +53,28 @@ export function caseActResource(deps: {
 }) {
   const referenceChecks = referencesExistStep<CaseAct>(deps.store, [
     { kind: "Case", label: "case", get: (a) => a.spec?.caseId || undefined },
+    { kind: "Document", label: "act text", get: (a) => a.spec?.actDocumentId || undefined },
   ]);
+
+  /** The text link must point at the acts collection (FR-ACT-001 as
+   * amended by FR-DOC-005): an ACT-category library document — the
+   * frame links statutes, never a matter's own papers. */
+  const actTextIntegrity: PipelineStep<WriteContext<CaseAct>> = {
+    name: "verify-act-text-link",
+    async execute(ctx) {
+      const actDocumentId = (ctx.newState as CaseAct).spec?.actDocumentId;
+      if (!actDocumentId) return;
+      const document = (await deps.store.getById("Document", actDocumentId)) as
+        | Document
+        | undefined;
+      if (document && document.spec?.category !== DocumentCategory.ACT) {
+        throw failedPrecondition(
+          "The linked text must be a bare act from the firm library " +
+            "(category 'act') — file the act there first",
+        );
+      }
+    },
+  };
 
   /** Create-input membership (policy.ts module header: the authorize
    * slot never sees create input). Clerks included — the frame is
@@ -77,10 +103,10 @@ export function caseActResource(deps: {
     service: CaseActService,
     operations: {
       create: createOperation<CaseAct>({
-        beforePersist: [membershipOnWrite, referenceChecks],
+        beforePersist: [membershipOnWrite, referenceChecks, actTextIntegrity],
       }),
       update: updateOperation<CaseAct>({
-        beforePersist: [membershipOnWrite, referenceChecks],
+        beforePersist: [membershipOnWrite, referenceChecks, actTextIntegrity],
       }),
       get: getOperation<CaseAct, GetCaseActRequest>({
         ref: (req) => ({ id: req.id }),

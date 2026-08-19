@@ -1,11 +1,13 @@
 /**
- * The Library (FR-CIT-002): the judgment collection with each row's
- * reliance trail loaded on demand, a use recorded against the caller's
- * own matters, and Read landing in the owning matter's viewer.
+ * The Library (FR-CIT-002 + FR-DOC-005): three honest piles (bare
+ * acts, the library's citations, judgments filed on matters), the
+ * upload front door, the on-demand reliance trail, and Read semantics
+ * per pile — library rows open the in-place viewer (?doc=), matter
+ * rows deep-link their own case's viewer.
  */
 
 import { create } from "@bufbuild/protobuf";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -20,7 +22,9 @@ import {
   DocumentCategory,
   DocumentSchema,
   ListDocumentsResponseSchema,
+  type ListDocumentsRequest,
 } from "../../../gen/stigmer/law/document/v1/document_pb.js";
+import type { MessageInitShape } from "@bufbuild/protobuf";
 import { renderScreen } from "../../../test-support/render.js";
 import { LibraryScreen } from "../LibraryScreen.js";
 
@@ -30,40 +34,57 @@ const SUMMARY = create(CaseSummarySchema, {
   caption: "Meridian Textiles vs Sunrise Traders",
 });
 
-function fakeClients(uses = [
-  create(CitationUseSchema, {
-    metadata: { id: "cuse_1" },
-    spec: {
-      documentId: "doc_1",
-      caseId: "case_1",
-      proposition: "bail where the offence carries under seven years",
-    },
-    status: { caseFileNumber: "CS/2026/042", documentFileName: "kesar-bail-order.pdf" },
-  }),
-]) {
+const LIBRARY_ACT = create(DocumentSchema, {
+  metadata: { id: "doc_act" },
+  spec: { fileName: "penal-code.pdf", category: DocumentCategory.ACT },
+});
+const LIBRARY_JUDGMENT = create(DocumentSchema, {
+  metadata: { id: "doc_lib" },
+  spec: { fileName: "kesar-guidelines.pdf", category: DocumentCategory.JUDGMENT },
+});
+const MATTER_JUDGMENT = create(DocumentSchema, {
+  metadata: { id: "doc_case" },
+  spec: {
+    caseId: "case_1",
+    fileName: "silverline-award.pdf",
+    category: DocumentCategory.JUDGMENT,
+  },
+});
+
+function fakeClients() {
   return {
     documents: {
-      list: vi.fn(async () =>
-        create(ListDocumentsResponseSchema, {
-          items: [
-            create(DocumentSchema, {
-              metadata: { id: "doc_1" },
-              spec: {
-                caseId: "case_1",
-                fileName: "kesar-bail-order.pdf",
-                category: DocumentCategory.JUDGMENT,
-              },
-            }),
-          ],
-          totalCount: 1n,
-        }),
-      ),
+      list: vi.fn(async (req: MessageInitShape<typeof ListDocumentsResponseSchema>) => {
+        const request = req as unknown as ListDocumentsRequest;
+        const items = request.libraryOnly
+          ? request.category === DocumentCategory.ACT
+            ? [LIBRARY_ACT]
+            : [LIBRARY_JUDGMENT]
+          : [MATTER_JUDGMENT];
+        return create(ListDocumentsResponseSchema, {
+          items,
+          totalCount: BigInt(items.length),
+        });
+      }),
     },
     citationUses: {
       list: vi.fn(async () =>
         create(ListCitationUsesResponseSchema, {
-          items: uses,
-          totalCount: BigInt(uses.length),
+          items: [
+            create(CitationUseSchema, {
+              metadata: { id: "cuse_1" },
+              spec: {
+                documentId: "doc_lib",
+                caseId: "case_1",
+                proposition: "bail where the offence carries under seven years",
+              },
+              status: {
+                caseFileNumber: "CS/2026/042",
+                documentFileName: "kesar-guidelines.pdf",
+              },
+            }),
+          ],
+          totalCount: 1n,
         }),
       ),
       create: vi.fn(async (use: unknown) => use),
@@ -73,11 +94,14 @@ function fakeClients(uses = [
         create(ListCasesResponseSchema, { items: [SUMMARY], totalCount: 1n }),
       ),
     },
+    files: {
+      uploadLibraryDocument: vi.fn(async () => LIBRARY_ACT),
+    },
   };
 }
 
-describe("LibraryScreen (the judgment collection, FR-CIT-002)", () => {
-  it("lists the collection with the owning matter, and opens a row's reliance trail on demand", async () => {
+describe("LibraryScreen (the firm's public-record shelf)", () => {
+  it("renders the three piles with the right Read semantics per pile", async () => {
     const clients = fakeClients();
     renderScreen(
       clients as never,
@@ -85,50 +109,53 @@ describe("LibraryScreen (the judgment collection, FR-CIT-002)", () => {
       "/library",
     );
 
-    expect(await screen.findByText("kesar-bail-order.pdf")).toBeInTheDocument();
-    expect(screen.getByText(/filed on CS\/2026\/042/)).toBeInTheDocument();
-    // The trail loads only when the row opens.
-    expect(clients.citationUses.list).not.toHaveBeenCalled();
+    // findByText per region: each pile's query resolves independently,
+    // and the section titles render before their data.
+    const actsPile = await screen.findByRole("region", { name: "Bare acts" });
+    await within(actsPile).findByText("penal-code.pdf");
+    // Library rows open in place (?doc=) — a button, not a case link.
+    expect(within(actsPile).getByRole("button", { name: "Read" })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Where we used it" }));
-    expect(await screen.findByText(/under seven years/)).toBeInTheDocument();
+    const shelf = screen.getByRole("region", { name: "Citations in the library" });
+    await within(shelf).findByText("kesar-guidelines.pdf");
+    expect(within(shelf).getByText("Firm library")).toBeInTheDocument();
 
-    // Read lands in the owning matter's viewer (?doc= deep link).
-    expect(screen.getByRole("link", { name: "Read" })).toHaveAttribute(
+    const onMatters = screen.getByRole("region", { name: "Judgments filed on matters" });
+    await within(onMatters).findByText("silverline-award.pdf");
+    await within(onMatters).findByText(/filed on CS\/2026\/042/);
+    // Matter rows deep-link their own case's viewer.
+    expect(within(onMatters).getByRole("link", { name: "Read" })).toHaveAttribute(
       "href",
-      "/cases/case_1?tab=Documents&doc=doc_1",
+      "/cases/case_1?tab=Documents&doc=doc_case",
     );
+
+    // The trail loads only on demand.
+    expect(clients.citationUses.list).not.toHaveBeenCalled();
+    await userEvent.click(within(shelf).getByRole("button", { name: "Where we used it" }));
+    expect(await within(shelf).findByText(/under seven years/)).toBeInTheDocument();
   });
 
-  it("records a use against one of the caller's matters", async () => {
-    const clients = fakeClients([]);
+  it("uploads through the front door with the chosen shelf", async () => {
+    const clients = fakeClients();
     renderScreen(
       clients as never,
       [{ path: "/library", element: <LibraryScreen /> }],
       "/library",
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "Where we used it" }));
-    expect(await screen.findByText(/No recorded uses yet/)).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: "Record a use" }));
-    await userEvent.selectOptions(screen.getByLabelText("Used in"), "CS/2026/042");
-    await userEvent.type(
-      screen.getByLabelText("For what proposition"),
-      "anticipatory bail guidelines",
+    await screen.findByRole("region", { name: "Add to the library" });
+    await userEvent.selectOptions(screen.getByLabelText("Add to the library as"), "act");
+    const file = new File(["%PDF-1.4 fictional act"], "ni-act.pdf", {
+      type: "application/pdf",
+    });
+    await userEvent.upload(
+      screen.getByLabelText(/Upload to library/, { selector: "input" }),
+      file,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Record use" }));
 
     await waitFor(() =>
-      expect(clients.citationUses.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          spec: expect.objectContaining({
-            documentId: "doc_1",
-            caseId: "case_1",
-            proposition: "anticipatory bail guidelines",
-          }),
-        }),
-      ),
+      expect(clients.files.uploadLibraryDocument).toHaveBeenCalledWith(file, "act"),
     );
+    expect(await screen.findByRole("status")).toHaveTextContent(/added to the library/);
   });
 });

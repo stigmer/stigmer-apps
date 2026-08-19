@@ -16,13 +16,15 @@ import { useState, type FormEvent } from "react";
 import { create } from "@bufbuild/protobuf";
 import { ConnectError } from "@connectrpc/connect";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
-import { Button } from "../../components/Button.js";
-import { FormError, Input, Label } from "../../components/Field.js";
+import { Button, ButtonLink } from "../../components/Button.js";
+import { FormError, Input, Label, Select } from "../../components/Field.js";
 import { Pagination } from "../../components/Pagination.js";
 import {
   type CaseAct,
   CaseActSpecSchema,
 } from "../../gen/stigmer/law/caseact/v1/caseact_pb.js";
+import { DocumentCategory } from "../../gen/stigmer/law/document/v1/document_pb.js";
+import { useLibraryDocuments } from "../library/queries.js";
 import { useAddCaseAct, useCaseActs, useUpdateCaseAct } from "./queries.js";
 
 /** "420, 468, 34 r/w 120B" → ["420", "468", "34 r/w 120B"]. */
@@ -40,9 +42,14 @@ function ActForm(props: {
 }) {
   const add = useAddCaseAct(props.caseId);
   const update = useUpdateCaseAct(props.caseId);
+  // The library's bare acts (FR-DOC-005) — the optional text link. One
+  // page covers a firm's statute shelf; a longer shelf still links via
+  // the assistant or a later search picker.
+  const actTexts = useLibraryDocuments(DocumentCategory.ACT, 0);
   const [act, setAct] = useState(props.existing?.spec?.act ?? "");
   const [sections, setSections] = useState(props.existing?.spec?.sections.join(", ") ?? "");
   const [note, setNote] = useState(props.existing?.spec?.note ?? "");
+  const [actDocumentId, setActDocumentId] = useState(props.existing?.spec?.actDocumentId ?? "");
   const [error, setError] = useState<string | undefined>();
   const pending = add.isPending || update.isPending;
 
@@ -58,6 +65,7 @@ function ActForm(props: {
             act: act.trim(),
             sections: parseSections(sections),
             note: note.trim(),
+            actDocumentId: actDocumentId || undefined,
           }),
         });
       } else {
@@ -65,6 +73,7 @@ function ActForm(props: {
           act: act.trim(),
           sections: parseSections(sections),
           note: note.trim(),
+          actDocumentId: actDocumentId || undefined,
         });
       }
       props.onDone();
@@ -107,6 +116,24 @@ function ActForm(props: {
         onChange={(e) => setNote(e.target.value)}
         placeholder="the fraud counts"
       />
+      <Label htmlFor="act-text">
+        The Act&apos;s text{" "}
+        <span className="font-normal text-ink-muted">
+          (from the library — upload it there if missing)
+        </span>
+      </Label>
+      <Select
+        id="act-text"
+        value={actDocumentId}
+        onChange={(e) => setActDocumentId(e.target.value)}
+      >
+        <option value="">Not linked</option>
+        {actTexts.data?.items.map((doc) => (
+          <option key={doc.metadata?.id} value={doc.metadata?.id}>
+            {doc.spec?.fileName}
+          </option>
+        ))}
+      </Select>
       <FormError message={error} />
       <Button type="submit" variant="primary" disabled={pending}>
         {pending ? "Saving…" : props.existing ? "Save changes" : "Add act"}
@@ -125,7 +152,12 @@ function ActRow(props: { caseId: string; act: CaseAct }) {
         {(act.spec?.sections.length ?? 0) > 0 && (
           <span className="text-xs text-ink-muted">{act.spec?.sections.join(", ")}</span>
         )}
-        <span className="ml-auto">
+        <span className="ml-auto flex gap-1">
+          {act.spec?.actDocumentId && (
+            <ButtonLink to={`/library?doc=${act.spec.actDocumentId}`}>
+              Read the Act
+            </ButtonLink>
+          )}
           <Button onClick={() => setEditing((v) => !v)}>{editing ? "Close" : "Edit"}</Button>
         </span>
       </div>
