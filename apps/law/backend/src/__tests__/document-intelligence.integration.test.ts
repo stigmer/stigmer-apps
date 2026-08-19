@@ -59,6 +59,7 @@ import {
   ListDocumentsRequestSchema,
   RecordDocumentExtractionRequestSchema,
 } from "../gen/stigmer/law/document/v1/document_pb.js";
+import { CitationService } from "../gen/stigmer/law/citation/v1/citation_pb.js";
 import {
   type DocumentPage,
   DocumentPageSchema,
@@ -78,7 +79,6 @@ import {
   runExtractionSweepOnce,
   type ExtractionSweepDeps,
 } from "../domain/document/extraction-sweep.js";
-import { storeDocument } from "../domain/document/store-document.js";
 import { fetchRemoteDocument } from "../files/remote-fetch.js";
 import { FIRM_TOOL_REGISTRARS } from "../mcp/server.js";
 import type { ToolDeps } from "../mcp/tools/shared.js";
@@ -113,6 +113,7 @@ describe("document intelligence, end to end", () => {
   let clients: Client<typeof ClientService>;
   let cases: Client<typeof CaseService>;
   let caseMembers: Client<typeof CaseMemberService>;
+  let citations: Client<typeof CitationService>;
 
   const people = {
     partner: { email: "meera@firm.example", role: FirmRole.MANAGING_PARTNER, userId: "", memberId: "" },
@@ -166,12 +167,14 @@ describe("document intelligence, end to end", () => {
 
   /** Uploads to the FIRM LIBRARY through its real byte route
    * (FR-DOC-005): no case segment, category header required by the
-   * pipeline's library rule. */
+   * pipeline's library rule. Optional shelf identity rides the
+   * x-citation-* headers (DD-012 D2). */
   async function uploadLibrary(
     email: string,
     fileName: string,
     category: string,
     body: Uint8Array | string,
+    identity?: { title?: string; court?: string; year?: number; citation?: string },
     mimeType = "application/pdf",
   ): Promise<{ status: number; json: { metadata?: { id?: string }; message?: string } & Record<string, unknown> }> {
     const person = Object.values(people).find((p) => p.email === email);
@@ -183,6 +186,12 @@ describe("document intelligence, end to end", () => {
         "content-type": mimeType,
         "x-file-name": encodeURIComponent(fileName),
         "x-document-category": category,
+        ...(identity?.title ? { "x-citation-title": encodeURIComponent(identity.title) } : {}),
+        ...(identity?.court ? { "x-citation-court": encodeURIComponent(identity.court) } : {}),
+        ...(identity?.year ? { "x-citation-year": String(identity.year) } : {}),
+        ...(identity?.citation
+          ? { "x-citation-string": encodeURIComponent(identity.citation) }
+          : {}),
       },
       body: typeof body === "string" ? Buffer.from(body) : Buffer.from(body),
     });
@@ -263,12 +272,14 @@ describe("document intelligence, end to end", () => {
     clients = createClient(ClientService, transport);
     cases = createClient(CaseService, transport);
     caseMembers = createClient(CaseMemberService, transport);
+    citations = createClient(CitationService, transport);
 
     // The tools' production dependency shape (server.ts): pipelines
     // composed over the SAME store, the caller resolver reading that
     // store directly (the sweep test's second-assembly precedent).
     const toolApp = createApp({
       store,
+      objectStore,
       caller: auth.kit.resolver.fromConnect,
       authz: engine,
       credentials: createPgCredentialStore(pool),
@@ -285,17 +296,9 @@ describe("document intelligence, end to end", () => {
       // purpose). Everything else is the production posture.
       fetchDocument: (url) => fetchRemoteDocument(url, { allowPrivateNetworks: true }),
       ocrEnabled: false,
-      storeDocument: (input, caller) =>
-        storeDocument(
-          {
-            objectStore,
-            createDocument: toolApp.resources.documents.invoke.create as NonNullable<
-              typeof toolApp.resources.documents.invoke.create
-            >,
-          },
-          input,
-          caller,
-        ),
+      // The ONE composed seam (createApp) — the same closure production
+      // wires, shelf-entry choreography included.
+      storeDocument: toolApp.storeDocument,
     };
 
     // The firm: users + profiles through the operator path.
@@ -456,10 +459,9 @@ describe("document intelligence, end to end", () => {
 
   /* ------------- the citation library (FR-CIT-001) ------------------- */
 
-  it("FR-CIT-001: a use is recorded against a library judgment and answers from both directions", async () => {
-    const uploaded = await upload(
+  it("FR-CIT-001: a use is recorded against a shelf judgment and answers from both directions", async () => {
+    const uploaded = await uploadLibrary(
       people.lead.email,
-      caseBId,
       "kesar-v-state-bail-order.pdf",
       "judgment",
       "%PDF-1.4 bail order text",
@@ -489,7 +491,7 @@ describe("document intelligence, end to end", () => {
     expect(textOf(byDocument)).toContain(FILE_A);
   });
 
-  it("FR-CIT-001: only judgment-collection documents can be cited — the library stays one pile", async () => {
+  it("FR-CIT-001 (tightened, DD-012): only SHELF judgments can be cited — case-bound papers point at promotion", async () => {
     const evidence = await upload(
       people.lead.email,
       caseAId,
@@ -497,13 +499,30 @@ describe("document intelligence, end to end", () => {
       "evidence",
       "%PDF-1.4 photos",
     );
-    const result = await runTool("record_citation_use", people.lead.email, {
+    const notAJudgment = await runTool("record_citation_use", people.lead.email, {
       document_id: evidence.json.metadata?.id ?? "",
       file_number: FILE_A,
       proposition: "should be refused",
     });
-    expect(result.isError).toBe(true);
-    expect(textOf(result)).toMatch(/judgment collection/);
+    expect(notAJudgment.isError).toBe(true);
+    expect(textOf(notAJudgment)).toMatch(/library shelf/);
+
+    // A judgment FILED ON A MATTER is not on the shelf either — the
+    // rule that keeps the reliance trail on one document id per paper.
+    const caseBound = await upload(
+      people.lead.email,
+      caseAId,
+      "some-order-on-file.pdf",
+      "judgment",
+      "%PDF-1.4 a matter's own judgment",
+    );
+    const notOnShelf = await runTool("record_citation_use", people.lead.email, {
+      document_id: caseBound.json.metadata?.id ?? "",
+      file_number: FILE_A,
+      proposition: "should point at promotion",
+    });
+    expect(notOnShelf.isError).toBe(true);
+    expect(textOf(notOnShelf)).toMatch(/promote it from/);
   });
 
   it("FR-CIT-001: the reliance trail is never wider than the caller's case visibility", async () => {
@@ -652,28 +671,221 @@ describe("document intelligence, end to end", () => {
     expect(textOf(neither)).toMatch(/file number|to_library/);
   });
 
-  it("FR-DOC-005: marks on library documents refuse with the named-deferral sentence; the list answers empty", async () => {
+  it("DD-012: two-layer marks on library judgments — the firm layer reads firm-wide, case badges stay with their team", async () => {
+    const markOn = (caseId: string, body: string) =>
+      create(DocumentAnnotationSchema, {
+        spec: {
+          documentId: libraryJudgmentId,
+          caseId,
+          page: 1,
+          annotationKind: AnnotationKind.REGION,
+          rects: [{ left: 0.1, top: 0.1, width: 0.2, height: 0.1 }],
+          body,
+        },
+      });
+
+    // The FIRM layer: no case — institutional knowledge on the shelf.
+    await toolDeps.resources.documentAnnotations.invoke.create(
+      markOn("", "the operative ratio is this paragraph"),
+      { id: people.lead.userId, kind: "user" },
+    );
+    // The case-badged layer: made while working matter A.
+    await toolDeps.resources.documentAnnotations.invoke.create(
+      markOn(caseAId, "helps our limitation argument"),
+      { id: people.lead.userId, kind: "user" },
+    );
+    // A badge is a claim of case context — a matter the author cannot
+    // work refuses (the outsider works neither case).
     await expect(
       toolDeps.resources.documentAnnotations.invoke.create(
-        create(DocumentAnnotationSchema, {
-          spec: {
-            documentId: libraryJudgmentId,
-            caseId: caseAId, // any value — the document itself has none
-            page: 1,
-            annotationKind: AnnotationKind.REGION,
-            rects: [{ left: 0.1, top: 0.1, width: 0.2, height: 0.1 }],
-            body: "should refuse",
-          },
-        }),
-        { id: people.lead.userId, kind: "user" },
+        markOn(caseAId, "should refuse"),
+        { id: people.outsider.userId, kind: "user" },
       ),
-    ).rejects.toThrow(/library documents aren't supported yet/);
+    ).rejects.toThrow(/case members and partners/);
 
-    const marks = await toolDeps.resources.documentAnnotations.invoke.list(
+    // The outsider reads the FIRM layer only; the lead reads both.
+    const outsiderView = await toolDeps.resources.documentAnnotations.invoke.list(
+      create(ListDocumentAnnotationsRequestSchema, { documentId: libraryJudgmentId }),
+      { id: people.outsider.userId, kind: "user" },
+    );
+    expect(outsiderView.items.map((m) => m.spec?.body)).toEqual([
+      "the operative ratio is this paragraph",
+    ]);
+    const leadView = await toolDeps.resources.documentAnnotations.invoke.list(
       create(ListDocumentAnnotationsRequestSchema, { documentId: libraryJudgmentId }),
       { id: people.lead.userId, kind: "user" },
     );
-    expect(Number(marks.totalCount)).toBe(0);
+    expect(leadView.items.map((m) => m.spec?.body)).toEqual([
+      "the operative ratio is this paragraph",
+      "helps our limitation argument",
+    ]);
+
+    // Office staff stay outside — the role gate is untouched.
+    await expect(
+      toolDeps.resources.documentAnnotations.invoke.list(
+        create(ListDocumentAnnotationsRequestSchema, { documentId: libraryJudgmentId }),
+        { id: people.office.userId, kind: "user" },
+      ),
+    ).rejects.toThrow(/office staff/i);
+  });
+
+  /* ------------- the citation shelf (DD-012 D2) ----------------------- */
+
+  it("DD-012: a library filing carries its shelf entry — identity from headers, filename stem as the fallback", async () => {
+    const uploaded = await uploadLibrary(
+      people.lead.email,
+      "arnesh-kumar-bail-guidelines.pdf",
+      "judgment",
+      "%PDF-1.4 arrest guidelines",
+      {
+        title: "Arnesh Kumar vs State of Bihar",
+        court: "Supreme Court",
+        year: 2014,
+        citation: "AIR 2014 SC 2756",
+      },
+    );
+    expect(uploaded.status).toBe(201);
+
+    // Identity search finds it by title AND by citation string.
+    const byTitle = await citations.search({ query: "Arnesh" }, auth.as(people.lead.userId));
+    const entry = byTitle.items.find((c) => c.spec?.title === "Arnesh Kumar vs State of Bihar");
+    expect(entry).toBeDefined();
+    expect(entry?.spec?.court).toBe("Supreme Court");
+    expect(entry?.spec?.year).toBe(2014);
+    expect(entry?.status?.documentFileName).toBe("arnesh-kumar-bail-guidelines.pdf");
+    const byCitation = await citations.search(
+      { query: "AIR 2014" },
+      auth.as(people.lead.userId),
+    );
+    expect(byCitation.items.some((c) => c.metadata?.id === entry?.metadata?.id)).toBe(true);
+
+    // The earlier identity-less filing stands under its filename stem —
+    // minimal but recognizable, refinable because the entry is mutable.
+    const fallback = await citations.search(
+      { query: "cheating-guidelines" },
+      auth.as(people.lead.userId),
+    );
+    expect(fallback.items.some((c) => c.spec?.title === "cheating-guidelines")).toBe(true);
+
+    // Office staff do not browse the shelf — the library read rule.
+    await expect(
+      citations.list({}, auth.as(people.office.userId)),
+    ).rejects.toThrow(/office staff/i);
+  });
+
+  it("DD-012: identity corrections are updates; an entry never re-points to a different paper", async () => {
+    const found = await citations.search({ query: "cheating-guidelines" }, auth.as(people.lead.userId));
+    const entry = found.items[0];
+    expect(entry).toBeDefined();
+
+    entry!.spec!.title = "Deception Precedes Delivery (Guidelines)";
+    entry!.spec!.year = 2019;
+    const corrected = await citations.update(entry!, auth.as(people.lead.userId));
+    expect(corrected.spec?.title).toBe("Deception Precedes Delivery (Guidelines)");
+
+    // The guard fires before any reference check — the message is the
+    // rule, regardless of whether the target paper exists.
+    corrected.spec!.documentId = "doc_somewhere_else";
+    await expect(citations.update(corrected, auth.as(people.lead.userId))).rejects.toThrow(
+      /stays with its paper/,
+    );
+  });
+
+  it("DD-012: promote puts a matter's judgment on the shelf — case-less copy, provenance, firm-readable, cite-able", async () => {
+    const source = await upload(
+      people.lead.email,
+      caseBId,
+      "meridian-v-silverline-award.pdf",
+      "judgment",
+      "%PDF-1.4 arbitral award text",
+    );
+    const sourceId = source.json.metadata?.id ?? "";
+
+    const entry = await citations.promote(
+      {
+        sourceDocumentId: sourceId,
+        title: "Meridian Fabricators vs Silverline",
+        court: "AP High Court",
+        year: 2025,
+        citation: "",
+      },
+      auth.as(people.lead.userId),
+    );
+    expect(entry.spec?.promotedFromCaseId).toBe(caseBId);
+    expect(entry.spec?.promotedFromDocumentId).toBe(sourceId);
+    expect(entry.status?.promotedFromFileNumber).toBe(FILE_B);
+    expect(entry.status?.documentFileName).toBe("meridian-v-silverline-award.pdf");
+    // The shelf copy is a NEW case-less paper, not the case's record.
+    expect(entry.spec?.documentId).not.toBe(sourceId);
+
+    // Case-less ⇒ the whole firm reads it (the FR-DOC-005 arm, no new
+    // policy machinery — the promoted copy inherits it by construction).
+    const download = await fetch(
+      `${base}/files/documents/${entry.spec?.documentId}/content`,
+      { headers: auth.as(people.outsider.userId).headers },
+    );
+    expect(download.status).toBe(200);
+
+    // One promotion per paper.
+    await expect(
+      citations.promote(
+        { sourceDocumentId: sourceId, title: "again", court: "", year: 0, citation: "" },
+        auth.as(people.lead.userId),
+      ),
+    ).rejects.toThrow(/already exists/);
+
+    // The promoted id is what the trail keys on — citing it works.
+    const cited = await runTool("record_citation_use", people.lead.email, {
+      document_id: entry.spec?.documentId,
+      file_number: FILE_B,
+      proposition: "specific performance where delivery was accepted",
+    });
+    expect(cited.isError).toBeFalsy();
+  });
+
+  it("DD-012: promotion is the matter team's act — outsiders, office staff, and non-judgments refuse", async () => {
+    const source = await upload(
+      people.lead.email,
+      caseBId,
+      "second-award-on-file.pdf",
+      "judgment",
+      "%PDF-1.4 another award",
+    );
+    const sourceId = source.json.metadata?.id ?? "";
+
+    await expect(
+      citations.promote(
+        { sourceDocumentId: sourceId, title: "x", court: "", year: 0, citation: "" },
+        auth.as(people.outsider.userId),
+      ),
+    ).rejects.toThrow(/case members and partners/);
+
+    await expect(
+      citations.promote(
+        { sourceDocumentId: sourceId, title: "x", court: "", year: 0, citation: "" },
+        auth.as(people.office.userId),
+      ),
+    ).rejects.toThrow(/office staff/i);
+
+    const photos = await upload(
+      people.lead.email,
+      caseBId,
+      "more-site-photos.pdf",
+      "evidence",
+      "%PDF-1.4 photos",
+    );
+    await expect(
+      citations.promote(
+        {
+          sourceDocumentId: photos.json.metadata?.id ?? "",
+          title: "x",
+          court: "",
+          year: 0,
+          citation: "",
+        },
+        auth.as(people.lead.userId),
+      ),
+    ).rejects.toThrow(/judgment collection/);
   });
 
   it("refuses an unknown web caller with the administrator sentence", async () => {

@@ -22,6 +22,7 @@ import { PostgresResourceStore } from "@stigmer/resource-api/postgres";
 import { identityStoreKinds } from "@stigmer/identity/postgres";
 import { AuditEntrySchema } from "./gen/stigmer/law/auditentry/v1/auditentry_pb.js";
 import { CaseSchema } from "./gen/stigmer/law/case/v1/case_pb.js";
+import { CitationSchema } from "./gen/stigmer/law/citation/v1/citation_pb.js";
 import { CitationUseSchema } from "./gen/stigmer/law/citationuse/v1/citationuse_pb.js";
 import { CaseMemberSchema } from "./gen/stigmer/law/casemember/v1/casemember_pb.js";
 import { CaseNoteSchema } from "./gen/stigmer/law/casenote/v1/casenote_pb.js";
@@ -85,6 +86,23 @@ export function createResourceStore(pool: pg.Pool): ResourceStore {
         caseId: "case_id",
         memberId: "member_id",
         active: "active",
+        createdAt: "created_at",
+      },
+    },
+    Citation: {
+      schema: CitationSchema,
+      table: "citations",
+      // One shelf entry per paper (DD-012 D2) — ALREADY_EXISTS from
+      // the database, the DocumentPage arrangement.
+      naturalKey: { column: "document_id", jsonField: "documentId" },
+      columns: {
+        documentId: "document_id",
+        // The identity search arms (title + citation string).
+        title: "title",
+        citation: "citation",
+        // The one-promotion-per-paper lookup (and its partial-unique
+        // backstop in the migration).
+        promotedFromDocumentId: "promoted_from_document_id",
         createdAt: "created_at",
       },
     },

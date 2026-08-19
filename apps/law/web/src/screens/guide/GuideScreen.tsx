@@ -123,8 +123,11 @@ export function GuideScreen() {
           </li>
           <li>
             The Library is the firm&apos;s citation shelf: judgments the firm relies on,
-            uploaded there directly — no matter needed — plus every judgment filed on a
-            matter. Each citation carries where it has been used and for what proposition.
+            each filed with the name the firm cites it by — never just a PDF name. A
+            judgment already on a matter joins the shelf through &ldquo;Add to
+            library&rdquo; on its Documents tab. Each citation carries where it has been
+            used and for what proposition, and a matter&apos;s Citations tab is where you
+            cite one — search the shelf, pick, say the proposition.
           </li>
           <li>
             Scanned papers and photos are read automatically where scan reading is set up for the

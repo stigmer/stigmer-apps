@@ -1,69 +1,92 @@
 /**
- * The Library (FR-CIT-002 + FR-DOC-005): the firm's public-record
- * shelf. Two honest piles, two simple queries — never one
- * offset-spliced list:
+ * The Library (FR-CIT-002 + DD-012 D2): the firm's citation SHELF —
+ * one list of Citation entries (identity a lawyer recognizes, never a
+ * bare file name), each with its provenance ("filed to the library" /
+ * "promoted from <matter>"), its reliance trail on demand, an
+ * identity-correction affordance (the entry is mutable so a typo is
+ * never permanent), and Read into the shared viewer (?doc= — the
+ * case-detail precedent; marks made here are the FIRM layer).
  *
- *   1. The library's citations — judgments filed directly to the firm
- *      (no owning matter), with each one's reliance trail.
- *   2. Judgments filed on matters — the case-bound collection
- *      (FR-DOC-002), reachable through their own matter's viewer.
+ * The front door takes the identity beside the bytes — the moment of
+ * filing is when someone knows what the judgment IS. Judgments filed
+ * on matters reach this shelf through "Add to library" on their own
+ * case's Documents tab (promotion); the old "judgments filed on
+ * matters" pile is gone — the shelf is CURATED, which is what makes
+ * it the firm's knowledge rather than a listing.
  *
- * (Bare acts were the third pile until the acts feature was removed —
- * owner decision, 2026-08-19.)
- *
- * The front door is HERE: upload a standalone citation firm-wide (the
- * byte route enforces the library-category rule). Reading a library
- * document swaps this frame for the shared viewer (?doc= — the
- * case-detail precedent); marks are a named deferral on library
- * documents, so the panel simply lists none.
+ * SEARCH: two honest answers side by side — identity hits (the
+ * Citation search: "the case I mean") and page-text hits (the same
+ * firm-wide pipeline the assistant rides: "the passage I remember"),
+ * each hit opening the viewer at the cited page.
  */
 
 import { useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ConnectError } from "@connectrpc/connect";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
-import { Button, ButtonLink, buttonClass } from "../../components/Button.js";
-import { FormError, Input, Label, Select } from "../../components/Field.js";
+import { Badge } from "../../components/Badge.js";
+import { Button, buttonClass } from "../../components/Button.js";
+import { FormError, InlineInput, Input, Label, Select } from "../../components/Field.js";
 import { PageHeader } from "../../components/PageHeader.js";
 import { Pagination } from "../../components/Pagination.js";
 import { SectionCard } from "../../components/SectionCard.js";
-import { type Document } from "../../gen/stigmer/law/document/v1/document_pb.js";
-import { formatCalendarDate } from "../../lib/format.js";
-import { useCaseList, useCaseSummaryMap } from "../cases/queries.js";
+import {
+  type Citation,
+  CitationSpecSchema,
+} from "../../gen/stigmer/law/citation/v1/citation_pb.js";
+import { create } from "@bufbuild/protobuf";
+import { citationFacts, formatCalendarDate } from "../../lib/format.js";
+import { snippetParts } from "../../lib/snippet.js";
+import { useCaseList } from "../cases/queries.js";
 import { DocumentViewer } from "../cases/DocumentViewer.js";
 import {
   useCitationUsesByDocument,
-  useJudgmentCollection,
-  useLibraryDocuments,
+  useCorrectCitation,
+  useLibraryTextSearch,
   useRecordCitationUse,
+  useShelf,
+  useShelfSearch,
   useUploadLibraryDocument,
 } from "./queries.js";
 
-function uploadedDay(document: Document): string {
-  const seconds = document.metadata?.createdAt?.seconds;
+function filedDay(citation: Citation): string {
+  const seconds = citation.metadata?.createdAt?.seconds;
   return seconds
     ? formatCalendarDate(new Date(Number(seconds) * 1000).toISOString().slice(0, 10))
     : "";
 }
 
-/** The front door: pick the judgment file(s) to put on the shelf. */
+/** The front door: the judgment's bytes AND its identity in one act. */
 function LibraryUpload() {
   const upload = useUploadLibraryDocument();
+  const [title, setTitle] = useState("");
+  const [court, setCourt] = useState("");
+  const [year, setYear] = useState("");
+  const [citation, setCitation] = useState("");
   const [error, setError] = useState<string | undefined>();
   const [confirmation, setConfirmation] = useState<string | undefined>();
   const fileInput = useRef<HTMLInputElement>(null);
 
   async function onPicked(files: FileList | null) {
-    if (!files || files.length === 0) return;
+    const file = files?.[0];
+    if (!file) return;
     setError(undefined);
     setConfirmation(undefined);
     try {
-      for (const file of files) {
-        await upload.mutateAsync({ file });
-      }
-      setConfirmation(
-        `${files.length > 1 ? `${files.length} files` : `“${files[0]?.name}”`} added to the library.`,
-      );
+      await upload.mutateAsync({
+        file,
+        identity: {
+          title: title.trim() || undefined,
+          court: court.trim() || undefined,
+          year: Number(year) || undefined,
+          citation: citation.trim() || undefined,
+        },
+      });
+      setConfirmation(`“${title.trim() || file.name}” is on the shelf.`);
+      setTitle("");
+      setCourt("");
+      setYear("");
+      setCitation("");
     } catch (err) {
       setError(err instanceof Error ? err.message : ConnectError.from(err).rawMessage);
     } finally {
@@ -72,26 +95,71 @@ function LibraryUpload() {
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-2">
-      <input
-        ref={fileInput}
-        type="file"
-        multiple
-        accept="application/pdf,image/png,image/jpeg"
-        className="sr-only"
-        id="library-upload"
-        onChange={(e) => void onPicked(e.target.files)}
-      />
-      <label htmlFor="library-upload" className={`${buttonClass("primary")} cursor-pointer`}>
-        {upload.isPending ? "Uploading…" : "Upload a judgment / citation"}
-      </label>
+    <div>
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex-1 basis-56">
+          <Label htmlFor="shelf-title">Case name (as the firm cites it)</Label>
+          <Input
+            id="shelf-title"
+            maxLength={300}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Arnesh Kumar vs State of Bihar"
+          />
+        </div>
+        <div className="flex-1 basis-40">
+          <Label htmlFor="shelf-court">Court</Label>
+          <Input
+            id="shelf-court"
+            maxLength={200}
+            value={court}
+            onChange={(e) => setCourt(e.target.value)}
+          />
+        </div>
+        <div className="w-24">
+          <Label htmlFor="shelf-year">Year</Label>
+          <Input
+            id="shelf-year"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={4}
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+          />
+        </div>
+        <div className="flex-1 basis-40">
+          <Label htmlFor="shelf-citation">Citation</Label>
+          <Input
+            id="shelf-citation"
+            maxLength={200}
+            value={citation}
+            onChange={(e) => setCitation(e.target.value)}
+            placeholder="AIR 2014 SC 2756"
+          />
+        </div>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="application/pdf,image/png,image/jpeg"
+          className="sr-only"
+          id="library-upload"
+          onChange={(e) => void onPicked(e.target.files)}
+        />
+        <label htmlFor="library-upload" className={`${buttonClass("primary")} cursor-pointer`}>
+          {upload.isPending ? "Uploading…" : "Pick the file & add"}
+        </label>
+      </div>
+      <p className="mt-1 text-xs text-ink-muted">
+        PDF, PNG, or JPG — up to 25 MB. The name can be corrected later; the paper itself
+        is permanent.
+      </p>
       {confirmation && (
-        <p role="status" className="w-full text-sm text-ok">
+        <p role="status" className="mt-1 text-sm text-ok">
           {confirmation}
         </p>
       )}
       {error && (
-        <div className="w-full">
+        <div className="mt-1">
           <FormError message={error} />
         </div>
       )}
@@ -151,44 +219,138 @@ function RecordUseForm(props: { documentId: string; onDone: () => void }) {
   );
 }
 
-/** One judgment (either pile) with its reliance trail on demand. */
-function JudgmentRow(props: {
-  document: Document;
-  fileNumber?: string;
-  onRead: () => void;
-}) {
-  const { document } = props;
-  const id = document.metadata?.id ?? "";
+/** Identity corrections in place (DD-012 D2): the words, never the
+ * paper — the server refuses a re-pointed document link. */
+function CorrectIdentityForm(props: { citation: Citation; onDone: () => void }) {
+  const correct = useCorrectCitation();
+  const spec = props.citation.spec;
+  const [title, setTitle] = useState(spec?.title ?? "");
+  const [court, setCourt] = useState(spec?.court ?? "");
+  const [year, setYear] = useState(spec?.year ? String(spec.year) : "");
+  const [citation, setCitation] = useState(spec?.citation ?? "");
+  const [error, setError] = useState<string | undefined>();
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(undefined);
+    try {
+      await correct.mutateAsync({
+        existing: props.citation,
+        spec: create(CitationSpecSchema, {
+          // The immutable links carry over verbatim; only words change
+          // (the server refuses anything else — verify-immutable-links).
+          documentId: spec?.documentId ?? "",
+          promotedFromCaseId: spec?.promotedFromCaseId ?? "",
+          promotedFromDocumentId: spec?.promotedFromDocumentId ?? "",
+          title: title.trim(),
+          court: court.trim(),
+          year: Number(year) || 0,
+          citation: citation.trim(),
+        }),
+      });
+      props.onDone();
+    } catch (err) {
+      setError(ConnectError.from(err).rawMessage);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={(e) => void onSubmit(e)}
+      aria-label="Correct the identity"
+      className="mt-2 w-full rounded-card border border-line p-3"
+    >
+      <Label htmlFor="fix-title">Case name</Label>
+      <Input
+        id="fix-title"
+        required
+        maxLength={300}
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+      />
+      <div className="flex flex-wrap gap-2">
+        <div className="flex-1 basis-40">
+          <Label htmlFor="fix-court">Court</Label>
+          <Input
+            id="fix-court"
+            maxLength={200}
+            value={court}
+            onChange={(e) => setCourt(e.target.value)}
+          />
+        </div>
+        <div className="w-24">
+          <Label htmlFor="fix-year">Year</Label>
+          <Input
+            id="fix-year"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={4}
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+          />
+        </div>
+        <div className="flex-1 basis-40">
+          <Label htmlFor="fix-citation">Citation</Label>
+          <Input
+            id="fix-citation"
+            maxLength={200}
+            value={citation}
+            onChange={(e) => setCitation(e.target.value)}
+          />
+        </div>
+      </div>
+      <FormError message={error} />
+      <div className="mt-1 flex gap-2">
+        <Button type="submit" variant="primary" disabled={correct.isPending}>
+          {correct.isPending ? "Saving…" : "Save"}
+        </Button>
+        <Button onClick={props.onDone}>Cancel</Button>
+      </div>
+    </form>
+  );
+}
+
+/** One shelf entry: identity, provenance, trail on demand. */
+function ShelfRow(props: { citation: Citation; onRead: () => void }) {
+  const { citation } = props;
+  const documentId = citation.spec?.documentId ?? "";
   const [open, setOpen] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [fixing, setFixing] = useState(false);
   // The trail loads only when the row opens — a hundred judgments must
   // not mean a hundred queries on screen entry.
-  const uses = useCitationUsesByDocument(id, open);
-  const uploaded = uploadedDay(document);
+  const uses = useCitationUsesByDocument(documentId, open);
+  const facts = citationFacts(citation.spec ?? {});
+  const filed = filedDay(citation);
 
   return (
     <li className="border-b border-line px-3 py-2 last:border-b-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="font-medium">{document.spec?.fileName}</span>
-        <span className="text-xs text-ink-muted">
-          {props.fileNumber ? `filed on ${props.fileNumber}` : "Firm library"}
-          {uploaded && `, ${uploaded}`}
+        <span className="min-w-0 flex-1 basis-56">
+          <span className="block font-medium">{citation.spec?.title}</span>
+          <span className="block text-xs text-ink-muted">
+            {facts && `${facts} · `}
+            {citation.status?.documentFileName}
+            {filed && ` · ${filed}`}
+          </span>
         </span>
-        <span className="ml-auto flex gap-1">
-          {props.fileNumber ? (
-            <ButtonLink
-              to={`/cases/${document.spec?.caseId}?tab=Documents&doc=${id}`}
-            >
-              Read
-            </ButtonLink>
-          ) : (
-            <Button onClick={props.onRead}>Read</Button>
-          )}
+        {citation.status?.promotedFromFileNumber ? (
+          <Badge>from {citation.status.promotedFromFileNumber}</Badge>
+        ) : (
+          <Badge>Library</Badge>
+        )}
+        <span className="flex gap-1">
+          <Button onClick={props.onRead}>Read</Button>
+          <Button onClick={() => setFixing((v) => !v)}>{fixing ? "Close" : "Edit"}</Button>
           <Button onClick={() => setOpen((v) => !v)}>
             {open ? "Close" : "Where we used it"}
           </Button>
         </span>
       </div>
+
+      {fixing && (
+        <CorrectIdentityForm citation={citation} onDone={() => setFixing(false)} />
+      )}
 
       {open && (
         <div className="mt-2">
@@ -217,22 +379,106 @@ function JudgmentRow(props: {
               {recording ? "Close" : "Record a use"}
             </Button>
           </div>
-          {recording && <RecordUseForm documentId={id} onDone={() => setRecording(false)} />}
+          {recording && <RecordUseForm documentId={documentId} onDone={() => setRecording(false)} />}
         </div>
       )}
     </li>
   );
 }
 
+/** The search box's two honest answers: identity hits and page-text
+ * hits, each labeled for what it is. */
+function LibrarySearchResults(props: {
+  query: string;
+  onOpen: (documentId: string, page?: number) => void;
+}) {
+  const trimmed = props.query.trim();
+  const identity = useShelfSearch(trimmed);
+  const text = useLibraryTextSearch(trimmed);
+
+  return (
+    <SectionCard title={`Search: “${trimmed}”`}>
+      <h3 className="mb-1 text-xs font-semibold text-ink-muted">Matching citations</h3>
+      {identity.isPending && <Loading label="Searching the shelf…" />}
+      {identity.isError && (
+        <ErrorState error={identity.error} onRetry={() => void identity.refetch()} />
+      )}
+      {identity.isSuccess && identity.data.items.length === 0 && (
+        <p className="mb-2 text-sm text-ink-muted">No shelf entry matches the name.</p>
+      )}
+      {identity.isSuccess && identity.data.items.length > 0 && (
+        <ul className="mb-3 rounded-card border border-line">
+          {identity.data.items.map((citation) => {
+            const facts = citationFacts(citation.spec ?? {});
+            return (
+              <li
+                key={citation.metadata?.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-3 py-2 last:border-b-0"
+              >
+                <span className="min-w-0 flex-1 basis-48">
+                  <span className="block font-medium">{citation.spec?.title}</span>
+                  <span className="block text-xs text-ink-muted">
+                    {facts && `${facts} · `}
+                    {citation.status?.documentFileName}
+                  </span>
+                </span>
+                <Button onClick={() => props.onOpen(citation.spec?.documentId ?? "")}>
+                  Read
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <h3 className="mb-1 text-xs font-semibold text-ink-muted">
+        Matching passages (page-cited)
+      </h3>
+      {trimmed.length < 2 && (
+        <p className="text-sm text-ink-muted">Type at least two letters to search inside pages.</p>
+      )}
+      {text.isPending && trimmed.length >= 2 && <Loading label="Searching pages…" />}
+      {text.isError && <ErrorState error={text.error} onRetry={() => void text.refetch()} />}
+      {text.isSuccess && text.data.items.length === 0 && (
+        <p className="text-sm text-ink-muted">
+          No page matches. Matching is exact — a different word may find it.
+        </p>
+      )}
+      {text.isSuccess && text.data.items.length > 0 && (
+        <ul aria-label="Matching pages" className="rounded-card border border-line">
+          {text.data.items.map((hit) => {
+            const parts = snippetParts(hit.spec?.text ?? "", trimmed);
+            return (
+              <li
+                key={hit.metadata?.id}
+                className="border-b border-line px-3 py-2 last:border-b-0"
+              >
+                <button
+                  type="button"
+                  className="font-medium text-brand hover:underline"
+                  onClick={() => props.onOpen(hit.spec?.documentId ?? "", hit.spec?.page)}
+                >
+                  Page {hit.spec?.page}
+                </button>
+                <p className="mt-0.5 text-sm text-ink-muted">
+                  {parts.prefix}
+                  {parts.match && <mark>{parts.match}</mark>}
+                  {parts.suffix}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </SectionCard>
+  );
+}
+
 export function LibraryScreen() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [shelfPage, setShelfPage] = useState(0);
-  const [mattersPage, setMattersPage] = useState(0);
-  const shelf = useLibraryDocuments(shelfPage);
-  const onMatters = useJudgmentCollection(mattersPage);
-  const summaries = useCaseSummaryMap();
-  const fileNumberOf = (caseId: string | undefined) =>
-    summaries.data?.get(caseId ?? "")?.fileNumber ?? "…";
+  const [query, setQuery] = useState("");
+  const shelf = useShelf(shelfPage);
 
   // The open document swaps the whole frame for the shared reading
   // view — the case-detail precedent (T09.2); Get/download authorize
@@ -242,9 +488,10 @@ export function LibraryScreen() {
   const documentPage =
     Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : undefined;
 
-  function openDocument(id: string) {
+  function openDocument(id: string, page?: number) {
     setSearchParams((params) => {
       params.set("doc", id);
+      if (page) params.set("page", String(page));
       return params;
     });
   }
@@ -273,73 +520,63 @@ export function LibraryScreen() {
     <div className="grid gap-4">
       <PageHeader title="Library" />
       <p className="-mt-2 text-sm text-ink-muted">
-        The firm&apos;s citation shelf: judgments the firm relies on, filed once for everyone,
-        with each one&apos;s reliance trail.
+        The firm&apos;s citation shelf: the judgments the firm relies on, filed once with
+        the name a colleague recognizes, each carrying where it worked before.
       </p>
 
       <SectionCard title="Add to the library">
         <LibraryUpload />
       </SectionCard>
 
-      <SectionCard title="Citations in the library">
-        {shelf.isPending && <Loading label="Loading the shelf…" />}
-        {shelf.isError && (
-          <ErrorState error={shelf.error} onRetry={() => void shelf.refetch()} />
-        )}
-        {shelf.isSuccess && shelf.data.items.length === 0 && (
-          <EmptyState title="No standalone citations yet">
-            Upload a judgment here when it belongs to the firm&apos;s knowledge, not to one
-            matter.
-          </EmptyState>
-        )}
-        {shelf.isSuccess && shelf.data.items.length > 0 && (
-          <>
-            <ul>
-              {shelf.data.items.map((document) => (
-                <JudgmentRow
-                  key={document.metadata?.id}
-                  document={document}
-                  onRead={() => openDocument(document.metadata?.id ?? "")}
-                />
-              ))}
-            </ul>
-            <Pagination
-              page={shelfPage}
-              totalCount={Number(shelf.data.totalCount)}
-              onPage={setShelfPage}
-            />
-          </>
-        )}
-      </SectionCard>
+      <div>
+        <label htmlFor="library-search" className="mb-1 block text-sm font-medium">
+          Search the shelf
+        </label>
+        <InlineInput
+          id="library-search"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="A case name, a citation, or a phrase from the judgment"
+          className="block w-full max-w-xl"
+        />
+      </div>
 
-      <SectionCard title="Judgments filed on matters">
-        {onMatters.isPending && <Loading label="Loading the collection…" />}
-        {onMatters.isError && (
-          <ErrorState error={onMatters.error} onRetry={() => void onMatters.refetch()} />
-        )}
-        {onMatters.isSuccess && onMatters.data.items.length === 0 && (
-          <EmptyState title="No judgments filed on matters yet" />
-        )}
-        {onMatters.isSuccess && onMatters.data.items.length > 0 && (
-          <>
-            <ul>
-              {onMatters.data.items.map((document) => (
-                <JudgmentRow
-                  key={document.metadata?.id}
-                  document={document}
-                  fileNumber={fileNumberOf(document.spec?.caseId)}
-                  onRead={() => undefined}
-                />
-              ))}
-            </ul>
-            <Pagination
-              page={mattersPage}
-              totalCount={Number(onMatters.data.totalCount)}
-              onPage={setMattersPage}
-            />
-          </>
-        )}
-      </SectionCard>
+      {query.trim().length > 0 ? (
+        <LibrarySearchResults query={query} onOpen={openDocument} />
+      ) : (
+        <SectionCard title="Citations on the shelf">
+          {shelf.isPending && <Loading label="Loading the shelf…" />}
+          {shelf.isError && (
+            <ErrorState error={shelf.error} onRetry={() => void shelf.refetch()} />
+          )}
+          {shelf.isSuccess && shelf.data.items.length === 0 && (
+            <EmptyState title="Nothing on the shelf yet">
+              Upload a judgment the firm relies on — or promote one from a matter&apos;s
+              Documents tab (&ldquo;Add to library&rdquo;) — and it becomes citable
+              everywhere.
+            </EmptyState>
+          )}
+          {shelf.isSuccess && shelf.data.items.length > 0 && (
+            <>
+              <ul>
+                {shelf.data.items.map((citation) => (
+                  <ShelfRow
+                    key={citation.metadata?.id}
+                    citation={citation}
+                    onRead={() => openDocument(citation.spec?.documentId ?? "")}
+                  />
+                ))}
+              </ul>
+              <Pagination
+                page={shelfPage}
+                totalCount={Number(shelf.data.totalCount)}
+                onPage={setShelfPage}
+              />
+            </>
+          )}
+        </SectionCard>
+      )}
     </div>
   );
 }

@@ -38,7 +38,7 @@ import {
 } from "../../gen/stigmer/law/documentannotation/v1/documentannotation_pb.js";
 import { formatInstant } from "../../lib/format.js";
 import { useFirmRoster } from "../members/queries.js";
-import { useAddAnnotation, useDocumentAnnotations } from "./queries.js";
+import { useAddAnnotation, useCaseSummaryMap, useDocumentAnnotations } from "./queries.js";
 
 /** A captured-but-uncommented mark, owned by DocumentViewer (it also
  * previews on the page); the panel turns it into the create call. */
@@ -51,7 +51,13 @@ export interface MarkDraft {
 
 export function AnnotationsPanel(props: {
   documentId: string;
+  /** On a library document this is the mark LAYER (DD-012 D2):
+   * empty = firm-wide, a case id = badged with that matter. On a
+   * matter's paper it is simply the paper's case. */
   caseId: string;
+  /** True for a library (case-less) document — turns on the layer
+   * note in the draft form and the per-row layer badges. */
+  library?: boolean;
   draft: MarkDraft | null;
   onDraftDone: () => void;
   /** The mark selected on either surface (owned by DocumentViewer). */
@@ -62,9 +68,16 @@ export function AnnotationsPanel(props: {
   const annotations = useDocumentAnnotations(props.documentId);
   const addAnnotation = useAddAnnotation(props.documentId);
   const roster = useFirmRoster();
+  // The layer badges name matters by file number; a case-badged mark
+  // is only ever VISIBLE to someone who can see its matter, so the
+  // caller's own summary map always resolves what it shows.
+  const summaries = useCaseSummaryMap();
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | undefined>();
   const listRef = useRef<HTMLUListElement>(null);
+
+  const fileNumberOf = (caseId: string) =>
+    summaries.data?.get(caseId)?.fileNumber ?? "a matter";
 
   // A body left half-typed for a previous draft must not leak into a
   // new one; the form's autoFocus puts the caret in the comment box the
@@ -120,6 +133,15 @@ export function AnnotationsPanel(props: {
             New mark — page {draft.page}
             {draft.kind === "region" && " (marked region)"}
           </p>
+          {props.library && (
+            // Visibility of status (the layer is a visibility fact):
+            // say WHO will see this mark before it is written.
+            <p className="mb-2 text-xs text-ink-muted">
+              {props.caseId
+                ? `Marked from ${fileNumberOf(props.caseId)} — visible to that matter's team.`
+                : "Firm-wide mark — visible to everyone who works cases."}
+            </p>
+          )}
           {draft.quotedText && (
             <p className="mb-2 border-l-2 border-warn pl-2 text-xs italic text-ink-muted">
               {draft.quotedText}
@@ -152,8 +174,8 @@ export function AnnotationsPanel(props: {
         )}
         {annotations.isSuccess && annotations.data.items.length === 0 && !draft && (
           <EmptyState title="No marks yet">
-            Select text or use “Mark region” to flag a section and leave a comment for the
-            case team.
+            Select text or use “Mark region” to flag a section and leave a comment for{" "}
+            {props.library ? "the firm" : "the case team"}.
           </EmptyState>
         )}
         {annotations.isSuccess && annotations.data.items.length > 0 && (
@@ -182,6 +204,16 @@ export function AnnotationsPanel(props: {
                       {roster.data?.nameOfUser(mark.metadata?.createdBy?.id ?? "") ?? "…"}
                     </span>
                     {createdAt && <> — {formatInstant(timestampDate(createdAt))}</>}
+                    {/* The layer badge (library papers only): whose mark
+                        this is — the firm's, or a matter team's. */}
+                    {props.library && (
+                      <>
+                        {" "}
+                        <Badge>
+                          {mark.spec?.caseId ? fileNumberOf(mark.spec.caseId) : "Firm"}
+                        </Badge>
+                      </>
+                    )}
                   </p>
                   {mark.spec?.quotedText ? (
                     <p className="mt-1 border-l-2 border-warn pl-2 text-xs italic text-ink-muted">

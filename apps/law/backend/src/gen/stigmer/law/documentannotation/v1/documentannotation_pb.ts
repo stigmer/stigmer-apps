@@ -30,7 +30,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file stigmer/law/documentannotation/v1/documentannotation.proto.
  */
 export const file_stigmer_law_documentannotation_v1_documentannotation: GenFile = /*@__PURE__*/
-  fileDesc("CjpzdGlnbWVyL2xhdy9kb2N1bWVudGFubm90YXRpb24vdjEvZG9jdW1lbnRhbm5vdGF0aW9uLnByb3RvEiFzdGlnbWVyLmxhdy5kb2N1bWVudGFubm90YXRpb24udjEixAEKEkRvY3VtZW50QW5ub3RhdGlvbhITCgthcGlfdmVyc2lvbhgBIAEoCRIMCgRraW5kGAIgASgJEjoKCG1ldGFkYXRhGAMgASgLMiguc3RpZ21lci5yZXNvdXJjZWFwaS52MS5SZXNvdXJjZU1ldGFkYXRhEk8KBHNwZWMYBCABKAsyOS5zdGlnbWVyLmxhdy5kb2N1bWVudGFubm90YXRpb24udjEuRG9jdW1lbnRBbm5vdGF0aW9uU3BlY0IGukgDyAEBIo4BCg5Ob3JtYWxpemVkUmVjdBIdCgRsZWZ0GAEgASgCQg+6SAwKCh0AAIA/LQAAAAASHAoDdG9wGAIgASgCQg+6SAwKCh0AAIA/LQAAAAASHgoFd2lkdGgYAyABKAJCD7pIDAoKHQAAgD8lAAAAABIfCgZoZWlnaHQYBCABKAJCD7pIDAoKHQAAgD8lAAAAACLGAgoWRG9jdW1lbnRBbm5vdGF0aW9uU3BlYxIcCgtkb2N1bWVudF9pZBgBIAEoCUIHukgEcgIQARIYCgdjYXNlX2lkGAIgASgJQge6SARyAhABEhUKBHBhZ2UYAyABKAVCB7pIBBoCKAESVgoPYW5ub3RhdGlvbl9raW5kGAQgASgOMjEuc3RpZ21lci5sYXcuZG9jdW1lbnRhbm5vdGF0aW9uLnYxLkFubm90YXRpb25LaW5kQgq6SAeCAQQQASAAEkwKBXJlY3RzGAUgAygLMjEuc3RpZ21lci5sYXcuZG9jdW1lbnRhbm5vdGF0aW9uLnYxLk5vcm1hbGl6ZWRSZWN0Qgq6SAeSAQQIARBAEh0KC3F1b3RlZF90ZXh0GAYgASgJQgi6SAVyAxjoBxIYCgRib2R5GAcgASgJQgq6SAdyBRABGNAPInoKHkxpc3REb2N1bWVudEFubm90YXRpb25zUmVxdWVzdBIcCgtkb2N1bWVudF9pZBgBIAEoCUIHukgEcgIQARIcCglwYWdlX3NpemUYAiABKAVCCbpIBhoEGGQoABIcCgtwYWdlX29mZnNldBgDIAEoBUIHukgEGgIoACJ8Ch9MaXN0RG9jdW1lbnRBbm5vdGF0aW9uc1Jlc3BvbnNlEkQKBWl0ZW1zGAEgAygLMjUuc3RpZ21lci5sYXcuZG9jdW1lbnRhbm5vdGF0aW9uLnYxLkRvY3VtZW50QW5ub3RhdGlvbhITCgt0b3RhbF9jb3VudBgCIAEoAypsCg5Bbm5vdGF0aW9uS2luZBIfChtBTk5PVEFUSU9OX0tJTkRfVU5TUEVDSUZJRUQQABIdChlBTk5PVEFUSU9OX0tJTkRfSElHSExJR0hUEAESGgoWQU5OT1RBVElPTl9LSU5EX1JFR0lPThACMqMCChlEb2N1bWVudEFubm90YXRpb25TZXJ2aWNlEnYKBkNyZWF0ZRI1LnN0aWdtZXIubGF3LmRvY3VtZW50YW5ub3RhdGlvbi52MS5Eb2N1bWVudEFubm90YXRpb24aNS5zdGlnbWVyLmxhdy5kb2N1bWVudGFubm90YXRpb24udjEuRG9jdW1lbnRBbm5vdGF0aW9uEo0BCgRMaXN0EkEuc3RpZ21lci5sYXcuZG9jdW1lbnRhbm5vdGF0aW9uLnYxLkxpc3REb2N1bWVudEFubm90YXRpb25zUmVxdWVzdBpCLnN0aWdtZXIubGF3LmRvY3VtZW50YW5ub3RhdGlvbi52MS5MaXN0RG9jdW1lbnRBbm5vdGF0aW9uc1Jlc3BvbnNlYgZwcm90bzM", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
+  fileDesc("CjpzdGlnbWVyL2xhdy9kb2N1bWVudGFubm90YXRpb24vdjEvZG9jdW1lbnRhbm5vdGF0aW9uLnByb3RvEiFzdGlnbWVyLmxhdy5kb2N1bWVudGFubm90YXRpb24udjEixAEKEkRvY3VtZW50QW5ub3RhdGlvbhITCgthcGlfdmVyc2lvbhgBIAEoCRIMCgRraW5kGAIgASgJEjoKCG1ldGFkYXRhGAMgASgLMiguc3RpZ21lci5yZXNvdXJjZWFwaS52MS5SZXNvdXJjZU1ldGFkYXRhEk8KBHNwZWMYBCABKAsyOS5zdGlnbWVyLmxhdy5kb2N1bWVudGFubm90YXRpb24udjEuRG9jdW1lbnRBbm5vdGF0aW9uU3BlY0IGukgDyAEBIo4BCg5Ob3JtYWxpemVkUmVjdBIdCgRsZWZ0GAEgASgCQg+6SAwKCh0AAIA/LQAAAAASHAoDdG9wGAIgASgCQg+6SAwKCh0AAIA/LQAAAAASHgoFd2lkdGgYAyABKAJCD7pIDAoKHQAAgD8lAAAAABIfCgZoZWlnaHQYBCABKAJCD7pIDAoKHQAAgD8lAAAAACK9AgoWRG9jdW1lbnRBbm5vdGF0aW9uU3BlYxIcCgtkb2N1bWVudF9pZBgBIAEoCUIHukgEcgIQARIPCgdjYXNlX2lkGAIgASgJEhUKBHBhZ2UYAyABKAVCB7pIBBoCKAESVgoPYW5ub3RhdGlvbl9raW5kGAQgASgOMjEuc3RpZ21lci5sYXcuZG9jdW1lbnRhbm5vdGF0aW9uLnYxLkFubm90YXRpb25LaW5kQgq6SAeCAQQQASAAEkwKBXJlY3RzGAUgAygLMjEuc3RpZ21lci5sYXcuZG9jdW1lbnRhbm5vdGF0aW9uLnYxLk5vcm1hbGl6ZWRSZWN0Qgq6SAeSAQQIARBAEh0KC3F1b3RlZF90ZXh0GAYgASgJQgi6SAVyAxjoBxIYCgRib2R5GAcgASgJQgq6SAdyBRABGNAPInoKHkxpc3REb2N1bWVudEFubm90YXRpb25zUmVxdWVzdBIcCgtkb2N1bWVudF9pZBgBIAEoCUIHukgEcgIQARIcCglwYWdlX3NpemUYAiABKAVCCbpIBhoEGGQoABIcCgtwYWdlX29mZnNldBgDIAEoBUIHukgEGgIoACJ8Ch9MaXN0RG9jdW1lbnRBbm5vdGF0aW9uc1Jlc3BvbnNlEkQKBWl0ZW1zGAEgAygLMjUuc3RpZ21lci5sYXcuZG9jdW1lbnRhbm5vdGF0aW9uLnYxLkRvY3VtZW50QW5ub3RhdGlvbhITCgt0b3RhbF9jb3VudBgCIAEoAypsCg5Bbm5vdGF0aW9uS2luZBIfChtBTk5PVEFUSU9OX0tJTkRfVU5TUEVDSUZJRUQQABIdChlBTk5PVEFUSU9OX0tJTkRfSElHSExJR0hUEAESGgoWQU5OT1RBVElPTl9LSU5EX1JFR0lPThACMqMCChlEb2N1bWVudEFubm90YXRpb25TZXJ2aWNlEnYKBkNyZWF0ZRI1LnN0aWdtZXIubGF3LmRvY3VtZW50YW5ub3RhdGlvbi52MS5Eb2N1bWVudEFubm90YXRpb24aNS5zdGlnbWVyLmxhdy5kb2N1bWVudGFubm90YXRpb24udjEuRG9jdW1lbnRBbm5vdGF0aW9uEo0BCgRMaXN0EkEuc3RpZ21lci5sYXcuZG9jdW1lbnRhbm5vdGF0aW9uLnYxLkxpc3REb2N1bWVudEFubm90YXRpb25zUmVxdWVzdBpCLnN0aWdtZXIubGF3LmRvY3VtZW50YW5ub3RhdGlvbi52MS5MaXN0RG9jdW1lbnRBbm5vdGF0aW9uc1Jlc3BvbnNlYgZwcm90bzM", [file_buf_validate_validate, file_stigmer_resourceapi_v1_resource]);
 
 /**
  * @generated from message stigmer.law.documentannotation.v1.DocumentAnnotation
@@ -120,12 +120,18 @@ export type DocumentAnnotationSpec = Message<"stigmer.law.documentannotation.v1.
   documentId: string;
 
   /**
-   * Denormalized from the owning Document at create time — safe
-   * because documents are immutable (the case link can never change),
-   * and load-bearing: it is what the policy's case-content rule reads
-   * without a store hop (the DocumentPage precedent). Client-supplied,
-   * so the pipeline VERIFIES it against the referenced document and
-   * refuses a mismatch — denormalized, never trusted.
+   * The mark's case scope — client-supplied, pipeline-VERIFIED, never
+   * trusted, and load-bearing for the policy's case-content rule (the
+   * DocumentPage precedent, no store hop).
+   *
+   * On a CASE-BOUND document it must match the document's case (the
+   * original denormalization — safe because documents are immutable).
+   * On a LIBRARY document (DD-012 D2, lifting the FR-DOC-005
+   * deferral) it is the mark's LAYER: empty = FIRM knowledge, visible
+   * to everyone who works cases (the library read rule — "this is the
+   * operative ratio"); a case id = a mark made while working that
+   * matter, case-team visible and badged with it. Plain string like
+   * DocumentSpec.case_id: proto3-JSON omits the empty value.
    *
    * @generated from field: string case_id = 2;
    */
@@ -287,9 +293,10 @@ export const AnnotationKindSchema: GenEnum<AnnotationKind> = /*@__PURE__*/
 export const DocumentAnnotationService: GenService<{
   /**
    * Add a mark with a comment to a document. The referenced document
-   * must exist, the submitted case_id must match its case, and the
-   * caller must be able to work the case's content (case members and
-   * partners; office staff refused).
+   * must exist; on a matter's paper the submitted case_id must match
+   * its case and the caller must be able to work it; on a library
+   * paper case_id picks the LAYER (empty = firm knowledge; a case the
+   * caller can work = case-badged). Office staff refused everywhere.
    *
    * @generated from rpc stigmer.law.documentannotation.v1.DocumentAnnotationService.Create
    */
@@ -299,8 +306,10 @@ export const DocumentAnnotationService: GenService<{
     output: typeof DocumentAnnotationSchema;
   },
   /**
-   * List a document's marks, oldest first. Case content: a mark is
-   * never more visible than its document.
+   * List a document's marks, oldest first. On a matter's paper: case
+   * content, a mark never more visible than its document. On a
+   * library paper: the firm layer for every case worker, case-badged
+   * marks only where the caller can work the badge's matter.
    *
    * @generated from rpc stigmer.law.documentannotation.v1.DocumentAnnotationService.List
    */

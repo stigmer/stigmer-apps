@@ -79,7 +79,6 @@ import {
   runOcrSweepOnce,
   type OcrBackoff,
 } from "../domain/document/ocr-sweep.js";
-import { storeDocument } from "../domain/document/store-document.js";
 import { fetchRemoteDocument } from "../files/remote-fetch.js";
 import { createDocumentAiProvider } from "../ocr/document-ai.js";
 import type { OcrProvider } from "../ocr/provider.js";
@@ -472,6 +471,7 @@ describe("the OCR sweep against a fake Document AI (DD-009)", () => {
 
     const toolApp = createApp({
       store,
+      objectStore,
       caller: auth.kit.resolver.fromConnect,
       authz: engine,
       credentials: createPgCredentialStore(pool),
@@ -485,17 +485,9 @@ describe("the OCR sweep against a fake Document AI (DD-009)", () => {
       policy: toolApp.policy,
       fetchDocument: (url) => fetchRemoteDocument(url, { allowPrivateNetworks: true }),
       ocrEnabled: false,
-      storeDocument: (input, caller) =>
-        storeDocument(
-          {
-            objectStore,
-            createDocument: toolApp.resources.documents.invoke.create as NonNullable<
-              typeof toolApp.resources.documents.invoke.create
-            >,
-          },
-          input,
-          caller,
-        ),
+      // The ONE composed seam (createApp) — the same closure production
+      // wires, shelf-entry choreography included.
+      storeDocument: toolApp.storeDocument,
     };
     ocrToolDeps = { ...toolDeps, ocrEnabled: true };
 

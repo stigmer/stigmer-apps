@@ -11,6 +11,7 @@ import { create } from "@bufbuild/protobuf";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallerIdentity } from "@stigmer/identity";
 import { z } from "zod";
+import type { Citation } from "../../gen/stigmer/law/citation/v1/citation_pb.js";
 import {
   DocumentCategory,
   ListDocumentsRequestSchema,
@@ -146,6 +147,37 @@ export function registerFindDocuments(
         ? () => undefined
         : await fileNumbersByCaseId(deps.store, items.map((d) => d.spec?.caseId ?? ""));
 
+      // Shelf entries answer with their IDENTITY, not a bare file name
+      // (DD-012 cross-surface coherence): one bulk lookup on the
+      // Citation companion for the page's case-less rows.
+      const shelfIds = items
+        .filter((d) => !d.spec?.caseId)
+        .map((d) => d.metadata?.id ?? "")
+        .filter(Boolean);
+      const identityOf = new Map<string, Citation>();
+      if (shelfIds.length > 0) {
+        const entries = await deps.store.list("Citation", {
+          limit: shelfIds.length,
+          offset: 0,
+          filter: { documentId: { in: shelfIds } },
+        });
+        for (const entry of entries.items as Citation[]) {
+          identityOf.set(entry.spec?.documentId ?? "", entry);
+        }
+      }
+      const identitySuffix = (d: Document): string => {
+        const entry = identityOf.get(d.metadata?.id ?? "");
+        if (!entry?.spec) return "";
+        const facts = [
+          entry.spec.court,
+          entry.spec.year > 0 ? String(entry.spec.year) : "",
+          entry.spec.citation,
+        ]
+          .filter(Boolean)
+          .join(", ");
+        return ` — “${entry.spec.title}”${facts ? ` (${facts})` : ""}`;
+      };
+
       const what = args.category ? `${args.category.replace(/_/g, " ")} document` : "document";
       const where = args.file_number
         ? `on ${args.file_number.trim()}`
@@ -156,7 +188,7 @@ export function registerFindDocuments(
         return textResult(`${headline}.`);
       }
       const lines = items.map(
-        (d, i) => `${i + 1}. ${documentLine(d, fileNumberOf(d.spec?.caseId))}`,
+        (d, i) => `${i + 1}. ${documentLine(d, fileNumberOf(d.spec?.caseId))}${identitySuffix(d)}`,
       );
       const more =
         totalCount > BigInt(items.length) ? `\n(showing the ${items.length} newest)` : "";

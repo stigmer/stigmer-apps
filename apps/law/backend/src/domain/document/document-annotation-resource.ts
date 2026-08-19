@@ -5,16 +5,22 @@
  * the absence is the contract (the TaskComment rule). Author and
  * timestamp are the envelope's created_by/created_at.
  *
- * Marks are case content reached THROUGH the document: create verifies
- * membership against the case the referenced document names, and list
- * does the same before reading — a mark can never be more visible than
- * its document (the DocumentPage rule).
+ * Marks are case content reached THROUGH the document: on a matter's
+ * paper, create verifies membership against the case the document
+ * names, and list does the same before reading — a mark is never more
+ * visible than its document (the DocumentPage rule). On a LIBRARY
+ * paper (DD-012 D2, lifting the FR-DOC-005 deferral) marks carry TWO
+ * layers keyed by case_id: empty = FIRM knowledge (readable by every
+ * case worker, the library read rule), a case id = made from that
+ * matter, case-team visible and badged with it.
  *
- * Two invariants field validation cannot express live here as steps:
- * the client-submitted denormalized case_id must MATCH the referenced
- * document's (denormalized, never trusted), and a REGION mark carries
- * exactly one rect (per-line rects are a HIGHLIGHT's shape — the
- * DD-010 amendment).
+ * The invariants field validation cannot express live here as steps:
+ * on a case-bound document the client-submitted case_id must MATCH
+ * the document's (denormalized, never trusted); on a library document
+ * a non-empty case_id must be a matter the author can WORK (the badge
+ * is a claim of case context); and a REGION mark carries exactly one
+ * rect (per-line rects are a HIGHLIGHT's shape — the DD-010
+ * amendment).
  */
 
 import { create } from "@bufbuild/protobuf";
@@ -69,20 +75,23 @@ export function documentAnnotationResource(deps: {
       const spec = (ctx.newState as DocumentAnnotation).spec;
       if (ctx.caller && spec?.documentId) {
         const document = await documentOrRefuse(spec.documentId);
-        if (!document.spec?.caseId) {
-          // Library documents (FR-DOC-005) — a NAMED deferral, refused
-          // in the user's words: marks are case-team records, and a
-          // firm-wide mark visibility model has not been designed yet.
-          throw failedPrecondition(
-            "Marks on library documents aren't supported yet — marks live on a matter's own papers",
-          );
+        if (document.spec?.caseId) {
+          // A matter's own paper: marks are case-team records.
+          await deps.guards.assertCaseContent(ctx.caller, document.spec.caseId);
+        } else if (spec.caseId) {
+          // Library paper, case-badged layer (DD-012 D2): the author
+          // must be able to work the matter the mark carries — the
+          // badge is a claim of case context, never decoration.
+          await deps.guards.assertCaseContent(ctx.caller, spec.caseId);
         }
-        await deps.guards.assertCaseContent(ctx.caller, document.spec.caseId);
+        // Library paper, firm layer (empty case): the policy's role
+        // gate is the whole check — firm knowledge is written by
+        // anyone who works cases, same rule that lets them read it.
       }
     },
   };
 
-  /** The two cross-field invariants (see the module header). */
+  /** The cross-field invariants (see the module header). */
   const anchorIntegrity: PipelineStep<WriteContext<DocumentAnnotation>> = {
     name: "verify-annotation-anchor",
     async execute(ctx) {
@@ -92,9 +101,12 @@ export function documentAnnotationResource(deps: {
         throw invalidArgument("A region mark carries exactly one rectangle");
       }
       const document = await documentOrRefuse(spec.documentId);
-      if (spec.caseId !== (document.spec?.caseId ?? "")) {
+      if (document.spec?.caseId && spec.caseId !== document.spec.caseId) {
         // The denormalized field is client-supplied and load-bearing
         // for policy — a lie here would misfile the mark's visibility.
+        // (On a LIBRARY document any case value is legitimate — it is
+        // the mark's LAYER, membership-verified above and existence-
+        // verified by the reference check.)
         throw invalidArgument(
           "case_id must match the case of the referenced document",
         );
@@ -124,6 +136,14 @@ export function documentAnnotationResource(deps: {
               label: "document",
               get: (a) => a.spec?.documentId || undefined,
             },
+            // The case-badged layer's matter must exist (on case-bound
+            // documents this re-checks the document's own case —
+            // harmless; on library documents it is the badge's check).
+            {
+              kind: "Case",
+              label: "case",
+              get: (a) => a.spec?.caseId || undefined,
+            },
           ]),
           anchorIntegrity,
         ],
@@ -148,12 +168,33 @@ export function documentAnnotationResource(deps: {
             throw invalidArgument(`Document '${ctx.input.documentId}' not found`);
           }
           if (!document.spec?.caseId) {
-            // Library documents carry no marks by contract (create
-            // refuses, FR-DOC-005 deferral) — the honest empty page,
-            // so the shared viewer renders cleanly on /library.
+            // Library documents: TWO layers (DD-012 D2). Everyone who
+            // works cases reads the FIRM layer (the role gate above);
+            // case-badged marks show only to people who can work that
+            // matter. The AND-only filter grammar cannot express
+            // "no case OR case in visible set", so this is a bounded
+            // fetch then an in-memory visibility cut — sound because a
+            // document's marks are capped (the 100-mark list bound),
+            // the DocumentPage bounded-fetch arrangement.
+            const member = await deps.guards.requireMember(ctx.caller);
+            const visible = await deps.guards.visibleCaseIds(member);
+            const { items } = await deps.store.list("DocumentAnnotation", {
+              limit: 100,
+              offset: 0,
+              orderBy: { field: "createdAt", direction: "asc", nulls: "last" },
+              filter: { documentId: ctx.input.documentId },
+            });
+            const readable = (items as DocumentAnnotation[]).filter(
+              (mark) =>
+                !mark.spec?.caseId ||
+                visible === undefined ||
+                visible.includes(mark.spec.caseId),
+            );
+            const size = ctx.input.pageSize > 0 ? Math.min(ctx.input.pageSize, 100) : 20;
+            const offset = ctx.input.pageOffset > 0 ? ctx.input.pageOffset : 0;
             return create(ListDocumentAnnotationsResponseSchema, {
-              items: [],
-              totalCount: 0n,
+              items: readable.slice(offset, offset + size),
+              totalCount: BigInt(readable.length),
             });
           }
           await deps.guards.assertCaseContent(ctx.caller, document.spec.caseId);
