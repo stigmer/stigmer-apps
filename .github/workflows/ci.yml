@@ -95,8 +95,42 @@ jobs:
         # build the E2E backend serves.
         run: npm run build
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+      # The browser download + apt dependency install cost ~10 minutes
+      # from scratch on every run. Three cuts, in order of effect:
+      # cache the browser binaries keyed on the INSTALLED Playwright
+      # version (the only thing that changes them — a lockfile hash
+      # would churn the cache on unrelated dependency bumps); download
+      # only the headless shell (every e2e run here is headless — the
+      # full headed Chromium is dead weight); and on a cache hit run
+      # only the quick OS-dependency step, skipping the download
+      # entirely.
+      - name: Resolve Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+        working-directory: apps/law/web
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium-shell
+
+      # Download and apt are SEPARATE steps with hard timeouts on
+      # purpose: on 2026-08-19 the combined install hung silently for
+      # 10-13 minutes on GitHub's runners (historical baseline: ~27s),
+      # and a single opaque step could not say which half was stuck. A
+      # hang now fails in bounded time and names its culprit.
+      - name: Install Playwright headless shell
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 5
+        run: npx playwright install --only-shell chromium
+
+      - name: Install Playwright system dependencies
+        # Needed on the cache-hit path too — the cache carries only
+        # browser binaries, never OS libraries.
+        timeout-minutes: 5
+        run: npx playwright install-deps chromium
 
       - name: Web E2E
         run: npm run test:e2e -w @law/web
