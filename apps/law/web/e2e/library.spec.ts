@@ -55,7 +55,9 @@ test("file a judgment with identity, read it on the shelf, cite it from a matter
   await page
     .getByLabel("Case name (as the firm cites it)")
     .fill("Fictional Guidelines vs State");
-  await page.getByLabel("Citation").fill("AIR 2099 SC 1");
+  // exact: the shelf section's aria-label ("Citations on the shelf")
+  // substring-matches "Citation" otherwise — a strict-mode violation.
+  await page.getByLabel("Citation", { exact: true }).fill("AIR 2099 SC 1");
   await page
     .locator("#library-upload")
     .setInputFiles([
