@@ -23,6 +23,7 @@ syntax = "proto3";
 package stigmer.law.hearing.v1;
 
 import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
 import "stigmer/resourceapi/v1/resource.proto";
 
 message Hearing {
@@ -70,6 +71,15 @@ message HearingStatus {
   // given — the same value that auto-scheduled the next hearing. Kept
   // here so the diary line reads complete on its own.
   optional string next_date = 4;
+
+  // When the outcome was recorded — written once by RecordOutcome, the
+  // same write that freezes the record (FR-HEAR-007). A stored domain
+  // fact, not a derivation from metadata.updated_at: deriving would
+  // hang the story-of-the-day feed on the non-local invariant that no
+  // future operation ever touches a completed hearing. Absent on
+  // hearings completed before this field existed — they honestly never
+  // match a recorded-on query.
+  google.protobuf.Timestamp recorded_at = 5;
 }
 
 enum OutcomeKind {
@@ -113,6 +123,18 @@ message ListHearingsRequest {
   // Only hearings still awaiting an outcome whose date has passed — the
   // unrecorded-outcome nag list (FR-HEAR-005).
   bool unrecorded_only = 6;
+
+  // Hearings whose outcome was RECORDED on this calendar day
+  // (YYYY-MM-DD, firm timezone) — the story-of-the-day's "what came
+  // back from court" (FR-HEAR-007). Answered newest-recorded first.
+  // Mutually exclusive with the other predicate shapes.
+  string recorded_on = 7;
+
+  // Hearings PUT ON THE BOARD on this calendar day (YYYY-MM-DD, firm
+  // timezone) — created that day, whether auto-scheduled by an outcome
+  // or entered directly (FR-HEAR-007). Answered newest first. Mutually
+  // exclusive with the other predicate shapes.
+  string scheduled_on = 8;
 }
 
 message ListHearingsResponse {

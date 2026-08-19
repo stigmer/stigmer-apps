@@ -32,6 +32,16 @@ export function useMyOpenDeadlines(dueTo: string) {
   });
 }
 
+/** The day's story (FR-HEAR-007): deadlines entered on this firm
+ * calendar day, newest first. */
+export function useDeadlinesEnteredOn(day: string) {
+  const { deadlines } = useApiClients();
+  return useQuery({
+    queryKey: ["deadlines", "enteredOn", day],
+    queryFn: () => deadlines.list({ enteredOn: day, pageSize: 20 }),
+  });
+}
+
 export function useCaseDeadlines(caseId: string, page: number) {
   const { deadlines } = useApiClients();
   return useQuery({

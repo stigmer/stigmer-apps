@@ -37,6 +37,8 @@ import {
   useScheduleHearing,
   useUpdateHearing,
 } from "../hearings/queries.js";
+import { DeadlineSpecSchema, useCreateDeadline } from "../deadlines/queries.js";
+import { TaskSpecSchema, useCreateTask } from "../tasks/queries.js";
 
 const OUTCOME_CHOICES: readonly OutcomeKind[] = [
   OutcomeKind.ADJOURNED,
@@ -53,7 +55,10 @@ function isScheduled(hearing: Hearing): boolean {
 }
 
 /** The J3 form: what happened, and the next date if the court gave one. */
-function RecordOutcomeForm(props: { hearing: Hearing; onDone: (message: string) => void }) {
+function RecordOutcomeForm(props: {
+  hearing: Hearing;
+  onDone: (message: string, nextDate?: string) => void;
+}) {
   const recordOutcome = useRecordOutcome();
   const roster = useFirmRoster();
   const [outcome, setOutcome] = useState<OutcomeKind>(OutcomeKind.UNSPECIFIED);
@@ -81,6 +86,7 @@ function RecordOutcomeForm(props: { hearing: Hearing; onDone: (message: string) 
               result.nextHearing.spec?.date ?? "",
             )}.`
           : "Recorded. No next date given — this matter now shows under “no next date” until one is scheduled.",
+        result.nextHearing?.spec?.date,
       );
     } catch (err) {
       setError(ConnectError.from(err).rawMessage);
@@ -178,6 +184,182 @@ function RecordOutcomeForm(props: { hearing: Hearing; onDone: (message: string) 
         {recordOutcome.isPending ? "Recording…" : "Record outcome"}
       </Button>
     </form>
+  );
+}
+
+/**
+ * Capture at the source (FR-HEAR-007): the follow-up work an outcome
+ * implies — "file written statement by the 29th" — created in the same
+ * motion as the outcome itself, so the gap between "the court said"
+ * and "someone owns it" never opens. Repeatable on purpose: one
+ * appearance routinely produces several follow-ups. Rides the existing
+ * Task/Deadline create contracts; assignment here is optional — an
+ * unassigned task lands on the home screen's pickup list (FR-TASK-002).
+ */
+function FollowUpForms(props: { caseId: string; nextDate?: string }) {
+  const createTask = useCreateTask();
+  const createDeadline = useCreateDeadline();
+  const roster = useFirmRoster();
+  const [mode, setMode] = useState<"none" | "task" | "deadline">("none");
+  const [title, setTitle] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [personId, setPersonId] = useState("");
+  const [basis, setBasis] = useState("");
+  const [created, setCreated] = useState<readonly string[]>([]);
+  const [error, setError] = useState<string | undefined>();
+
+  function reset(nextMode: "none" | "task" | "deadline") {
+    setMode(nextMode);
+    setTitle("");
+    // The next hearing date is the natural first guess for when
+    // follow-up work must be done by; the person edits it when the
+    // court said otherwise.
+    setDueDate(props.nextDate ?? "");
+    setPersonId("");
+    setBasis("");
+    setError(undefined);
+  }
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(undefined);
+    try {
+      if (mode === "task") {
+        await createTask.mutateAsync(
+          create(TaskSpecSchema, {
+            caseId: props.caseId,
+            title: title.trim(),
+            assigneeId: personId || undefined,
+            dueDate: dueDate || undefined,
+          }),
+        );
+        setCreated((lines) => [
+          ...lines,
+          `Task “${title.trim()}” ${personId ? "assigned" : "created — waiting for an owner"}.`,
+        ]);
+      } else {
+        await createDeadline.mutateAsync(
+          create(DeadlineSpecSchema, {
+            caseId: props.caseId,
+            title: title.trim(),
+            dueDate,
+            statutoryBasis: basis.trim(),
+            ownerId: personId,
+          }),
+        );
+        setCreated((lines) => [...lines, `Deadline “${title.trim()}” on the book.`]);
+      }
+      reset("none");
+    } catch (err) {
+      setError(ConnectError.from(err).rawMessage);
+    }
+  }
+
+  const pending = createTask.isPending || createDeadline.isPending;
+
+  return (
+    <div className="mt-2 rounded-card border border-line bg-surface p-3">
+      {created.map((line) => (
+        <p key={line} role="status" className="mb-1 text-sm text-ok">
+          {line}
+        </p>
+      ))}
+      <p className="mb-2 text-xs text-ink-muted">
+        Anything to do before the next date? Capture it now so it reaches the board.
+      </p>
+      <div className="flex gap-1">
+        <Button onClick={() => reset(mode === "task" ? "none" : "task")}>
+          {mode === "task" ? "Close" : "Add a follow-up task"}
+        </Button>
+        <Button onClick={() => reset(mode === "deadline" ? "none" : "deadline")}>
+          {mode === "deadline" ? "Close" : "Add a deadline"}
+        </Button>
+      </div>
+
+      {mode !== "none" && (
+        <form
+          onSubmit={(e) => void onSubmit(e)}
+          aria-label={mode === "task" ? "Add a follow-up task" : "Add a deadline"}
+          className="mt-3"
+        >
+          <Label htmlFor="follow-up-title">
+            {mode === "task" ? "What has to be done" : "What must happen"}
+          </Label>
+          <Input
+            id="follow-up-title"
+            required
+            maxLength={200}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={mode === "task" ? "Prepare evidence affidavit" : "File written statement"}
+          />
+
+          <Label htmlFor="follow-up-due">
+            {mode === "task" ? (
+              <>
+                Due date <span className="font-normal text-ink-muted">(optional)</span>
+              </>
+            ) : (
+              "Due date"
+            )}
+          </Label>
+          <Input
+            id="follow-up-due"
+            type="date"
+            required={mode === "deadline"}
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+          />
+
+          {mode === "deadline" && (
+            <>
+              <Label htmlFor="follow-up-basis">
+                Where the date comes from{" "}
+                <span className="font-normal text-ink-muted">(optional)</span>
+              </Label>
+              <Input
+                id="follow-up-basis"
+                maxLength={500}
+                value={basis}
+                onChange={(e) => setBasis(e.target.value)}
+                placeholder="O.VIII R.1 — 30 days from summons"
+              />
+            </>
+          )}
+
+          <Label htmlFor="follow-up-person">
+            {mode === "task" ? (
+              <>
+                Assign to{" "}
+                <span className="font-normal text-ink-muted">
+                  (leave empty — it shows as waiting for an owner)
+                </span>
+              </>
+            ) : (
+              "Answerable"
+            )}
+          </Label>
+          <Select
+            id="follow-up-person"
+            required={mode === "deadline"}
+            value={personId}
+            onChange={(e) => setPersonId(e.target.value)}
+          >
+            <option value="">{mode === "task" ? "Nobody yet" : "Pick a person"}</option>
+            {roster.data?.members.map((member) => (
+              <option key={member.metadata?.id} value={member.metadata?.id}>
+                {member.status?.userName || member.status?.userEmail}
+              </option>
+            ))}
+          </Select>
+
+          <FormError message={error} />
+          <Button type="submit" variant="primary" disabled={pending}>
+            {pending ? "Saving…" : mode === "task" ? "Add task" : "Add deadline"}
+          </Button>
+        </form>
+      )}
+    </div>
   );
 }
 
@@ -311,6 +493,12 @@ function DiaryEntry(props: { hearing: Hearing; rosterName: (id: string) => strin
   const [recording, setRecording] = useState(false);
   const [editingListing, setEditingListing] = useState(false);
   const [confirmation, setConfirmation] = useState<string | undefined>();
+  // Set the moment an outcome is recorded — the capture window for the
+  // follow-up work it implies (FR-HEAR-007). Carries the auto-scheduled
+  // next date as the follow-up forms' due-date default.
+  const [followUp, setFollowUp] = useState<{ offered: boolean; nextDate?: string }>({
+    offered: false,
+  });
 
   const scheduled = isScheduled(hearing);
   const listing = [
@@ -370,12 +558,16 @@ function DiaryEntry(props: { hearing: Hearing; rosterName: (id: string) => strin
           {confirmation}
         </p>
       )}
+      {followUp.offered && (
+        <FollowUpForms caseId={hearing.spec?.caseId ?? ""} nextDate={followUp.nextDate} />
+      )}
       {recording && scheduled && (
         <RecordOutcomeForm
           hearing={hearing}
-          onDone={(message) => {
+          onDone={(message, nextDate) => {
             setRecording(false);
             setConfirmation(message);
+            setFollowUp({ offered: true, nextDate });
           }}
         />
       )}

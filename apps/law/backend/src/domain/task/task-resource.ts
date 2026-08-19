@@ -180,6 +180,14 @@ export function taskResource(deps: {
           }
           const member = await deps.guards.requireMember(ctx.caller);
 
+          // unassigned_only contradicts an assignee filter by
+          // definition — refuse loudly rather than guess (FR-TASK-002).
+          if (ctx.input.unassignedOnly && ctx.input.assigneeId) {
+            throw invalidArgument(
+              "unassigned_only and assignee_id contradict each other — ask for one",
+            );
+          }
+
           // Scope first. An explicit case filter is case content and
           // gates on membership; otherwise "My Tasks" is the contract's
           // default and FIRM must be asked for by name — for partners
@@ -198,7 +206,9 @@ export function taskResource(deps: {
               visible !== undefined ? { caseId: { in: [...visible] } } : {};
             if (ctx.input.assigneeId) {
               scope = { ...visibility, assigneeId: ctx.input.assigneeId };
-            } else if (ctx.input.scope === TaskListScope.FIRM) {
+            } else if (ctx.input.scope === TaskListScope.FIRM || ctx.input.unassignedOnly) {
+              // unassigned_only implies the FIRM visibility shape: an
+              // unassigned task has no "mine" to default to (contract).
               scope = visibility;
             } else {
               // "My Tasks": my assignments, on my visible cases. The
@@ -208,6 +218,9 @@ export function taskResource(deps: {
               // same rule the WhatsApp my_day answer rides.
               scope = { ...visibility, assigneeId: member.metadata?.id ?? "" };
             }
+          }
+          if (ctx.input.unassignedOnly) {
+            scope = { ...scope, assigneeId: { absent: true } };
           }
 
           // Then the named predicate — implemented here exactly once,

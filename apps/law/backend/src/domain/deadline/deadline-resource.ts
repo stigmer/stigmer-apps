@@ -35,7 +35,7 @@ import {
   ListDeadlinesResponseSchema,
   type UpdateDeadlineStatusRequest,
 } from "../../gen/stigmer/law/deadline/v1/deadline_pb.js";
-import { todayInFirmTimezone } from "../firm-clock.js";
+import { firmDayUtcBounds, todayInFirmTimezone } from "../firm-clock.js";
 import type { PolicyGuards } from "../authz/policy.js";
 
 const OPEN_TEXT = "DEADLINE_STATE_OPEN";
@@ -167,14 +167,22 @@ export function deadlineResource(deps: {
             ...(ctx.input.dueTo ? { lte: ctx.input.dueTo } : {}),
           };
 
+          // entered_on (FR-HEAR-007's deadline leg) reads newest-first —
+          // "what was put on the book today" — where every other shape
+          // keeps the most-urgent-first due-date order.
           const { items, totalCount } = await deps.store.list("Deadline", {
             limit: ctx.input.pageSize > 0 ? Math.min(ctx.input.pageSize, 100) : 20,
             offset: ctx.input.pageOffset > 0 ? ctx.input.pageOffset : 0,
-            orderBy: { field: "dueDate", direction: "asc", nulls: "last" },
+            orderBy: ctx.input.enteredOn
+              ? { field: "createdAt", direction: "desc", nulls: "last" }
+              : { field: "dueDate", direction: "asc", nulls: "last" },
             filter: {
               ...scope,
               ...(ctx.input.openOnly ? { state: OPEN_TEXT } : {}),
               ...(Object.keys(dueRange).length > 0 ? { dueDate: dueRange } : {}),
+              ...(ctx.input.enteredOn
+                ? { createdAt: firmDayUtcBounds(ctx.input.enteredOn) }
+                : {}),
             },
           });
           const deadlines = items as Deadline[];

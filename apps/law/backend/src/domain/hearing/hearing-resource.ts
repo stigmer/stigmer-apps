@@ -13,10 +13,12 @@
  */
 
 import { clone, create } from "@bufbuild/protobuf";
+import { timestampNow } from "@bufbuild/protobuf/wkt";
 import type {
   AuthorizationPolicy,
   CallerExtractor,
   CallerPrincipal,
+  FilterValue,
   PipelineStep,
   ResourceEventPublisher,
   ResourceStore,
@@ -46,7 +48,7 @@ import {
   type RecordOutcomeResponse,
   RecordOutcomeResponseSchema,
 } from "../../gen/stigmer/law/hearing/v1/hearing_pb.js";
-import { todayInFirmTimezone } from "../firm-clock.js";
+import { firmDayUtcBounds, todayInFirmTimezone } from "../firm-clock.js";
 import type { PolicyGuards } from "../authz/policy.js";
 
 export function hearingResource(deps: {
@@ -142,6 +144,9 @@ export function hearingResource(deps: {
             outcomeNotes: ctx.input.outcomeNotes,
             attendedBy: ctx.input.attendedBy,
             nextDate: ctx.input.nextDate,
+            // Stamped here, once — the write that freezes the record is
+            // the write that timestamps it (FR-HEAR-007).
+            recordedAt: timestampNow(),
           });
           const saved = await ctx.save(hearing);
           await ctx.publish("updated", saved, previous);
@@ -201,21 +206,40 @@ export function hearingResource(deps: {
             ...(ctx.input.dateTo ? { lte: ctx.input.dateTo } : {}),
           };
 
+          // The predicate shapes are mutually exclusive by contract;
+          // the day-feed shapes (FR-HEAR-007) read newest-first because
+          // they answer "what just happened", not the board's
+          // chronological order.
+          const shape: {
+            orderBy: NonNullable<Parameters<typeof deps.store.list>[1]["orderBy"]>;
+            filter: Record<string, FilterValue>;
+          } = ctx.input.recordedOn
+            ? {
+                orderBy: { field: "recordedAt", direction: "desc", nulls: "last" },
+                filter: { recordedAt: firmDayUtcBounds(ctx.input.recordedOn) },
+              }
+            : ctx.input.scheduledOn
+              ? {
+                  orderBy: { field: "createdAt", direction: "desc", nulls: "last" },
+                  filter: { createdAt: firmDayUtcBounds(ctx.input.scheduledOn) },
+                }
+              : {
+                  orderBy: { field: "date", direction: "asc", nulls: "last" },
+                  filter: ctx.input.unrecordedOnly
+                    ? {
+                        outcomeKind: { absent: true },
+                        date: { lt: todayInFirmTimezone() },
+                      }
+                    : Object.keys(dateRange).length > 0
+                      ? { date: dateRange }
+                      : {},
+                };
+
           const { items, totalCount } = await deps.store.list("Hearing", {
             limit: ctx.input.pageSize > 0 ? Math.min(ctx.input.pageSize, 100) : 20,
             offset: ctx.input.pageOffset > 0 ? ctx.input.pageOffset : 0,
-            orderBy: { field: "date", direction: "asc", nulls: "last" },
-            filter: {
-              ...scope,
-              ...(ctx.input.unrecordedOnly
-                ? {
-                    outcomeKind: { absent: true },
-                    date: { lt: todayInFirmTimezone() },
-                  }
-                : Object.keys(dateRange).length > 0
-                  ? { date: dateRange }
-                  : {}),
-            },
+            orderBy: shape.orderBy,
+            filter: { ...scope, ...shape.filter },
           });
           return create(ListHearingsResponseSchema, {
             items: items as Hearing[],

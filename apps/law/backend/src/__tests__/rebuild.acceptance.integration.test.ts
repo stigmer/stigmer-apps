@@ -345,6 +345,91 @@ describe("the rebuilt firm, end to end", () => {
     );
   });
 
+  /* --------------- the story of the day (FR-HEAR-007) --------------- */
+
+  it("FR-HEAR-007: an outcome recorded today lists under recorded_on today, newest first, and carries recorded_at", async () => {
+    const today = todayInFirmTimezone();
+    const recorded = await hearings.list({ recordedOn: today }, auth.as(people.mp.userId));
+    const ids = recorded.items.map((h) => h.metadata?.id);
+    expect(ids).toContain(firstHearingId);
+    const mine = recorded.items.find((h) => h.metadata?.id === firstHearingId);
+    expect(mine?.status?.recordedAt).toBeDefined();
+  });
+
+  it("FR-HEAR-007: recorded_on another day answers nothing — the day boundary is real", async () => {
+    const yesterday = addDaysToIsoDate(todayInFirmTimezone(), -1);
+    const recorded = await hearings.list({ recordedOn: yesterday }, auth.as(people.mp.userId));
+    expect(recorded.items).toHaveLength(0);
+  });
+
+  it("FR-HEAR-007: the auto-scheduled next hearing lists under scheduled_on today", async () => {
+    const today = todayInFirmTimezone();
+    const scheduled = await hearings.list({ scheduledOn: today }, auth.as(people.mp.userId));
+    // Both diary writes happened today: the directly created first
+    // hearing and the outcome's auto-scheduled successor.
+    const dates = scheduled.items.map((h) => h.spec?.date);
+    expect(dates).toContain(addDaysToIsoDate(today, 21));
+    expect(scheduled.items.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("FR-HEAR-007: a deadline entered today lists under entered_on today", async () => {
+    // Due far beyond every sweep window (T-7..day-of) so this fixture
+    // can never disturb the notification-dedup assertions downstream.
+    const dueDate = addDaysToIsoDate(todayInFirmTimezone(), 60);
+    await deadlines.create(
+      create(DeadlineSchema, {
+        spec: {
+          caseId,
+          title: "File written statement",
+          dueDate,
+          statutoryBasis: "O.VIII R.1",
+          ownerId: people.associate.memberId,
+        },
+      }),
+      auth.as(people.associate.userId),
+    );
+    const entered = await deadlines.list(
+      { enteredOn: todayInFirmTimezone() },
+      auth.as(people.mp.userId),
+    );
+    expect(entered.items.map((d) => d.spec?.title)).toContain("File written statement");
+  });
+
+  /* ------------- work waiting for an owner (FR-TASK-002) ------------ */
+
+  it("FR-TASK-002: an unassigned open task lists firm-wide for a partner and is invisible to a non-member", async () => {
+    await tasks.create(
+      create(TaskSchema, {
+        spec: { caseId, title: "Prepare evidence affidavit" },
+      }),
+      auth.as(people.associate.userId),
+    );
+
+    const forPartner = await tasks.list({ unassignedOnly: true }, auth.as(people.mp.userId));
+    expect(forPartner.items.map((t) => t.spec?.title)).toContain("Prepare evidence affidavit");
+    expect(forPartner.items.every((t) => !t.spec?.assigneeId)).toBe(true);
+
+    // The matrix holds: a non-member associate sees none of it.
+    const forOutsider = await tasks.list(
+      { unassignedOnly: true },
+      auth.as(people.associate2.userId),
+    );
+    expect(forOutsider.items.map((t) => t.spec?.title)).not.toContain(
+      "Prepare evidence affidavit",
+    );
+  });
+
+  it("FR-TASK-002: unassigned_only with an assignee filter refuses as contradictory", async () => {
+    await expectCode(
+      tasks.list(
+        { unassignedOnly: true, assigneeId: people.associate.memberId },
+        auth.as(people.mp.userId),
+      ),
+      Code.InvalidArgument,
+      /contradict/,
+    );
+  });
+
   /* ------------- the matrix at the wire (FR-AUTHZ-*) ---------------- */
 
   it("FR-AUTHZ-002/003: a non-member associate gets the list line but never the content", async () => {

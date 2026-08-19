@@ -79,6 +79,71 @@ describe("CaseDiary — recording an outcome (J3, FR-HEAR-002)", () => {
     );
   });
 
+  it("captures follow-up work at the source: a task created from the outcome, due date defaulted to the next hearing (FR-HEAR-007)", async () => {
+    const hearings = {
+      list: vi.fn(async () =>
+        create(ListHearingsResponseSchema, { items: [SCHEDULED], totalCount: 1n }),
+      ),
+      recordOutcome: vi.fn(async (req: RecordOutcomeRequest) =>
+        create(RecordOutcomeResponseSchema, {
+          hearing: create(HearingSchema, {
+            metadata: SCHEDULED.metadata,
+            spec: SCHEDULED.spec,
+            status: { outcomeKind: req.outcomeKind },
+          }),
+          nextHearing: create(HearingSchema, {
+            metadata: { id: "hear_2" },
+            spec: { caseId: "case_1", date: req.nextDate ?? "", purpose: "" },
+          }),
+        }),
+      ),
+    };
+    const tasks = {
+      create: vi.fn(async (task: unknown) => task),
+    };
+    renderScreen(
+      {
+        hearings: hearings as never,
+        tasks: tasks as never,
+        firmMembers: fakeFirmMembers() as never,
+      },
+      [{ path: "/", element: <CaseDiary caseId="case_1" /> }],
+      "/",
+    );
+
+    // Record the outcome with a next date…
+    await userEvent.click(await screen.findByRole("button", { name: "Record outcome" }));
+    await userEvent.selectOptions(screen.getByLabelText("What happened"), "Adjourned");
+    await userEvent.type(screen.getByLabelText(/Next date/), "2026-09-12");
+    await userEvent.click(screen.getByRole("button", { name: "Record outcome" }));
+
+    // …and the follow-up window opens in the same motion.
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Add a follow-up task" }),
+    );
+    // The due date defaults to the auto-scheduled next hearing.
+    expect(screen.getByLabelText(/Due date/)).toHaveValue("2026-09-12");
+    await userEvent.type(
+      screen.getByLabelText(/What has to be done/),
+      "Prepare evidence affidavit",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Add task" }));
+
+    await waitFor(() =>
+      expect(tasks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          spec: expect.objectContaining({
+            caseId: "case_1",
+            title: "Prepare evidence affidavit",
+            dueDate: "2026-09-12",
+          }),
+        }),
+      ),
+    );
+    // Left unassigned on purpose: the confirmation says where it lands.
+    expect(await screen.findByText(/waiting for an owner/i)).toBeInTheDocument();
+  });
+
   it("a completed hearing is read-only: no record button, the outcome as words", async () => {
     const hearings = {
       list: vi.fn(async () =>

@@ -98,6 +98,12 @@ message ListDeadlinesRequest {
   // week" (J1).
   string due_from = 6;
   string due_to = 7;
+
+  // Deadlines ENTERED on this calendar day (YYYY-MM-DD, firm timezone)
+  // — the story-of-the-day's "new obligations on the book"
+  // (FR-HEAR-007). Answered newest first. Composes with the other
+  // filters like any predicate.
+  string entered_on = 8;
 }
 
 message ListDeadlinesResponse {

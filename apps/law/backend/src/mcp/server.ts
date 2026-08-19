@@ -26,12 +26,13 @@ import { registerOutstandingBalances } from "./tools/outstanding-balances.js";
 import { registerRecordHearingOutcome } from "./tools/record-hearing-outcome.js";
 import { registerUpcomingHearings } from "./tools/upcoming-hearings.js";
 import { registerUpdateTaskStatus } from "./tools/update-task-status.js";
+import { registerWhatHappenedToday } from "./tools/what-happened-today.js";
 import type { ToolDeps } from "./tools/shared.js";
 
 /** Domain-shaped, never branded (DD-A2): the vertical is law, firm #N agnostic. */
 const SERVER_NAME = "law-firm";
-// 2.2: attach_document — filing over chat, on the #532 URL hand-off.
-const SERVER_VERSION = "2.2.0";
+// 2.3: what_happened_today — the day's story, backward-looking (FR-HEAR-007).
+const SERVER_VERSION = "2.3.0";
 
 /**
  * Every tool registrar, in one list — the surface's single source of
@@ -47,6 +48,7 @@ export const FIRM_TOOL_REGISTRARS: readonly ((
   deps: ToolDeps,
 ) => string)[] = [
   registerMyDay,
+  registerWhatHappenedToday,
   registerMyDeadlines,
   registerFindTasks,
   registerCaseStory,

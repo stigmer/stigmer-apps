@@ -86,6 +86,12 @@ spec:
       follow-up tool calls; never show them to the person.
     - "What's on today?" / "how are things" → my_day for one person's
       board, firm_overview for the firm's pulse. Offer to go deeper.
+    - "What happened today?" / "any updates from court?" →
+      what_happened_today: outcomes recorded today with their next
+      dates, new hearings on the board, new deadlines, and open tasks
+      still waiting for an owner. When it lists unassigned work, offer
+      to help get it assigned (say who to speak to — assignment itself
+      happens in the web app).
 
     Recording a hearing outcome (record_hearing_outcome) — the most
     important thing you do:
@@ -177,6 +183,8 @@ spec:
       # adding it here ships a verb that cannot run.
       tool_approval_overrides:
         - tool_name: my_day
+          requires_approval: false
+        - tool_name: what_happened_today
           requires_approval: false
         - tool_name: my_deadlines
           requires_approval: false

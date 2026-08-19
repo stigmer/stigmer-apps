@@ -144,6 +144,14 @@ message ListTasksRequest {
 
   TaskListFilter filter = 5 [(buf.validate.field).enum.defined_only = true];
   TaskListScope scope = 6 [(buf.validate.field).enum.defined_only = true];
+
+  // Only tasks with NO assignee — work waiting for an owner, born (for
+  // example) from a hearing outcome nobody has picked up yet
+  // (FR-TASK-002). Visibility is the FIRM shape regardless of scope:
+  // partners see the whole firm's unassigned work, everyone else their
+  // member cases — an unassigned task has no "mine" to default to.
+  // INVALID_ARGUMENT when combined with assignee_id (contradictory).
+  bool unassigned_only = 7;
 }
 
 message ListTasksResponse {

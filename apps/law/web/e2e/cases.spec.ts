@@ -81,12 +81,24 @@ test("intake → diary → recorded outcome auto-schedules → notes → documen
   await page.getByLabel(/Next date/).fill("2099-09-12");
   await page.getByLabel("Listed for").last().fill("evidence");
   await page.getByRole("form", { name: /Record outcome/ }).getByRole("button", { name: "Record outcome" }).click();
-  await expect(page.getByRole("status")).toContainText("Next hearing scheduled for 12/09/2099");
+  await expect(page.getByRole("status").first()).toContainText(
+    "Next hearing scheduled for 12/09/2099",
+  );
   // The case's derived next date follows — read from the context rail,
   // the facts surface (the diary shows the same date in the story).
   await expect(
     page.getByRole("complementary", { name: "Matter facts" }).getByText("12/09/2099"),
   ).toBeVisible();
+
+  // Capture at the source (FR-HEAR-007): the follow-up window opened
+  // with the outcome; leave the task unassigned so it lands on the
+  // home screen's pickup list (asserted at the end of this journey).
+  await page.getByRole("button", { name: "Add a follow-up task" }).click();
+  // The due date defaulted to the auto-scheduled next hearing.
+  await expect(page.getByLabel(/Due date/)).toHaveValue("2099-09-12");
+  await page.getByLabel("What has to be done").fill("Draft evidence affidavit");
+  await page.getByRole("button", { name: "Add task", exact: true }).click();
+  await expect(page.getByText(/waiting for an owner/)).toBeVisible();
 
   // Notes: append-only running record, author from the envelope.
   await page.getByRole("button", { name: "Notes" }).click();
@@ -204,6 +216,17 @@ test("intake → diary → recorded outcome auto-schedules → notes → documen
   await expect(docs.getByText(/scans are searchable only after the system has read them/i)).toBeVisible();
   await documentSearch.fill("");
   await expect(docs.getByText("vakalatnama.pdf")).toBeVisible();
+
+  // The communication loop closes on home (FR-HEAR-007, FR-TASK-002):
+  // the outcome this journey recorded happened TODAY, so the story
+  // panel tells it, and the unassigned follow-up sits on the pickup
+  // list for whoever is free.
+  await page.goto("/");
+  const story = page.getByRole("region", { name: "What happened today" });
+  await expect(story.getByText("CRL/2026/055").first()).toBeVisible();
+  await expect(story.getByText(/Adjourned — next 12\/09\/2099/)).toBeVisible();
+  const pickup = page.getByRole("region", { name: "Tasks waiting for an owner" });
+  await expect(pickup.getByText("Draft evidence affidavit")).toBeVisible();
 });
 
 test("the conflict check fires DURING intake when the name is on the other side", async ({ page }) => {
