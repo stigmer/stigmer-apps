@@ -233,28 +233,6 @@ test("intake → diary → recorded outcome auto-schedules → notes → documen
   await expect(pickup.getByText("Draft evidence affidavit")).toBeVisible();
 });
 
-test("the statutory frame: acts entered manually, corrected in place (FR-ACT-001)", async ({ page }) => {
-  await signIn(page);
-  await createMatter(page, "CRL/2026/099", "Delta Traders");
-
-  await page.getByRole("button", { name: "Acts" }).click();
-  await expect(page.getByText(/entered by the team/)).toBeVisible();
-
-  await page.getByRole("button", { name: "Add act" }).click();
-  await page.getByLabel("Act", { exact: true }).fill("IPC");
-  await page.getByLabel(/Sections/).fill("420, 468");
-  await page.getByRole("button", { name: "Add act" }).click();
-  await expect(page.getByText("420, 468")).toBeVisible();
-
-  // The corrections model: edit in place; no delete control exists.
-  // exact: the context rail's "Edit details" also answers to /Edit/.
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await page.getByLabel(/Sections/).fill("420, 468, 471");
-  await page.getByRole("button", { name: "Save changes" }).click();
-  await expect(page.getByText("420, 468, 471")).toBeVisible();
-  await expect(page.getByRole("button", { name: /delete|remove/i })).toHaveCount(0);
-});
-
 test("the conflict check fires DURING intake when the name is on the other side", async ({ page }) => {
   await signIn(page);
   // First matter puts "Sunrise Traders" on the other side.

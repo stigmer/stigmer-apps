@@ -78,8 +78,6 @@ const CASE_REF: Readonly<
   // Denormalized from the immutable Document at create time,
   // pipeline-verified against the referenced document (DD-010).
   DocumentAnnotation: (r) => r.spec?.caseId,
-  // The statutory frame (FR-ACT-001) — case content like the diary.
-  CaseAct: (r) => r.spec?.caseId,
   // The reliance trail (FR-CIT-001) — case content of the USING case;
   // the judgment side is verified by the create pipeline's steps.
   CitationUse: (r) => r.spec?.caseId,
@@ -340,7 +338,6 @@ export function createFirmPolicy(
       case "CaseNote":
       case "Document":
       case "DocumentAnnotation":
-      case "CaseAct":
       case "CitationUse":
       case "Task": {
         // Case content, clerk included (the clerk records hearings —

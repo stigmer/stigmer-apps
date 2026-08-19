@@ -99,13 +99,11 @@ export function documentResource(deps: {
           }
 
           let scope: Record<string, string | { in: string[] } | { absent: true }> = {};
-          if (ctx.input.libraryOnly || ctx.input.category === DocumentCategory.ACT) {
+          if (ctx.input.libraryOnly) {
             // The firm library (FR-DOC-005): case-less rows are library
             // material by the create invariant, readable by every case
             // worker — the authorize() above IS the whole gate, no
-            // visibility scoping applies. ACT lands here even unasked:
-            // acts are case-less by construction, so their only view is
-            // the library view.
+            // visibility scoping applies.
             scope = { caseId: { absent: true } };
           } else if (ctx.input.caseId) {
             await deps.guards.assertCaseContent(ctx.caller, ctx.input.caseId);
@@ -125,7 +123,7 @@ export function documentResource(deps: {
             throw invalidArgument(
               "Documents are listed per case (case_id), firm-wide for the " +
                 "judgment collection (category JUDGMENT), or from the firm " +
-                "library (library_only / category ACT)",
+                "library (library_only)",
             );
           }
 
@@ -167,21 +165,13 @@ export function documentResource(deps: {
   });
 }
 
-/** The set of categories that may live in the FIRM LIBRARY (case-less,
- * FR-DOC-005): public-record material only. Exported so the policy's
- * comments and future transports can cite one source. */
-const LIBRARY_CATEGORIES: ReadonlySet<DocumentCategory> = new Set([
-  DocumentCategory.ACT,
-  DocumentCategory.JUDGMENT,
-]);
-
 /**
  * The library invariants (FR-DOC-005) — what makes "case-less ⇒
  * library material" TRUE, which the policy's read arm then relies on:
- * a case-less document must carry a library category and no hearing
- * link (a hearing without a case is meaningless), and an ACT is
- * case-less BY CONSTRUCTION (bare acts are firm-level; one pile —
- * session-27 owner decision).
+ * a case-less document must be a JUDGMENT (the one library category
+ * since the acts feature was removed — owner decision, 2026-08-19)
+ * and carry no hearing link (a hearing without a case is
+ * meaningless).
  */
 const libraryIntegrity: PipelineStep<WriteContext<Document>> = {
   name: "verify-library-shape",
@@ -189,10 +179,10 @@ const libraryIntegrity: PipelineStep<WriteContext<Document>> = {
     const spec = (ctx.newState as Document).spec;
     if (!spec) return;
     if (!spec.caseId) {
-      if (!LIBRARY_CATEGORIES.has(spec.category)) {
+      if (spec.category !== DocumentCategory.JUDGMENT) {
         throw failedPrecondition(
-          "Only acts and judgments can be filed to the firm library — " +
-            "every other paper belongs to a matter (give its case)",
+          "Only judgments can be filed to the firm library — every other " +
+            "paper belongs to a matter (give its case)",
         );
       }
       if (spec.hearingId) {
@@ -200,10 +190,6 @@ const libraryIntegrity: PipelineStep<WriteContext<Document>> = {
           "A library document cannot reference a hearing — hearings belong to matters",
         );
       }
-    } else if (spec.category === DocumentCategory.ACT) {
-      throw failedPrecondition(
-        "Bare acts are firm-library material — file them to the library, not to a matter",
-      );
     }
   },
 };

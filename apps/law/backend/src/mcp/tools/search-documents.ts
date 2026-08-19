@@ -44,9 +44,9 @@ export function registerSearchDocuments(
       description:
         "Search the text of the firm's documents (the pages the system has " +
         "extracted) for an exact word or phrase — across every case the " +
-        "caller can see AND the firm library (bare acts, standalone " +
-        "citations), or within one matter. This is how to answer 'what " +
-        "does Section 420 say?': search the act's text, then read the " +
+        "caller can see AND the firm library (standalone citations), or " +
+        "within one matter. This is how to answer 'which acts does the " +
+        "FIR name?': search the matter's filed papers, then read the " +
         "cited page. Matching is literal — if a word finds nothing, try a " +
         "synonym or a shorter root (e.g. 'limitation' not 'time-barred'). " +
         (deps.ocrEnabled
