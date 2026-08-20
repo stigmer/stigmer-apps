@@ -50,19 +50,21 @@ test("file a judgment with identity, read it on the shelf, cite it from a matter
   // A matter to cite from, created first.
   await createMatter(page, "CRL/2026/121", "Zeta Traders");
 
-  // The front door: identity beside the bytes (DD-012 D2).
+  // The front door: identity beside the bytes (DD-012 D2) — pick the
+  // file, then the explicit submit (a real form; the required case
+  // name is browser-enforced).
   await page.goto("/library");
   await page
     .getByLabel("Case name (as the firm cites it)")
     .fill("Fictional Guidelines vs State");
-  // exact: the shelf section's aria-label ("Citations on the shelf")
-  // substring-matches "Citation" otherwise — a strict-mode violation.
-  await page.getByLabel("Citation", { exact: true }).fill("AIR 2099 SC 1");
+  await page.getByLabel("Citation (optional)").fill("AIR 2099 SC 1");
   await page
     .locator("#library-upload")
     .setInputFiles([
       { name: "fictional-guidelines.pdf", mimeType: "application/pdf", buffer: JUDGMENT_PDF },
     ]);
+  await expect(page.getByText(/Picked: fictional-guidelines\.pdf/)).toBeVisible();
+  await page.getByRole("button", { name: "Add to the library" }).click();
   await expect(page.getByRole("status")).toContainText("on the shelf");
 
   // The shelf leads with the IDENTITY, the file name is small print.

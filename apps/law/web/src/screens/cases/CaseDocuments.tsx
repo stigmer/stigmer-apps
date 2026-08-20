@@ -37,8 +37,12 @@ import { useApiClients } from "../../api/clients.js";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
 import { Badge } from "../../components/Badge.js";
 import { Button, buttonClass } from "../../components/Button.js";
-import { FormError, InlineInput, Input, Label, Select } from "../../components/Field.js";
+import { FormError, InlineInput, Label, Select } from "../../components/Field.js";
 import { Pagination } from "../../components/Pagination.js";
+import {
+  CitationIdentityFields,
+  EMPTY_IDENTITY,
+} from "../library/CitationIdentityFields.js";
 import {
   DocumentCategory,
   type Document,
@@ -133,18 +137,16 @@ function DocumentSearchResults(props: {
 }
 
 /** The promote form (DD-012 D2): the identity a colleague recognizes,
- * asked for at the moment of sharing — title required (the shelf's
- * own rule), the rest refinable later on the Library screen. */
+ * asked for at the moment of sharing — the ONE identity form block
+ * (case name required, the rest marked optional and refinable later
+ * on the Library screen). */
 function PromoteForm(props: {
   document: Document;
   onPromoted: () => void;
   onCancel: () => void;
 }) {
   const promote = usePromoteToLibrary();
-  const [title, setTitle] = useState("");
-  const [court, setCourt] = useState("");
-  const [year, setYear] = useState("");
-  const [citation, setCitation] = useState("");
+  const [identity, setIdentity] = useState(EMPTY_IDENTITY);
   const [error, setError] = useState<string | undefined>();
 
   async function onSubmit(event: FormEvent) {
@@ -153,10 +155,10 @@ function PromoteForm(props: {
     try {
       await promote.mutateAsync({
         sourceDocumentId: props.document.metadata?.id ?? "",
-        title: title.trim(),
-        court: court.trim(),
-        year: Number(year) || 0,
-        citation: citation.trim(),
+        title: identity.title.trim(),
+        court: identity.court.trim(),
+        year: Number(identity.year) || 0,
+        citation: identity.citation.trim(),
       });
       props.onPromoted();
     } catch (err) {
@@ -174,48 +176,10 @@ function PromoteForm(props: {
         A copy goes on the firm&apos;s citation shelf, readable by everyone who works
         cases. The matter&apos;s own copy stays here, unchanged.
       </p>
-      <Label htmlFor="promote-title">Case name (as the firm cites it)</Label>
-      <Input
-        id="promote-title"
-        required
-        maxLength={300}
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Arnesh Kumar vs State of Bihar"
-      />
-      <div className="flex flex-wrap gap-2">
-        <div className="flex-1 basis-40">
-          <Label htmlFor="promote-court">Court</Label>
-          <Input
-            id="promote-court"
-            maxLength={200}
-            value={court}
-            onChange={(e) => setCourt(e.target.value)}
-          />
-        </div>
-        <div className="w-24">
-          <Label htmlFor="promote-year">Year</Label>
-          <Input
-            id="promote-year"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={4}
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-          />
-        </div>
-        <div className="flex-1 basis-40">
-          <Label htmlFor="promote-citation">Citation</Label>
-          <Input
-            id="promote-citation"
-            maxLength={200}
-            value={citation}
-            onChange={(e) => setCitation(e.target.value)}
-            placeholder="AIR 2014 SC 2756"
-          />
-        </div>
+      <CitationIdentityFields idPrefix="promote" value={identity} onChange={setIdentity} />
+      <div className="mt-2">
+        <FormError message={error} />
       </div>
-      <FormError message={error} />
       <div className="mt-1 flex gap-2">
         <Button type="submit" variant="primary" disabled={promote.isPending}>
           {promote.isPending ? "Adding…" : "Add to library"}

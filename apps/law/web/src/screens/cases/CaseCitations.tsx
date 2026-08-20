@@ -18,11 +18,15 @@ import { useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ConnectError } from "@connectrpc/connect";
 import { EmptyState, ErrorState, Loading } from "../../components/async.js";
-import { Button } from "../../components/Button.js";
+import { Button, buttonClass } from "../../components/Button.js";
 import { FormError, InlineInput, Input, Label } from "../../components/Field.js";
 import { Pagination } from "../../components/Pagination.js";
 import type { Citation } from "../../gen/stigmer/law/citation/v1/citation_pb.js";
 import { citationFacts } from "../../lib/format.js";
+import {
+  CitationIdentityFields,
+  EMPTY_IDENTITY,
+} from "../library/CitationIdentityFields.js";
 import { useShelfSearch, useUploadLibraryDocument } from "../library/queries.js";
 import { useCaseCitationUses, useCiteJudgment } from "./queries.js";
 
@@ -53,7 +57,7 @@ function CiteFlow(props: { caseId: string; onDone: () => void }) {
   const [proposition, setProposition] = useState("");
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | undefined>();
-  const [title, setTitle] = useState("");
+  const [identity, setIdentity] = useState(EMPTY_IDENTITY);
   const [error, setError] = useState<string | undefined>();
   const search = useShelfSearch(query);
   const upload = useUploadLibraryDocument();
@@ -65,12 +69,22 @@ function CiteFlow(props: { caseId: string; onDone: () => void }) {
     try {
       let documentId = picked?.spec?.documentId ?? "";
       if (uploading) {
-        if (!file) return;
+        if (!file) {
+          setError("Pick the judgment's file first.");
+          return;
+        }
         // Not on the shelf yet: file it there first (the shelf rule —
-        // the trail only ever keys library papers), then cite it.
+        // the trail only ever keys library papers), then cite it. The
+        // SAME identity form as the Library's front door — one act,
+        // one vocabulary (the two doors must never drift apart).
         const uploaded = await upload.mutateAsync({
           file,
-          identity: { title: title.trim() || undefined },
+          identity: {
+            title: identity.title.trim(),
+            court: identity.court.trim() || undefined,
+            year: Number(identity.year) || undefined,
+            citation: identity.citation.trim() || undefined,
+          },
         });
         documentId = uploaded.metadata?.id ?? "";
       }
@@ -139,25 +153,29 @@ function CiteFlow(props: { caseId: string; onDone: () => void }) {
       )}
 
       {uploading && (
-        <>
-          <Label htmlFor="cite-file">The judgment (PDF, PNG, or JPG — up to 25 MB)</Label>
-          <input
-            id="cite-file"
-            type="file"
-            accept="application/pdf,image/png,image/jpeg"
-            className="mb-2 block text-sm"
-            onChange={(e) => setFile(e.target.files?.[0])}
-          />
-          <Label htmlFor="cite-title">Case name (as the firm cites it)</Label>
-          <Input
-            id="cite-title"
-            maxLength={300}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Arnesh Kumar vs State of Bihar"
-          />
-          <Button onClick={() => setUploading(false)}>Back to the shelf search</Button>
-        </>
+        <div className="mb-2">
+          <CitationIdentityFields idPrefix="cite" value={identity} onChange={setIdentity}>
+            <input
+              id="cite-file"
+              type="file"
+              accept="application/pdf,image/png,image/jpeg"
+              className="sr-only"
+              onChange={(e) => setFile(e.target.files?.[0])}
+            />
+            <label htmlFor="cite-file" className={`${buttonClass()} cursor-pointer`}>
+              Pick the file
+            </label>
+          </CitationIdentityFields>
+          <p className="mt-1 text-xs text-ink-muted">
+            {file
+              ? `Picked: ${file.name}. `
+              : "The judgment's file — PDF, PNG, or JPG, up to 25 MB. "}
+            It goes on the firm&apos;s shelf, then the citation is recorded here.
+          </p>
+          <div className="mt-1">
+            <Button onClick={() => setUploading(false)}>Back to the shelf search</Button>
+          </div>
+        </div>
       )}
 
       <Label htmlFor="cite-proposition">For what proposition</Label>
