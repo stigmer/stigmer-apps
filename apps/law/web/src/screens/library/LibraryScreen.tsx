@@ -27,6 +27,11 @@ import { EmptyState, ErrorState, Loading } from "../../components/async.js";
 import { Badge } from "../../components/Badge.js";
 import { Button, buttonClass } from "../../components/Button.js";
 import { FormError, InlineInput, Input, Label, Select } from "../../components/Field.js";
+import {
+  CitationIdentityFields,
+  EMPTY_IDENTITY,
+  type CitationIdentityDraft,
+} from "./CitationIdentityFields.js";
 import { PageHeader } from "../../components/PageHeader.js";
 import { Pagination } from "../../components/Pagination.js";
 import { SectionCard } from "../../components/SectionCard.js";
@@ -56,102 +61,66 @@ function filedDay(citation: Citation): string {
     : "";
 }
 
-/** The front door: the judgment's bytes AND its identity in one act. */
+/** The front door: the judgment's bytes AND its identity in one act —
+ * a real form, so "case name required" is the browser's own refusal,
+ * not a server round trip (error prevention over error messages). */
 function LibraryUpload() {
   const upload = useUploadLibraryDocument();
-  const [title, setTitle] = useState("");
-  const [court, setCourt] = useState("");
-  const [year, setYear] = useState("");
-  const [citation, setCitation] = useState("");
+  const [identity, setIdentity] = useState(EMPTY_IDENTITY);
+  const [file, setFile] = useState<File | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [confirmation, setConfirmation] = useState<string | undefined>();
   const fileInput = useRef<HTMLInputElement>(null);
 
-  async function onPicked(files: FileList | null) {
-    const file = files?.[0];
-    if (!file) return;
-    setError(undefined);
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
     setConfirmation(undefined);
+    if (!file) {
+      setError("Pick the judgment's file first.");
+      return;
+    }
+    setError(undefined);
     try {
       await upload.mutateAsync({
         file,
         identity: {
-          title: title.trim() || undefined,
-          court: court.trim() || undefined,
-          year: Number(year) || undefined,
-          citation: citation.trim() || undefined,
+          title: identity.title.trim(),
+          court: identity.court.trim() || undefined,
+          year: Number(identity.year) || undefined,
+          citation: identity.citation.trim() || undefined,
         },
       });
-      setConfirmation(`“${title.trim() || file.name}” is on the shelf.`);
-      setTitle("");
-      setCourt("");
-      setYear("");
-      setCitation("");
+      setConfirmation(`“${identity.title.trim()}” is on the shelf.`);
+      setIdentity(EMPTY_IDENTITY);
+      setFile(undefined);
+      if (fileInput.current) fileInput.current.value = "";
     } catch (err) {
       setError(err instanceof Error ? err.message : ConnectError.from(err).rawMessage);
-    } finally {
-      if (fileInput.current) fileInput.current.value = "";
     }
   }
 
   return (
-    <div>
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="flex-1 basis-56">
-          <Label htmlFor="shelf-title">Case name (as the firm cites it)</Label>
-          <Input
-            id="shelf-title"
-            maxLength={300}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Arnesh Kumar vs State of Bihar"
-          />
-        </div>
-        <div className="flex-1 basis-40">
-          <Label htmlFor="shelf-court">Court</Label>
-          <Input
-            id="shelf-court"
-            maxLength={200}
-            value={court}
-            onChange={(e) => setCourt(e.target.value)}
-          />
-        </div>
-        <div className="w-24">
-          <Label htmlFor="shelf-year">Year</Label>
-          <Input
-            id="shelf-year"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={4}
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-          />
-        </div>
-        <div className="flex-1 basis-40">
-          <Label htmlFor="shelf-citation">Citation</Label>
-          <Input
-            id="shelf-citation"
-            maxLength={200}
-            value={citation}
-            onChange={(e) => setCitation(e.target.value)}
-            placeholder="AIR 2014 SC 2756"
-          />
-        </div>
+    <form onSubmit={(e) => void onSubmit(e)}>
+      <CitationIdentityFields idPrefix="shelf" value={identity} onChange={setIdentity}>
         <input
           ref={fileInput}
           type="file"
           accept="application/pdf,image/png,image/jpeg"
           className="sr-only"
           id="library-upload"
-          onChange={(e) => void onPicked(e.target.files)}
+          onChange={(e) => setFile(e.target.files?.[0])}
         />
-        <label htmlFor="library-upload" className={`${buttonClass("primary")} cursor-pointer`}>
-          {upload.isPending ? "Uploading…" : "Pick the file & add"}
+        <label htmlFor="library-upload" className={`${buttonClass()} cursor-pointer`}>
+          Pick the file
         </label>
-      </div>
+        <Button type="submit" variant="primary" disabled={upload.isPending}>
+          {upload.isPending ? "Adding…" : "Add to the library"}
+        </Button>
+      </CitationIdentityFields>
       <p className="mt-1 text-xs text-ink-muted">
-        PDF, PNG, or JPG — up to 25 MB. The name can be corrected later; the paper itself
-        is permanent.
+        {file ? `Picked: ${file.name}. ` : "PDF, PNG, or JPG — up to 25 MB. "}
+        Court, year, and citation can be added or corrected later; the paper itself is
+        permanent.
       </p>
       {confirmation && (
         <p role="status" className="mt-1 text-sm text-ok">
@@ -163,7 +132,7 @@ function LibraryUpload() {
           <FormError message={error} />
         </div>
       )}
-    </div>
+    </form>
   );
 }
 
@@ -224,10 +193,12 @@ function RecordUseForm(props: { documentId: string; onDone: () => void }) {
 function CorrectIdentityForm(props: { citation: Citation; onDone: () => void }) {
   const correct = useCorrectCitation();
   const spec = props.citation.spec;
-  const [title, setTitle] = useState(spec?.title ?? "");
-  const [court, setCourt] = useState(spec?.court ?? "");
-  const [year, setYear] = useState(spec?.year ? String(spec.year) : "");
-  const [citation, setCitation] = useState(spec?.citation ?? "");
+  const [identity, setIdentity] = useState<CitationIdentityDraft>({
+    title: spec?.title ?? "",
+    court: spec?.court ?? "",
+    year: spec?.year ? String(spec.year) : "",
+    citation: spec?.citation ?? "",
+  });
   const [error, setError] = useState<string | undefined>();
 
   async function onSubmit(event: FormEvent) {
@@ -242,10 +213,10 @@ function CorrectIdentityForm(props: { citation: Citation; onDone: () => void }) 
           documentId: spec?.documentId ?? "",
           promotedFromCaseId: spec?.promotedFromCaseId ?? "",
           promotedFromDocumentId: spec?.promotedFromDocumentId ?? "",
-          title: title.trim(),
-          court: court.trim(),
-          year: Number(year) || 0,
-          citation: citation.trim(),
+          title: identity.title.trim(),
+          court: identity.court.trim(),
+          year: Number(identity.year) || 0,
+          citation: identity.citation.trim(),
         }),
       });
       props.onDone();
@@ -260,46 +231,10 @@ function CorrectIdentityForm(props: { citation: Citation; onDone: () => void }) 
       aria-label="Correct the identity"
       className="mt-2 w-full rounded-card border border-line p-3"
     >
-      <Label htmlFor="fix-title">Case name</Label>
-      <Input
-        id="fix-title"
-        required
-        maxLength={300}
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-      />
-      <div className="flex flex-wrap gap-2">
-        <div className="flex-1 basis-40">
-          <Label htmlFor="fix-court">Court</Label>
-          <Input
-            id="fix-court"
-            maxLength={200}
-            value={court}
-            onChange={(e) => setCourt(e.target.value)}
-          />
-        </div>
-        <div className="w-24">
-          <Label htmlFor="fix-year">Year</Label>
-          <Input
-            id="fix-year"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={4}
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-          />
-        </div>
-        <div className="flex-1 basis-40">
-          <Label htmlFor="fix-citation">Citation</Label>
-          <Input
-            id="fix-citation"
-            maxLength={200}
-            value={citation}
-            onChange={(e) => setCitation(e.target.value)}
-          />
-        </div>
+      <CitationIdentityFields idPrefix="fix" value={identity} onChange={setIdentity} />
+      <div className="mt-2">
+        <FormError message={error} />
       </div>
-      <FormError message={error} />
       <div className="mt-1 flex gap-2">
         <Button type="submit" variant="primary" disabled={correct.isPending}>
           {correct.isPending ? "Saving…" : "Save"}

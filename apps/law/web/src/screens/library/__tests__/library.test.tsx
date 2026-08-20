@@ -146,7 +146,7 @@ describe("LibraryScreen (the citation shelf, DD-012 D2)", () => {
     const shelf = await screen.findByRole("region", { name: "Citations on the shelf" });
     await within(shelf).findByText("Kesar vs State");
     await userEvent.click(within(shelf).getAllByRole("button", { name: "Edit" })[0]!);
-    const nameBox = within(shelf).getByLabelText("Case name");
+    const nameBox = within(shelf).getByLabelText("Case name (as the firm cites it)");
     await userEvent.clear(nameBox);
     await userEvent.type(nameBox, "Kesar Singh vs State of Punjab");
     await userEvent.click(within(shelf).getByRole("button", { name: "Save" }));
@@ -168,19 +168,26 @@ describe("LibraryScreen (the citation shelf, DD-012 D2)", () => {
       "/library",
     );
 
-    await screen.findByRole("region", { name: "Add to the library" });
+    const door = await screen.findByRole("region", { name: "Add to the library" });
     await userEvent.type(
-      screen.getByLabelText("Case name (as the firm cites it)"),
+      within(door).getByLabelText("Case name (as the firm cites it)"),
       "Arnesh Kumar vs State of Bihar",
     );
-    await userEvent.type(screen.getByLabelText("Citation"), "AIR 2014 SC 2756");
+    await userEvent.type(
+      within(door).getByLabelText("Citation (optional)"),
+      "AIR 2014 SC 2756",
+    );
     const file = new File(["%PDF-1.4 fictional judgment"], "arnesh.pdf", {
       type: "application/pdf",
     });
     await userEvent.upload(
-      screen.getByLabelText(/Pick the file & add/, { selector: "input" }),
+      within(door).getByLabelText("Pick the file", { selector: "input" }),
       file,
     );
+    // Picking is not filing — the visible submit is (a real form, so
+    // the required case name is browser-enforced).
+    expect(within(door).getByText(/Picked: arnesh\.pdf/)).toBeInTheDocument();
+    await userEvent.click(within(door).getByRole("button", { name: "Add to the library" }));
 
     await waitFor(() =>
       expect(clients.files.uploadLibraryDocument).toHaveBeenCalledWith(file, {
