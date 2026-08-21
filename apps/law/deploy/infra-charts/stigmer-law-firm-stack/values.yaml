@@ -64,13 +64,22 @@ params:
     description: Planton container-registry connection for image pulls (planton.dev/container-registry annotation)
     value: ghcr-stigmer
 
-  # REQUIRED, no usable default. MUST be a single label under the
-  # platform domain (e.g. <firm>-law.stigmer.ai): the TLS issuer is
-  # derived from everything after the first dot, and only a stigmer.ai
-  # ClusterIssuer exists — a deeper name never gets a certificate, and
-  # without HTTPS nobody can sign in (Secure session cookie).
+  # REQUIRED, no usable default. MUST be a single label under a domain
+  # whose cert-manager ClusterIssuer exists on the cluster: the TLS
+  # issuer is derived from everything after the hostname's first dot,
+  # and a name whose derived issuer is missing never gets a certificate
+  # — and without HTTPS nobody can sign in (Secure session cookie).
+  # Two supported shapes:
+  #   - platform hostname (<firm>-law.stigmer.ai): the stigmer.ai
+  #     issuer always exists — the onboarding default.
+  #   - the firm's own domain (app.example-firm.com): provision that
+  #     domain's ClusterIssuer + ExternalDNS instance FIRST (README,
+  #     "Bring your own domain").
+  # Apex hostnames (bare example-firm.com) are unsupported by the
+  # derivation — it would look up an issuer literally named "com";
+  # redirect the apex to the app at the DNS edge instead.
   - name: hostname
-    description: Public hostname for the firm's app (single label under stigmer.ai)
+    description: Public hostname for the firm's app (single label under a domain with a ClusterIssuer)
     value: ""
 
   # Set ONLY during a signing-key rotation window (DD-005): the previous
