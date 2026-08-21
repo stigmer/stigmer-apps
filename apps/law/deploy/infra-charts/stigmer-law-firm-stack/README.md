@@ -92,6 +92,47 @@ step below ever requires one, the design has failed its own test.
 5. **First user**: bootstrap with the operator key over the live
    hostname (`apps/law/README.md`, "Authentication and the first user").
 
+## Bring your own domain (the firm's hostname off stigmer.ai)
+
+The onboarding default is a platform hostname (`<firm>-law.stigmer.ai`)
+because the platform's TLS/DNS wiring — one `stigmer.ai` ClusterIssuer,
+one ExternalDNS instance scoped to the stigmer.ai zone — already covers
+it. Moving a firm to its own domain (e.g. `app.example-firm.com`) means
+teaching the cluster that domain FIRST, then flipping one value:
+
+1. **Constraints.** The hostname must be a single label under the
+   domain: the certificate issuer is derived from everything after the
+   hostname's first dot, so `app.example-firm.com` looks up a
+   ClusterIssuer named exactly `example-firm.com` — and a bare apex
+   would look up one named `com`. Handle the apex with a redirect rule
+   at the DNS provider's edge (proxied placeholder record + 301 to the
+   app hostname); the cluster never sees apex traffic.
+2. **Credential.** In the Cloudflare account that owns the domain's
+   zone, mint one API token scoped `Zone:Zone:Read + Zone:DNS:Edit` on
+   that zone only. It serves both halves of the wiring: cert-manager's
+   DNS-01 challenges and ExternalDNS's record writes. Stage it
+   gitignored in the client's folder; it is never committed.
+3. **Cluster wiring, per domain**: one `KubernetesClusterIssuer` (named
+   `<domain-slug>-cluster-issuer`, `dns_domain` = the domain) and one
+   `KubernetesExternalDns` instance (named `<domain-slug>-external-dns`,
+   zone-ID-scoped; instances coexist in the shared external-dns
+   namespace because the Helm release is named per instance). Deliver
+   both as a client-local infra-chart via `planton chart install` — the
+   template channel is parsed server-side. Records stay unproxied and
+   the ExternalDNS policy is upsert-only: retiring a hostname later
+   means deleting its A + ownership-TXT records by hand.
+4. **The flip.** Set `hostname` in the client's values file to the new
+   name — that change and nothing else — and re-run the install. The
+   platform re-renders the route and certificate; ExternalDNS writes
+   the record; sessions are host-scoped so staff sign in once at the
+   new URL. If the firm's Ask AI is enabled, ADD the new origin to its
+   PlatformClient `allowed_origins` BEFORE the flip and remove the old
+   origin after — origin enforcement would otherwise refuse the
+   assistant on the new hostname.
+5. **Aftermath.** The old hostname's A + TXT records orphan (upsert-only
+   policy) — delete them in the platform zone; the old ingress and
+   certificate are re-rendered away by the install itself.
+
 ## Gate before real case data
 
 - **Backups do not exist yet.** The live Postgres operator has no

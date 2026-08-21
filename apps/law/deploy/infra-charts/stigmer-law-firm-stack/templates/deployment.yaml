@@ -273,12 +273,16 @@ spec:
           isIngressPort: false
   ingress:
     enabled: true
-    # Single label under the platform domain: the certificate issuer is
-    # derived from everything after the hostname's first dot, and
-    # <firm>-law.stigmer.ai lands on the existing stigmer.ai issuer. A
-    # deeper name (nk.law.stigmer.ai) would derive an issuer that does
-    # not exist and TLS would never come up (T06 decision) — and without
-    # HTTPS nobody can sign in: the session cookie is Secure.
+    # Single label under a domain whose ClusterIssuer exists: the
+    # certificate issuer is derived from everything after the hostname's
+    # first dot — <firm>-law.stigmer.ai lands on the platform's
+    # stigmer.ai issuer, app.<firm-domain> lands on the issuer
+    # provisioned per the README's "Bring your own domain" runbook. A
+    # deeper name (acme.law.stigmer.ai) or a bare apex would derive an
+    # issuer that does not exist and TLS would never come up (T06
+    # decision, generalized when the first firm brought its own domain)
+    # — and without HTTPS nobody can sign in: the session cookie is
+    # Secure.
     hostname: {{ values.hostname }}
   availability:
     minReplicas: 1
