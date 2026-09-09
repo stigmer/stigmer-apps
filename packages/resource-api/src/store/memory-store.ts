@@ -9,6 +9,7 @@
 import { clone, type DescMessage, toJson } from "@bufbuild/protobuf";
 import type { ResourceMessage } from "../envelope.js";
 import {
+  DuplicateIdError,
   DuplicateNaturalKeyError,
   type FilterValue,
   type ListQuery,
@@ -50,27 +51,50 @@ export class MemoryResourceStore implements ResourceStore {
     this.#kinds = kinds;
   }
 
+  async insert(kind: string, resource: ResourceMessage): Promise<void> {
+    const id = this.#requireId(kind, resource);
+    if (this.#table(kind).has(id)) {
+      throw new DuplicateIdError(kind, id);
+    }
+    this.#assertNaturalKeyFree(kind, resource, id);
+    this.#put(kind, id, resource);
+  }
+
   async save(kind: string, resource: ResourceMessage): Promise<void> {
-    const config = this.#config(kind);
+    const id = this.#requireId(kind, resource);
+    this.#assertNaturalKeyFree(kind, resource, id);
+    this.#put(kind, id, resource);
+  }
+
+  #requireId(kind: string, resource: ResourceMessage): string {
     const id = resource.metadata?.id;
     if (!id) {
-      throw new Error(`Cannot save ${kind} without metadata.id (pipeline bug)`);
+      throw new Error(`Cannot write ${kind} without metadata.id (pipeline bug)`);
     }
+    return id;
+  }
 
+  /** The natural-key UNIQUE constraint, excluding the row's own id (an
+   * upsert of the same row is not a collision with itself). */
+  #assertNaturalKeyFree(kind: string, resource: ResourceMessage, id: string): void {
     const value = this.#naturalKey(kind, resource);
-    if (value !== undefined) {
-      for (const [otherId, other] of this.#table(kind)) {
-        if (otherId === id) continue;
-        if (this.#naturalKey(kind, other) === value) {
-          throw new DuplicateNaturalKeyError(kind, value);
-        }
+    if (value === undefined) return;
+    for (const [otherId, other] of this.#table(kind)) {
+      if (otherId === id) continue;
+      if (this.#naturalKey(kind, other) === value) {
+        throw new DuplicateNaturalKeyError(kind, value);
       }
     }
+  }
 
+  #put(kind: string, id: string, resource: ResourceMessage): void {
     // Store and return clones, never references: aliasing between the
     // store and live pipeline state would hide bugs the Postgres adapter
     // (which round-trips through JSON) can never have.
-    this.#table(kind).set(id, clone(config.schema, resource as never) as ResourceMessage);
+    this.#table(kind).set(
+      id,
+      clone(this.#config(kind).schema, resource as never) as ResourceMessage,
+    );
   }
 
   async getById(kind: string, id: string): Promise<ResourceMessage | undefined> {

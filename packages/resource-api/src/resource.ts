@@ -318,10 +318,25 @@ function requireRef<R extends ResourceMessage>(runtime: Runtime<R>, ref: Resourc
   }
 }
 
-async function persist<R extends ResourceMessage>(runtime: Runtime<R>, resource: R): Promise<void> {
+/**
+ * The write behind every chain. A create INSERTS (a fresh id, never an
+ * upsert — the store port's `insert` says why); an update or custom
+ * mutation SAVES the row it loaded. A `DuplicateIdError` from insert is
+ * deliberately not caught: a minted id colliding is a bug, and the
+ * pipeline's untyped-error mapping surfaces it as INTERNAL.
+ */
+async function persist<R extends ResourceMessage>(
+  runtime: Runtime<R>,
+  resource: R,
+  write: "insert" | "save",
+): Promise<void> {
   const { def } = runtime;
   try {
-    await def.store.save(def.kind, resource);
+    if (write === "insert") {
+      await def.store.insert(def.kind, resource);
+    } else {
+      await def.store.save(def.kind, resource);
+    }
   } catch (err) {
     // The database uniqueness constraint is the backstop for the
     // duplicate-check race window (two concurrent creates) — the Java
@@ -450,7 +465,7 @@ function buildCreateExecutor<R extends ResourceMessage>(
     {
       name: "persist",
       async execute(ctx) {
-        await persist(runtime, ctx.newState as R);
+        await persist(runtime, ctx.newState as R, "insert");
       },
     },
     ...(options.afterPersist ?? []),
@@ -554,7 +569,7 @@ function buildUpdateExecutor<R extends ResourceMessage>(
     {
       name: "persist",
       async execute(ctx) {
-        await persist(runtime, ctx.newState as R);
+        await persist(runtime, ctx.newState as R, "save");
       },
     },
     ...(options.afterPersist ?? []),
@@ -753,7 +768,7 @@ export function customOperation<R extends ResourceMessage, I, O>(
             caller as CallerPrincipal,
             new Date(),
           );
-          await persist(runtime, stamped);
+          await persist(runtime, stamped, "save");
           return stamped;
         },
         async publish(type, resource, previous) {

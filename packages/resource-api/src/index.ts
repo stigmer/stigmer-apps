@@ -53,7 +53,7 @@ export type {
   RangeBound,
   ResourceStore,
 } from "./store/store.js";
-export { DuplicateNaturalKeyError, normalizeFilterValue } from "./store/store.js";
+export { DuplicateIdError, DuplicateNaturalKeyError, normalizeFilterValue } from "./store/store.js";
 export type { MemoryKindConfig } from "./store/memory-store.js";
 export { MemoryResourceStore } from "./store/memory-store.js";
 

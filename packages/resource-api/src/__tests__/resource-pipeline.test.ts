@@ -185,6 +185,7 @@ describe("create", () => {
     const real = widgetMemoryStore();
     let misses = 0;
     const racy: ResourceStore = {
+      insert: (kind, r) => real.insert(kind, r),
       save: (kind, r) => real.save(kind, r),
       getById: (kind, id) => real.getById(kind, id),
       getByNaturalKey: async (kind, value) => {
