@@ -38,7 +38,7 @@ export function buildCreateState<R extends ResourceMessage>(
   state.kind = identity.kind;
   clearStatus(schema, state);
 
-  const actor = create(ActorSchema, { id: caller.id });
+  const actor = actorOf(caller);
   const at = timestampFromDate(now);
   state.metadata = create(ResourceMetadataSchema, {
     id: generateResourceId(identity.idPrefix),
@@ -86,7 +86,7 @@ export function buildUpdateState<R extends ResourceMessage>(
     createdAt: existingMeta.createdAt,
     createdBy: existingMeta.createdBy,
     updatedAt: timestampFromDate(now),
-    updatedBy: create(ActorSchema, { id: caller.id }),
+    updatedBy: actorOf(caller),
   });
   return state;
 }
@@ -112,9 +112,19 @@ export function stampCustomMutation<R extends ResourceMessage>(
     createdAt: meta.createdAt,
     createdBy: meta.createdBy,
     updatedAt: timestampFromDate(now),
-    updatedBy: create(ActorSchema, { id: caller.id }),
+    updatedBy: actorOf(caller),
   });
   return state;
+}
+
+/**
+ * The one place a caller becomes an audit Actor. Both fields travel: the
+ * envelope is the sole home of provenance, so a spec never needs a copy of
+ * the writer's kind (the copy would be content and break content-based
+ * idempotency — S29 in the invest record).
+ */
+function actorOf(caller: CallerPrincipal) {
+  return create(ActorSchema, { id: caller.id, kind: caller.kind });
 }
 
 function statusField(schema: DescMessage): DescField | undefined {

@@ -23,7 +23,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file stigmer/resourceapi/v1/resource.proto.
  */
 export const file_stigmer_resourceapi_v1_resource: GenFile = /*@__PURE__*/
-  fileDesc("CiVzdGlnbWVyL3Jlc291cmNlYXBpL3YxL3Jlc291cmNlLnByb3RvEhZzdGlnbWVyLnJlc291cmNlYXBpLnYxIvUBChBSZXNvdXJjZU1ldGFkYXRhEgoKAmlkGAEgASgJEi4KCmNyZWF0ZWRfYXQYAiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjEKCmNyZWF0ZWRfYnkYAyABKAsyHS5zdGlnbWVyLnJlc291cmNlYXBpLnYxLkFjdG9yEi4KCnVwZGF0ZWRfYXQYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjEKCnVwZGF0ZWRfYnkYBSABKAsyHS5zdGlnbWVyLnJlc291cmNlYXBpLnYxLkFjdG9yEg8KB3ZlcnNpb24YBiABKAMiEwoFQWN0b3ISCgoCaWQYASABKAliBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("CiVzdGlnbWVyL3Jlc291cmNlYXBpL3YxL3Jlc291cmNlLnByb3RvEhZzdGlnbWVyLnJlc291cmNlYXBpLnYxIvUBChBSZXNvdXJjZU1ldGFkYXRhEgoKAmlkGAEgASgJEi4KCmNyZWF0ZWRfYXQYAiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjEKCmNyZWF0ZWRfYnkYAyABKAsyHS5zdGlnbWVyLnJlc291cmNlYXBpLnYxLkFjdG9yEi4KCnVwZGF0ZWRfYXQYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjEKCnVwZGF0ZWRfYnkYBSABKAsyHS5zdGlnbWVyLnJlc291cmNlYXBpLnYxLkFjdG9yEg8KB3ZlcnNpb24YBiABKAMiIQoFQWN0b3ISCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCWIGcHJvdG8z", [file_google_protobuf_timestamp]);
 
 /**
  * System-managed identity and audit fields. Clients never set these; the
@@ -89,6 +89,21 @@ export type Actor = Message<"stigmer.resourceapi.v1.Actor"> & {
    * @generated from field: string id = 1;
    */
   id: string;
+
+  /**
+   * The principal's kind: `user`, `operator` or `system` — the pipeline's
+   * caller vocabulary, stamped by the build-state step from the caller it
+   * authorized. Provenance lives wholly here so a resource's spec never has
+   * to carry a copy of who wrote it; a spec that did would make a retried
+   * system write and a user's identical recovery write compare as
+   * different content (stigmer-cloud invest-autopilot T03 D1, S29). No
+   * validation rule on purpose: client-sent metadata is discarded, and a
+   * rule here would drag buf.validate into the one generated file this
+   * package ships.
+   *
+   * @generated from field: string kind = 2;
+   */
+  kind: string;
 };
 
 /**

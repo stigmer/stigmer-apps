@@ -114,6 +114,7 @@ describe("systemOperations + invoke (D1)", () => {
     const created = await resource.invoke.create!(widgetInput(), SYSTEM_PRINCIPAL);
     expect(created.metadata?.id).toMatch(/^wdg_[0-9a-z]{26}$/);
     expect(created.metadata?.createdBy?.id).toBe("system");
+    expect(created.metadata?.createdBy?.kind).toBe("system");
     expect(await store.getById("Widget", created.metadata?.id ?? "")).toBeDefined();
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe("created");

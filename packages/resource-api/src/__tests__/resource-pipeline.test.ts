@@ -74,6 +74,10 @@ describe("create", () => {
     expect(created.metadata?.version).toBe(1n);
     expect(created.metadata?.createdBy?.id).toBe("lawyer-1");
     expect(created.metadata?.updatedBy?.id).toBe("lawyer-1");
+    // Both audit fields carry the caller's kind: the envelope is the one
+    // home of provenance, so no spec ever needs a copy (S29).
+    expect(created.metadata?.createdBy?.kind).toBe("user");
+    expect(created.metadata?.updatedBy?.kind).toBe("user");
     expect(created.metadata?.createdAt).toBeDefined();
     expect(created.apiVersion).toBe("testing.stigmer.ai/v1");
     expect(created.kind).toBe("Widget");
@@ -167,12 +171,14 @@ describe("update", () => {
       metadata: { id: created.metadata?.id ?? "" },
       spec: { serialNumber: "SN-1", name: "after" },
     } as never);
-    const updated = await client.update(edit, asCaller("editor"));
+    const updated = await client.update(edit, asCaller("editor", "operator"));
 
     expect(updated.metadata?.id).toBe(created.metadata?.id);
     expect(updated.metadata?.version).toBe(2n);
     expect(updated.metadata?.createdBy?.id).toBe("author");
+    expect(updated.metadata?.createdBy?.kind).toBe("user");
     expect(updated.metadata?.updatedBy?.id).toBe("editor");
+    expect(updated.metadata?.updatedBy?.kind).toBe("operator");
     expect(updated.spec?.name).toBe("after");
   });
 
@@ -313,12 +319,13 @@ describe("custom operation (retire)", () => {
   it("mutates stored status with update audit semantics", async () => {
     const { client } = makeClient();
     const created = await client.create(widgetInput({ serialNumber: "SN-R" }), asCaller("owner"));
-    const retired = await client.retire({ id: created.metadata?.id ?? "" }, asCaller("closer"));
+    const retired = await client.retire({ id: created.metadata?.id ?? "" }, asCaller("closer", "system"));
 
     expect(retired.status?.retired).toBe(true);
     expect(retired.metadata?.version).toBe(2n);
     expect(retired.metadata?.createdBy?.id).toBe("owner");
     expect(retired.metadata?.updatedBy?.id).toBe("closer");
+    expect(retired.metadata?.updatedBy?.kind).toBe("system");
 
     const fetched = await client.get({ id: created.metadata?.id ?? "" }, asCaller("owner"));
     expect(fetched.status?.retired).toBe(true);

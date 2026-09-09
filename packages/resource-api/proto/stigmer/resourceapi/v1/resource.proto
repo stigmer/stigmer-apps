@@ -37,4 +37,15 @@ message ResourceMetadata {
 // enrichment (names, avatars) is a read-side concern, never stored.
 message Actor {
   string id = 1;
+
+  // The principal's kind: `user`, `operator` or `system` — the pipeline's
+  // caller vocabulary, stamped by the build-state step from the caller it
+  // authorized. Provenance lives wholly here so a resource's spec never has
+  // to carry a copy of who wrote it; a spec that did would make a retried
+  // system write and a user's identical recovery write compare as
+  // different content (stigmer-cloud invest-autopilot T03 D1, S29). No
+  // validation rule on purpose: client-sent metadata is discarded, and a
+  // rule here would drag buf.validate into the one generated file this
+  // package ships.
+  string kind = 2;
 }

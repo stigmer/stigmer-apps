@@ -36,9 +36,9 @@ export function makeWidget(overrides: {
       id: overrides.id,
       version: overrides.version ?? 1n,
       createdAt: timestampFromDate(new Date(overrides.createdAt ?? "2026-08-08T05:00:00Z")),
-      createdBy: create(ActorSchema, { id: "tester" }),
+      createdBy: create(ActorSchema, { id: "tester", kind: "user" }),
       updatedAt: timestampFromDate(new Date(overrides.createdAt ?? "2026-08-08T05:00:00Z")),
-      updatedBy: create(ActorSchema, { id: "tester" }),
+      updatedBy: create(ActorSchema, { id: "tester", kind: "user" }),
     }),
     spec: {
       serialNumber: overrides.serialNumber,
@@ -82,6 +82,7 @@ export function runStoreContractTests(
         // Envelope fidelity: bigint version, timestamps, actors.
         expect(loaded.metadata?.version).toBe(3n);
         expect(loaded.metadata?.createdBy?.id).toBe("tester");
+        expect(loaded.metadata?.createdBy?.kind).toBe("user");
         expect(loaded.metadata?.createdAt?.seconds).toBe(
           widget.metadata?.createdAt?.seconds,
         );
