@@ -75,19 +75,6 @@ export function deadlineResource(deps: {
     }
   };
 
-  /** Deadlines are entered by lawyers ON THEIR CASES (clerks see, never
-   * enter — the matrix); the create-input twin of the loaded-resource
-   * rule. */
-  const lawyerMembershipOnWrite: PipelineStep<WriteContext<Deadline>> = {
-    name: "assert-lawyer-membership",
-    async execute(ctx) {
-      const caseId = (ctx.newState as Deadline).spec?.caseId;
-      if (ctx.caller && caseId) {
-        await deps.guards.assertCaseContent(ctx.caller, caseId, { clerkAllowed: false });
-      }
-    },
-  };
-
   const openOnCreateStep: PipelineStep<WriteContext<Deadline>> = {
     name: "initialize-status",
     execute(ctx) {
@@ -111,8 +98,10 @@ export function deadlineResource(deps: {
     },
     service: DeadlineService,
     operations: {
+      // "Lawyers on the matter enter deadlines" is the policy's create
+      // cell (the authorize slot sees the input since resource-api 0.6).
       create: createOperation<Deadline>({
-        beforePersist: [openOnCreateStep, lawyerMembershipOnWrite, referenceChecks],
+        beforePersist: [openOnCreateStep, referenceChecks],
       }),
       update: updateOperation<Deadline>({
         beforePersist: [referenceChecks],

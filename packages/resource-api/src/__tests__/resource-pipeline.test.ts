@@ -15,7 +15,7 @@ import {
   WidgetStatusSchema,
 } from "../gen/stigmer/resourceapi/testing/v1/widget_pb.js";
 import { ResourceMetadataSchema } from "../envelope.js";
-import { deny, type AuthorizationPolicy } from "../policy.js";
+import { ALLOW, deny, type AuthorizationPolicy } from "../policy.js";
 import { InProcessEventDispatcher, type ResourceEvent } from "../publisher.js";
 import type { ResourceStore } from "../store/store.js";
 import { asCaller, widgetMemoryStore, widgetResource } from "./widget-fixture.js";
@@ -120,6 +120,55 @@ describe("create", () => {
     );
   });
 
+  it("shows the policy the validated input, so ownership is a policy rule", async () => {
+    // "A user may create only what they own" needs the input; before S28
+    // the slot saw undefined on create and products carried the rule as a
+    // beforePersist guard. The policy also sees no stored resource here:
+    // there is none yet, and the two must never be confused.
+    const seen: unknown[] = [];
+    const { client } = makeClient({
+      policy: {
+        authorize: ({ caller, operation, resource, input }) => {
+          seen.push({ operation, resource, ownerId: (input as Widget | undefined)?.spec?.ownerId });
+          const owner = (input as Widget | undefined)?.spec?.ownerId;
+          return operation === "create" && owner !== caller?.id
+            ? deny("You may only create widgets you own")
+            : ALLOW;
+        },
+      },
+    });
+    await client.create(widgetInput({ ownerId: "u1" }), asCaller("u1"));
+    await expectCode(
+      client.create(widgetInput({ serialNumber: "SN-2", ownerId: "u2" }), asCaller("u1")),
+      Code.PermissionDenied,
+      /only create widgets you own/,
+    );
+    expect(seen).toEqual([
+      { operation: "create", resource: undefined, ownerId: "u1" },
+      { operation: "create", resource: undefined, ownerId: "u2" },
+    ]);
+  });
+
+  it("refuses an unauthorized create before the duplicate check, so a held key cannot be probed", async () => {
+    // The S28 probe: without the input in the slot, "may I create this"
+    // could only be asked after ALREADY_EXISTS had already answered
+    // "someone has this key". Authorization now comes first, so a caller
+    // who may not create the resource learns nothing about its key.
+    const { client } = makeClient({
+      policy: {
+        authorize: ({ caller, operation, input }) =>
+          operation === "create" && (input as Widget | undefined)?.spec?.ownerId !== caller?.id
+            ? deny("You may only create widgets you own")
+            : ALLOW,
+      },
+    });
+    await client.create(widgetInput({ serialNumber: "SN-HELD", ownerId: "u1" }), asCaller("u1"));
+    await expectCode(
+      client.create(widgetInput({ serialNumber: "SN-HELD", ownerId: "u1" }), asCaller("u2")),
+      Code.PermissionDenied,
+    );
+  });
+
   it("rejects duplicate natural keys, naming resource, key, and value", async () => {
     const { client } = makeClient();
     await client.create(widgetInput({ serialNumber: "SN-DUP" }), asCaller("u1"));
@@ -197,6 +246,32 @@ describe("update", () => {
     // Stored status came from the existing row, not the client.
     expect(updated.status?.retired).toBe(true);
     expect(updated.spec?.name).toBe("renamed");
+  });
+
+  it("shows the policy the stored resource AND the proposal, so a spec change can be refused", async () => {
+    // An owner transfer is visible to neither the fact nor the proposal
+    // alone; the update slot carries both, apart, so the policy compares.
+    const { client } = makeClient({
+      policy: {
+        authorize: ({ operation, resource, input }) => {
+          if (operation !== "update") return ALLOW;
+          const before = (resource as Widget | undefined)?.spec?.ownerId;
+          const after = (input as Widget | undefined)?.spec?.ownerId;
+          return before === after ? ALLOW : deny("Widgets cannot change owner");
+        },
+      },
+    });
+    const created = await client.create(widgetInput({ ownerId: "u1" }), asCaller("u1"));
+    const transfer = create(WidgetSchema, {
+      metadata: { id: created.metadata?.id ?? "" },
+      spec: { serialNumber: "SN-1", name: "moved", ownerId: "u2" },
+    } as never);
+    await expectCode(client.update(transfer, asCaller("u1")), Code.PermissionDenied, /cannot change owner/);
+    const rename = create(WidgetSchema, {
+      metadata: { id: created.metadata?.id ?? "" },
+      spec: { serialNumber: "SN-1", name: "renamed", ownerId: "u1" },
+    } as never);
+    expect((await client.update(rename, asCaller("u1"))).spec?.name).toBe("renamed");
   });
 
   it("answers NOT_FOUND (not PERMISSION_DENIED) for a missing id, even under deny-all", async () => {

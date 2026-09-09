@@ -22,11 +22,24 @@ export interface AuthorizationRequest {
   /** Operation name as declared on the resource (create/update/get/list/…). */
   readonly operation: string;
   /**
-   * The loaded resource for operations that target one (update/get/custom
-   * after load); undefined for create/list. This is what future per-case
-   * grant policies will inspect.
+   * The STORED resource for operations that target one (update/get/custom
+   * after load); undefined for create/list. Always a fact the store holds,
+   * never a proposal — a policy can read `resource.spec.ownerId` as the
+   * current owner without wondering whether a caller wrote it.
    */
   readonly resource?: ResourceMessage;
+  /**
+   * The caller's validated input for the write operations (create/update);
+   * undefined otherwise. Present so ownership and input-shaped rules
+   * ("a user may create only what they own", "office staff record
+   * receipts only") are policy, consulted BEFORE the duplicate check —
+   * an unauthorized caller can then never learn from ALREADY_EXISTS
+   * whether another user's natural key is taken. Kept apart from
+   * `resource` on purpose: on an update a policy sees both the fact and
+   * the proposal and can refuse a spec change (an owner transfer) that
+   * neither alone reveals.
+   */
+  readonly input?: ResourceMessage;
 }
 
 export type AuthorizationDecision =

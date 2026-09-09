@@ -12,10 +12,8 @@ import { create } from "@bufbuild/protobuf";
 import type {
   AuthorizationPolicy,
   CallerExtractor,
-  PipelineStep,
   ResourceEventPublisher,
   ResourceStore,
-  WriteContext,
 } from "@stigmer/resource-api";
 import {
   createOperation,
@@ -51,16 +49,6 @@ export function taskCommentResource(deps: {
     return task.spec?.caseId ?? "";
   }
 
-  const membershipOnWrite: PipelineStep<WriteContext<TaskComment>> = {
-    name: "assert-case-membership",
-    async execute(ctx) {
-      const taskId = (ctx.newState as TaskComment).spec?.taskId;
-      if (ctx.caller && taskId) {
-        await deps.guards.assertCaseContent(ctx.caller, await caseIdOfTask(taskId));
-      }
-    },
-  };
-
   return defineResource({
     definition: {
       kind: "TaskComment",
@@ -74,9 +62,11 @@ export function taskCommentResource(deps: {
     },
     service: TaskCommentService,
     operations: {
+      // Membership of the task's case is the policy's create cell, which
+      // reaches the case through the task the same way (the authorize
+      // slot sees the input since resource-api 0.6).
       create: createOperation<TaskComment>({
         beforePersist: [
-          membershipOnWrite,
           referencesExistStep<TaskComment>(deps.store, [
             { kind: "Task", label: "task", get: (c) => c.spec?.taskId || undefined },
           ]),

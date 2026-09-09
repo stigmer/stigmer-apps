@@ -27,12 +27,16 @@
  * Per-operation chains are ports of the Java edition's canonical
  * pipelines, including their deliberate ordering:
  *
- *   create: validate → authorize → duplicate-check → build state →
+ *   create: validate → authorize(input) → duplicate-check → build state →
  *           [beforePersist…] → persist → publish
  *           (authorize precedes duplicate-check so an unauthorized caller
- *           cannot probe for existence via ALREADY_EXISTS)
- *   update: validate → load existing → authorize → duplicate-check(natural
- *           key changed) → build state → [beforePersist…] → persist → publish
+ *           cannot probe for existence via ALREADY_EXISTS; the policy sees
+ *           the validated input, so ownership and input-shaped rules are
+ *           policy, not domain steps — a create the policy refuses never
+ *           reaches the natural-key lookup)
+ *   update: validate → load existing → authorize(existing, input) →
+ *           duplicate-check(natural key changed) → build state →
+ *           [beforePersist…] → persist → publish
  *   get:    validate → load target → authorize
  *           (load precedes authorize: missing ⇒ NOT_FOUND, not
  *           PERMISSION_DENIED — stigmer/stigmer#224; enforced by the
@@ -239,16 +243,27 @@ function validateInputStep<C extends { input: unknown }>(
   };
 }
 
+/**
+ * What the policy is shown for an operation: the stored resource (loaded
+ * operations), the caller's input (writes), both (update), or neither
+ * (list). Two named fields rather than one "resource" so a policy can never
+ * mistake a proposal for a fact (policy.ts, AuthorizationRequest).
+ */
+interface AuthorizationSubject<R extends ResourceMessage> {
+  readonly resource?: R;
+  readonly input?: R;
+}
+
 function authorizeStep<C extends { caller: CallerPrincipal | undefined }, R extends ResourceMessage>(
   runtime: Runtime<R>,
   operation: string,
-  resourceOf: (ctx: C) => R | undefined,
+  subjectOf: (ctx: C) => AuthorizationSubject<R>,
 ): PipelineStep<C> {
   return {
     name: "authorize",
     traits: ["authorization"],
     async execute(ctx) {
-      await authorizeOrThrow(runtime, operation, ctx.caller, resourceOf(ctx));
+      await authorizeOrThrow(runtime, operation, ctx.caller, subjectOf(ctx));
     },
   };
 }
@@ -257,7 +272,7 @@ async function authorizeOrThrow<R extends ResourceMessage>(
   runtime: Runtime<R>,
   operation: string,
   caller: CallerPrincipal | undefined,
-  resource: R | undefined,
+  subject: AuthorizationSubject<R>,
 ): Promise<void> {
   if (!caller) {
     throw unauthenticated();
@@ -266,7 +281,8 @@ async function authorizeOrThrow<R extends ResourceMessage>(
     caller,
     kind: runtime.def.kind,
     operation,
-    resource,
+    resource: subject.resource,
+    input: subject.input,
   });
   if (!decision.allow) {
     throw permissionDenied(decision.reason);
@@ -403,7 +419,10 @@ function buildCreateExecutor<R extends ResourceMessage>(
   // schema keeps the chain identical with or without a transport.
   const pipeline = new Pipeline<WriteContext<R>>(`${def.kind}-${operationName}`, [
     validateInputStep(def.schema, runtime.displayName),
-    authorizeStep(runtime, operationName, () => undefined),
+    // The policy sees the validated input: "may THIS caller create THIS" is
+    // answered before the natural-key lookup, so a refused caller learns
+    // nothing from ALREADY_EXISTS (invest T03 D1, S28).
+    authorizeStep(runtime, operationName, (ctx) => ({ input: ctx.input })),
     {
       name: "check-duplicate",
       async execute(ctx) {
@@ -501,7 +520,7 @@ function buildUpdateExecutor<R extends ResourceMessage>(
         ctx.existing = existing;
       },
     },
-    authorizeStep(runtime, operationName, (ctx) => ctx.existing),
+    authorizeStep(runtime, operationName, (ctx) => ({ resource: ctx.existing, input: ctx.input })),
     {
       name: "check-duplicate",
       async execute(ctx) {
@@ -604,7 +623,7 @@ export function getOperation<R extends ResourceMessage, I>(
           ctx.target = target;
         },
       },
-      authorizeStep(runtime, operationName, (ctx) => ctx.target),
+      authorizeStep(runtime, operationName, (ctx) => ({ resource: ctx.target })),
     ]);
 
     return async (input, caller) => {
@@ -660,7 +679,7 @@ export function listOperation<R extends ResourceMessage, I, O>(
     // pipeline): there is no single resource to load.
     const pipeline = new Pipeline<ReadContext<R, I>>(`${def.kind}-${operationName}`, [
       validateInputStep(method.input, runtime.displayName),
-      authorizeStep(runtime, operationName, () => undefined),
+      authorizeStep(runtime, operationName, () => ({})),
     ]);
 
     return async (input, caller) => {
@@ -719,12 +738,12 @@ export function customOperation<R extends ResourceMessage, I, O>(
           if (!resource) {
             throw notFound(runtime.displayName, refDescription(runtime, ref));
           }
-          await authorizeOrThrow(runtime, operationName, caller, resource);
+          await authorizeOrThrow(runtime, operationName, caller, { resource });
           authorized = true;
           return resource;
         },
         async authorize() {
-          await authorizeOrThrow(runtime, operationName, caller, undefined);
+          await authorizeOrThrow(runtime, operationName, caller, {});
           authorized = true;
         },
         async save(resource) {

@@ -149,12 +149,12 @@ export function documentResource(deps: {
       // Reached only through invoke, from the upload route — which has
       // already put the bytes in the bucket, so a persisted row always
       // has its object (T03 D6 failure polarity). The route passes the
-      // REAL caller, so the policy's create rule AND the membership
-      // guard below apply to the person, never to "system".
+      // REAL caller, so the policy's create rule — role AND case
+      // membership, over the input — applies to the person, never to
+      // "system".
       create: {
         beforePersist: [
           libraryIntegrity,
-          membershipOnWrite(deps),
           referencesExistStep<Document>(deps.store, [
             { kind: "Case", label: "case", get: (d) => d.spec?.caseId || undefined },
             { kind: "Hearing", label: "hearing", get: (d) => d.spec?.hearingId || undefined },
@@ -193,22 +193,3 @@ const libraryIntegrity: PipelineStep<WriteContext<Document>> = {
     }
   },
 };
-
-/** Documents are case content: the uploader must be a member of the
- * case (or a partner) — the create-input check the authorize slot
- * cannot make (policy.ts, rule shapes). Library documents skip it by
- * shape: no case, no membership to assert (the role gate in the
- * policy's create rule still applies). */
-function membershipOnWrite(deps: {
-  guards: PolicyGuards;
-}): PipelineStep<WriteContext<Document>> {
-  return {
-    name: "assert-case-membership",
-    async execute(ctx) {
-      const caseId = (ctx.newState as Document).spec?.caseId;
-      if (ctx.caller && ctx.caller.kind === "user" && caseId) {
-        await deps.guards.assertCaseContent(ctx.caller, caseId);
-      }
-    },
-  };
-}
