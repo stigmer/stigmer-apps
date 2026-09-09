@@ -16,7 +16,7 @@ its extraction is mechanical). No → it belongs to exactly one app.
 
 | Layer | Path | License | Knows about |
 |-------|------|---------|-------------|
-| Commons | `packages/resource-api` (and future `packages/*`) | Apache-2.0 | Nothing product-, domain-, or customer-specific — business-agnostic by contract |
+| Commons | `packages/*` (`resource-api`, `identity`, `authorization`; published to npm as `@stigmer/*`) | Apache-2.0 | Nothing product-, domain-, or customer-specific — business-agnostic by contract |
 | Apps | `apps/<domain>/` (proto, backend, web, deploy) | AGPL-3.0-only | Its own domain + the commons |
 
 **There is deliberately NO `mcp-server` directory** (a T05 decision this
@@ -50,12 +50,14 @@ words (`apps` is a folder, not a domain). The brand ("Stigmer Law") never
 enters the wire contract: apiVersions are stamped into every persisted
 row, and a brand in there turns a rebrand into a data migration.
 
-**DD-A3 — One proto definition, everywhere.** The envelope module is
-`buf.build/stigmer/resourceapi` on the BSR for external consumers; inside
-this repo every module resolves in-workspace through the single root
-`buf.yaml`. Nothing is vendored; nothing is pinned between siblings.
-Generated code is committed; `npm run codegen` from the root is the only
-way to produce it; CI fails on drift.
+**DD-A3 — One proto definition, everywhere.** The commons modules are on
+the BSR for external consumers — `buf.build/stigmer/resourceapi` (the
+envelope) and `buf.build/stigmer/identity` — pushed by the release lane
+under the release tag's label; inside this repo every module resolves
+in-workspace through the single root `buf.yaml`. Nothing is vendored;
+nothing is pinned between siblings. Generated code is committed;
+`npm run codegen` from the root is the only way to produce it; CI fails
+on drift, and `buf breaking` against main gates every PR.
 
 **DD-A4 — No resource bypasses the pipeline.** Every resource is served
 through the commons pipeline (validate → load → authorize →
@@ -106,7 +108,10 @@ weaken the guard to make a failure go away; fix the data.
 is 0.x but its API is a contract with every app. Breaking changes land
 back-to-back with the consumer adaptation and a consumer-forced-changes
 list in the task record. A commons change that breaks an app it didn't
-adapt is incomplete work.
+adapt is incomplete work. The commons publish to npm in lockstep from one
+annotated `v*` tag (`.cursor/rules/release-stigmer-apps.mdc`); an app
+outside this repository adapts on upgrade, pinned to an exact version,
+and a commons change it needs lands here first.
 
 ## Dont-Dos
 

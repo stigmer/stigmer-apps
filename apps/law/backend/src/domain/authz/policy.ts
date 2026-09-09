@@ -30,14 +30,19 @@
  * invokes authorize once per operation, so there is deliberately no
  * cross-request cache to go stale.
  *
- * TWO RULE SHAPES, ONE MODULE: the authorize slot sees the loaded
- * resource for update/get/custom operations but NOT the input of a
- * create (the pipeline authorizes creates before building state). Rules
- * that depend on create INPUT — "members may add hearings only to their
- * own cases", "office staff may record receipts only" — are therefore
- * exported as guards that the resources' beforePersist steps invoke.
- * The rules still live here and only here; the steps are enforcement
- * points, not rule owners.
+ * ONE RULE SHAPE: the authorize slot sees the loaded resource for
+ * update/get/custom operations and the caller's validated INPUT for
+ * create and update (@stigmer/resource-api 0.6, `AuthorizationRequest.input`).
+ * Rules that depend on create input — "members may add hearings only to
+ * their own cases", "office staff may record receipts only", "only the
+ * lead or a partner adds case members" — are therefore ordinary cells of
+ * the matrix below, consulted BEFORE the pipeline's duplicate check, so a
+ * refused caller never learns from ALREADY_EXISTS whether a natural key
+ * is taken. Before 0.6 the slot saw undefined on create and these rules
+ * lived in `beforePersist` guard steps per resource; those steps are
+ * gone. The guards that remain serve the enforcement points that still
+ * see what authorize cannot: list scoping and the custom handlers' own
+ * loads.
  */
 
 import {
@@ -87,9 +92,10 @@ export interface FirmPolicy {
   /** The authorize-slot implementation every pipeline consults. */
   readonly policy: AuthorizationPolicy;
   /**
-   * Create-time and query-time rules for the enforcement points that see
-   * what authorize cannot (create input, list scoping). Every guard
-   * throws PERMISSION_DENIED with a user-facing reason, or returns.
+   * Query-time rules and the membership gate for the enforcement points
+   * that see what authorize cannot (list scoping, a custom handler's own
+   * loads). Every guard throws PERMISSION_DENIED with a user-facing
+   * reason, or returns.
    */
   readonly guards: PolicyGuards;
 }
@@ -110,18 +116,6 @@ export interface PolicyGuards {
   ): Promise<FirmMember>;
   /** Partner-only gate (money, audit history). */
   assertPartner(caller: CallerPrincipal): Promise<FirmMember>;
-  /**
-   * Case-membership management (FR-CASE-003): partners, or the case's
-   * lead lawyer — the create-input twin of the authorize-slot rule the
-   * loaded-resource operations get.
-   */
-  assertManageMembers(caller: CallerPrincipal, caseId: string): Promise<FirmMember>;
-  /**
-   * The ledger-create rule (FR-AUTHZ-004): partners record anything;
-   * office staff record RECEIPTS ONLY, blind to arrangements and
-   * balances; everyone else is refused.
-   */
-  assertLedgerCreate(caller: CallerPrincipal, entryKind: LedgerEntryKind): Promise<FirmMember>;
   /**
    * The case ids the caller may see content of, for query scoping —
    * undefined means "unscoped" (partners see the whole firm, and NEVER
@@ -196,6 +190,48 @@ export function createFirmPolicy(
     return task?.spec?.caseId;
   }
 
+  /**
+   * A proposed mark's case is its DOCUMENT's (a matter's paper) or, on a
+   * library paper, the case the mark claims as its layer (DD-012 D2) —
+   * the badge is a claim of case context the author must be able to
+   * work. Read from the document, not the input's denormalised case_id:
+   * that field is the caller's word until the pipeline's anchor
+   * invariant verifies it, and policy must not trust it first.
+   */
+  async function caseIdOfProposedAnnotation(input: unknown): Promise<string | undefined> {
+    const spec = (input as { spec?: { documentId?: string; caseId?: string } } | undefined)?.spec;
+    if (!spec?.documentId) return undefined;
+    const document = (await store.getById("Document", spec.documentId)) as
+      | { spec?: { caseId?: string } }
+      | undefined;
+    return document?.spec?.caseId || spec.caseId || undefined;
+  }
+
+  /**
+   * The case a subject belongs to. A LOADED resource's case reference is
+   * a stored, pipeline-verified fact; a create INPUT's is the caller's
+   * proposal, so for the two kinds whose case is really their parent's
+   * (a comment's task, a mark's document) the parent row is read
+   * instead. A missing parent yields no case: the cells then apply their
+   * role gate and leave "that task does not exist" to the pipeline's
+   * reference check (FAILED_PRECONDITION, the honest code — a missing
+   * reference is not a permission matter).
+   */
+  async function caseIdOf(
+    kind: string,
+    subject: unknown,
+    provenance: "stored" | "proposed",
+  ): Promise<string | undefined> {
+    if (subject === undefined) return undefined;
+    if (kind === "TaskComment") return caseIdOfTaskComment(subject);
+    if (kind === "DocumentAnnotation" && provenance === "proposed") {
+      return caseIdOfProposedAnnotation(subject);
+    }
+    // proto3's unset string is "", which is "no case" (a library paper),
+    // not a case named "".
+    return CASE_REF[kind]?.(subject as never) || undefined;
+  }
+
   /* ----------------------- the user-role matrix --------------------- */
 
   async function authorizeUser(
@@ -203,14 +239,27 @@ export function createFirmPolicy(
     kind: string,
     operation: string,
     resource: unknown,
+    input: unknown,
   ): Promise<AuthorizationDecision> {
-    const caseRefOf = CASE_REF[kind];
+    // The fact when there is one (loaded operations), else the proposal
+    // (create): the case a content rule asks about.
     const caseId =
-      kind === "TaskComment" && resource !== undefined
-        ? await caseIdOfTaskComment(resource)
-        : resource !== undefined
-          ? caseRefOf?.(resource as never)
-          : undefined;
+      resource !== undefined
+        ? await caseIdOf(kind, resource, "stored")
+        : await caseIdOf(kind, input, "proposed");
+
+    /**
+     * Content moved between matters needs membership of BOTH: the
+     * update slot shows the fact and the proposal side by side, so the
+     * rule the per-resource guard steps used to carry ("assert-case-
+     * membership" on update) is one line here.
+     */
+    async function canTouchProposedCaseToo(opts?: { clerkAllowed?: boolean }): Promise<boolean> {
+      if (operation !== "update" || input === undefined) return true;
+      const proposed = await caseIdOf(kind, input, "proposed");
+      if (!proposed || proposed === caseId) return true;
+      return canTouchCaseContent(member, proposed, opts);
+    }
 
     switch (kind) {
       case "User": {
@@ -319,8 +368,15 @@ export function createFirmPolicy(
 
       case "CaseMember": {
         if (operation === "create") {
-          // Role gate here; partner-or-lead is the guard's create-input
-          // check (assertManageMembers in the resource's step).
+          // Partner-or-lead of the case the proposal names (FR-CASE-003),
+          // the create-input twin of the remove rule below. An input
+          // with no case (never a valid one — the proto requires it)
+          // leaves only the lawyer role gate.
+          if (caseId !== undefined) {
+            return (await onCase(member, "can_manage_members", caseId))
+              ? ALLOW
+              : deny("Only partners or the matter's lead lawyer may manage case members");
+          }
           return (await onFirm(member, "lawyers"))
             ? ALLOW
             : deny("Only lawyers may manage case members");
@@ -355,11 +411,12 @@ export function createFirmPolicy(
       case "Task": {
         // Case content, clerk included (the clerk records hearings —
         // DD-001's division of labour; a clerk who works the case may
-        // mark its documents, DD-010 as decided 2026-08-15). Creates
-        // carry their membership check in the guard; loaded-resource
-        // operations check here. DocumentAnnotation joins this branch
-        // rather than TaskComment's standalone one because its case_id
-        // is denormalized on the spec — no store hop needed.
+        // mark its documents, DD-010 as decided 2026-08-15). A create is
+        // authorized on the case its input names; loaded-resource
+        // operations on the stored case; an update on both when it
+        // moves content. DocumentAnnotation's stored case_id is
+        // denormalized on the spec (no hop on reads); a PROPOSED mark's
+        // case is read from its document (caseIdOf).
         if (kind === "Document" && operation === "recordExtraction") {
           // The sweep's status report — a person can never write it,
           // membership notwithstanding (the fall-through below would
@@ -367,14 +424,25 @@ export function createFirmPolicy(
           return deny("Extraction status is system-written");
         }
         if (operation === "create") {
-          return (await onFirm(member, "case_workers"))
+          if (!(await onFirm(member, "case_workers"))) {
+            return deny("Office staff do not work case content");
+          }
+          // A case-less create is library material (Document, or a
+          // library mark's firm layer) or a reference the pipeline will
+          // refuse: the role gate is the whole rule. With a case, the
+          // author must be able to work it.
+          if (caseId === undefined) return ALLOW;
+          return (await canTouchCaseContent(member, caseId))
             ? ALLOW
-            : deny("Office staff do not work case content");
+            : deny("Only case members and partners may work this matter");
         }
         if (operation === "list") {
           return (await onFirm(member, "case_workers"))
             ? ALLOW
             : deny("Office staff do not view case content");
+        }
+        if (operation === "update" && !(await canTouchProposedCaseToo())) {
+          return deny("Only case members and partners may work this matter");
         }
         if ((kind === "Document" || kind === "DocumentAnnotation") && !caseId) {
           // The FIRM LIBRARY arm (FR-DOC-005) — the ONE deliberate
@@ -398,10 +466,21 @@ export function createFirmPolicy(
       }
 
       case "TaskComment": {
-        if (operation === "create" || operation === "list") {
+        if (operation === "list") {
           return (await onFirm(member, "case_workers"))
             ? ALLOW
             : deny("Office staff do not view case content");
+        }
+        if (operation === "create") {
+          if (!(await onFirm(member, "case_workers"))) {
+            return deny("Office staff do not view case content");
+          }
+          // No case means the task was not found; the reference check
+          // answers that (caseIdOf).
+          if (caseId === undefined) return ALLOW;
+          return (await canTouchCaseContent(member, caseId))
+            ? ALLOW
+            : deny("Only case members and partners may work this matter");
         }
         return (await canTouchCaseContent(member, caseId))
           ? ALLOW
@@ -439,9 +518,15 @@ export function createFirmPolicy(
         // enter or resolve them (matrix: enter deadline — lawyers only).
         switch (operation) {
           case "create":
-            return (await onFirm(member, "lawyers"))
+            if (!(await onFirm(member, "lawyers"))) {
+              return deny("Only lawyers may enter deadlines");
+            }
+            // Lawyers ON the matter (or partners) — the model's
+            // can_enter_deadline verb; clerks never reach this line.
+            if (caseId === undefined) return ALLOW;
+            return (await canTouchCaseContent(member, caseId, { clerkAllowed: false }))
               ? ALLOW
-              : deny("Only lawyers may enter deadlines");
+              : deny("Only lawyers on this matter (or partners) may do this");
           case "update":
           case "updateStatus": {
             // Owner is an attribute rule (DD-003 D3): a tuple per
@@ -475,12 +560,18 @@ export function createFirmPolicy(
 
       case "LedgerEntry": {
         if (operation === "create") {
-          // Role gate: partners and office staff reach the pipeline; the
-          // receipts-only rule needs the entry kind and lives in the
-          // guard (assertLedgerCreate).
-          return (await onFirm(member, "can_record_ledger"))
-            ? ALLOW
-            : deny("Only partners and office staff may record ledger entries");
+          // FR-AUTHZ-004: partners record anything; office staff record
+          // RECEIPTS ONLY (the entry kind is on the input), blind to
+          // arrangements and balances; everyone else is refused.
+          if (await onFirm(member, "partners")) return ALLOW;
+          if (await onFirm(member, "office_staff")) {
+            const entryKind = (input as { spec?: { entryKind?: LedgerEntryKind } } | undefined)
+              ?.spec?.entryKind;
+            return entryKind === LedgerEntryKind.RECEIPT
+              ? ALLOW
+              : deny("Office staff may record receipts only");
+          }
+          return deny("Only partners and office staff may record ledger entries");
         }
         return (await onFirm(member, "can_view_money"))
           ? ALLOW
@@ -551,7 +642,7 @@ export function createFirmPolicy(
   /* ------------------------------ wiring ---------------------------- */
 
   const policy: AuthorizationPolicy = {
-    async authorize({ caller, kind, operation, resource }) {
+    async authorize({ caller, kind, operation, resource, input }) {
       if (!caller) {
         return deny("Authentication required");
       }
@@ -567,7 +658,7 @@ export function createFirmPolicy(
         // every-access-path revocation is exactly this line.
         return deny("No active firm membership for this account");
       }
-      return authorizeUser(member, kind, operation, resource);
+      return authorizeUser(member, kind, operation, resource, input);
     },
   };
 
@@ -599,28 +690,6 @@ export function createFirmPolicy(
       const member = await guards.requireMember(caller);
       if (await onFirm(member, "partners")) return member;
       throw permissionDenied("This is visible to partners only");
-    },
-
-    async assertManageMembers(caller, caseId) {
-      const member = await guards.requireMember(caller);
-      if (await onCase(member, "can_manage_members", caseId)) {
-        return member;
-      }
-      throw permissionDenied(
-        "Only partners or the matter's lead lawyer may manage case members",
-      );
-    },
-
-    async assertLedgerCreate(caller, entryKind) {
-      const member = await guards.requireMember(caller);
-      if (await onFirm(member, "partners")) return member;
-      if (await onFirm(member, "office_staff")) {
-        if (entryKind === LedgerEntryKind.RECEIPT) {
-          return member;
-        }
-        throw permissionDenied("Office staff may record receipts only");
-      }
-      throw permissionDenied("Only partners and office staff may record ledger entries");
     },
 
     async visibleCaseIds(member) {

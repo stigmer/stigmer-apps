@@ -20,6 +20,7 @@ import {
 import { allowAnyAuthenticated, type AuthorizationPolicy } from "../policy.js";
 import type { CallerPrincipal } from "../principal.js";
 import type { ResourceEventPublisher } from "../publisher.js";
+import type { PipelineStep } from "../pipeline.js";
 import {
   createOperation,
   customOperation,
@@ -27,6 +28,7 @@ import {
   getOperation,
   listOperation,
   updateOperation,
+  type WriteContext,
 } from "../resource.js";
 import { MemoryResourceStore } from "../store/memory-store.js";
 import type { ResourceStore } from "../store/store.js";
@@ -70,6 +72,10 @@ export function widgetResource(options: {
   store: ResourceStore;
   policy?: AuthorizationPolicy;
   publisher?: ResourceEventPublisher;
+  /** What a create does on a held serial number; the definition's default is refuse. */
+  duplicate?: "refuse" | "idempotent";
+  /** Domain steps between build-state and persist, for tests of that seam. */
+  beforePersist?: readonly PipelineStep<WriteContext<Widget>>[];
 }) {
   return defineResource({
     definition: {
@@ -80,6 +86,7 @@ export function widgetResource(options: {
       naturalKey: {
         label: "serial number",
         get: (w) => w.spec?.serialNumber ?? "",
+        ...(options.duplicate ? { duplicate: options.duplicate } : {}),
       },
       store: options.store,
       policy: options.policy ?? allowAnyAuthenticated(),
@@ -100,7 +107,9 @@ export function widgetResource(options: {
     },
     service: WidgetService,
     operations: {
-      create: createOperation<Widget>(),
+      create: createOperation<Widget>(
+        options.beforePersist ? { beforePersist: options.beforePersist } : {},
+      ),
       update: updateOperation<Widget>(),
       get: getOperation<Widget, GetWidgetRequest>({
         ref: (req) => ({

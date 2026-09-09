@@ -121,14 +121,14 @@ afterAll(async () => {
 describe("User on the commons pipeline (identity edition)", () => {
   it("operator creates; email normalizes; name defaults to the local-part", async () => {
     const created = await client.create(
-      userInput("First.Clerk@Firm.example"),
+      userInput("First.User@Example.test"),
       asBearer(operatorKey),
     );
 
     expect(created.metadata?.id).toMatch(/^user_/);
     expect(created.apiVersion).toBe("identity.stigmer.ai/v1");
-    expect(created.spec?.email).toBe("first.clerk@firm.example");
-    expect(created.spec?.name).toBe("first.clerk");
+    expect(created.spec?.email).toBe("first.user@example.test");
+    expect(created.spec?.name).toBe("first.user");
     expect(created.metadata?.createdBy?.id).toBe("operator");
   });
 
@@ -136,13 +136,13 @@ describe("User on the commons pipeline (identity edition)", () => {
     const token = await issuer.issue("user_someone");
 
     await expectCode(
-      client.create(userInput("intruder@firm.example"), asBearer(token)),
+      client.create(userInput("intruder@example.test"), asBearer(token)),
       Code.PermissionDenied,
       /operator/i,
     );
     await expectCode(
       client.setPassword(
-        { email: "first.clerk@firm.example", password: "long-enough-pw" },
+        { email: "first.user@example.test", password: "long-enough-pw" },
         asBearer(token),
       ),
       Code.PermissionDenied,
@@ -177,41 +177,41 @@ describe("User on the commons pipeline (identity edition)", () => {
     );
 
     await expectCode(
-      guardedClient.create(userInput("sys@firm.example"), asBearer(operatorKey)),
+      guardedClient.create(userInput("sys@example.test"), asBearer(operatorKey)),
       Code.PermissionDenied,
       /system-only/,
     );
     await expectCode(
-      guardedClient.create(userInput("sys@firm.example"), asBearer(await issuer.issue("system"))),
+      guardedClient.create(userInput("sys@example.test"), asBearer(await issuer.issue("system"))),
       Code.PermissionDenied,
       /system-only/,
     );
   });
 
   it("duplicate emails answer ALREADY_EXISTS even re-cased", async () => {
-    await client.create(userInput("dup@firm.example"), asBearer(operatorKey));
+    await client.create(userInput("dup@example.test"), asBearer(operatorKey));
     await expectCode(
-      client.create(userInput("DUP@firm.example"), asBearer(operatorKey)),
+      client.create(userInput("DUP@example.test"), asBearer(operatorKey)),
       Code.AlreadyExists,
-      /dup@firm\.example/,
+      /dup@example\.test/,
     );
   });
 
   it("get by email is case-insensitive; unauthenticated is refused", async () => {
     const token = await issuer.issue("user_reader");
-    const fetched = await client.get({ email: "First.Clerk@firm.example" }, asBearer(token));
-    expect(fetched.spec?.email).toBe("first.clerk@firm.example");
+    const fetched = await client.get({ email: "First.User@example.test" }, asBearer(token));
+    expect(fetched.spec?.email).toBe("first.user@example.test");
 
-    await expectCode(client.get({ email: "first.clerk@firm.example" }), Code.Unauthenticated);
+    await expectCode(client.get({ email: "first.user@example.test" }), Code.Unauthenticated);
     await expectCode(
-      client.get({ email: "first.clerk@firm.example" }, asBearer("Bearer garbage")),
+      client.get({ email: "first.user@example.test" }, asBearer("Bearer garbage")),
       Code.Unauthenticated,
     );
   });
 
   it("setPassword bcrypts into the credential store AND revokes sessions (D9)", async () => {
     const created = await client.create(
-      userInput("departing@firm.example"),
+      userInput("departing@example.test"),
       asBearer(operatorKey),
     );
     const userId = created.metadata?.id as string;
@@ -221,7 +221,7 @@ describe("User on the commons pipeline (identity edition)", () => {
     await refreshTokens.insert(userId, session.sha256Hex, new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000));
 
     await client.setPassword(
-      { email: "departing@firm.example", password: "new-password-1" },
+      { email: "departing@example.test", password: "new-password-1" },
       asBearer(operatorKey),
     );
 
@@ -244,11 +244,11 @@ describe("User on the commons pipeline (identity edition)", () => {
 
   it("phone must be strict E.164 when present", async () => {
     await expectCode(
-      client.create(userInput("phone@firm.example", "0044 123"), asBearer(operatorKey)),
+      client.create(userInput("phone@example.test", "0044 123"), asBearer(operatorKey)),
       Code.InvalidArgument,
     );
     const ok = await client.create(
-      userInput("phone@firm.example", "+91123456"),
+      userInput("phone@example.test", "+91123456"),
       asBearer(operatorKey),
     );
     expect(ok.spec?.phone).toBe("+91123456");
@@ -265,14 +265,14 @@ describe("User on the commons pipeline (identity edition)", () => {
 
     it("operator corrects name and phone; audit and version advance, createdBy survives", async () => {
       const created = await client.create(
-        userInput("correctable@firm.example", "+91123460"),
+        userInput("correctable@example.test", "+91123460"),
         asBearer(operatorKey),
       );
       const id = created.metadata?.id as string;
 
       const updated = await client.update(
         updateInput(id, {
-          email: "correctable@firm.example",
+          email: "correctable@example.test",
           name: "Asha V.",
           phone: "+91123461",
         }),
@@ -288,13 +288,13 @@ describe("User on the commons pipeline (identity edition)", () => {
 
     it("a user-kind bearer token cannot update — even for a benign name fix (the convention's boundary)", async () => {
       const created = await client.create(
-        userInput("untouchable@firm.example"),
+        userInput("untouchable@example.test"),
         asBearer(operatorKey),
       );
       await expectCode(
         client.update(
           updateInput(created.metadata?.id as string, {
-            email: "untouchable@firm.example",
+            email: "untouchable@example.test",
             name: "New Name",
           }),
           asBearer(await issuer.issue("user_someone")),
@@ -311,7 +311,7 @@ describe("User on the commons pipeline (identity edition)", () => {
         new PostgresResourceStore(pool, identityStoreKinds()),
       );
       const created = await client.create(
-        userInput("rebindable@firm.example"),
+        userInput("rebindable@example.test"),
         asBearer(operatorKey),
       );
       const id = created.metadata?.id as string;
@@ -321,7 +321,7 @@ describe("User on the commons pipeline (identity edition)", () => {
       );
 
       await client.update(
-        updateInput(id, { email: "rebindable@firm.example", phone: "+91123470" }),
+        updateInput(id, { email: "rebindable@example.test", phone: "+91123470" }),
         asBearer(operatorKey),
       );
       const bound = await resolve({ kind: WHATSAPP_PHONE_KIND, value: "91123470" });
@@ -331,7 +331,7 @@ describe("User on the commons pipeline (identity edition)", () => {
       // Full-spec replacement: omitting phone clears the binding — the
       // number-offboarding path, and the sharp edge the docs warn about.
       await client.update(
-        updateInput(id, { email: "rebindable@firm.example" }),
+        updateInput(id, { email: "rebindable@example.test" }),
         asBearer(operatorKey),
       );
       expect((await resolve({ kind: WHATSAPP_PHONE_KIND, value: "91123470" })).outcome).toBe(
@@ -341,14 +341,14 @@ describe("User on the commons pipeline (identity edition)", () => {
 
     it("update enforces the same E.164 validation and normalizes a re-cased email onto itself", async () => {
       const created = await client.create(
-        userInput("recase@firm.example"),
+        userInput("recase@example.test"),
         asBearer(operatorKey),
       );
       const id = created.metadata?.id as string;
 
       await expectCode(
         client.update(
-          updateInput(id, { email: "recase@firm.example", phone: "0044 123" }),
+          updateInput(id, { email: "recase@example.test", phone: "0044 123" }),
           asBearer(operatorKey),
         ),
         Code.InvalidArgument,
@@ -358,29 +358,29 @@ describe("User on the commons pipeline (identity edition)", () => {
       // it must update in place, never answer ALREADY_EXISTS against
       // its own row.
       const recased = await client.update(
-        updateInput(id, { email: "ReCase@Firm.example", name: "Recase" }),
+        updateInput(id, { email: "ReCase@Example.test", name: "Recase" }),
         asBearer(operatorKey),
       );
       expect(recased.metadata?.id).toBe(id);
-      expect(recased.spec?.email).toBe("recase@firm.example");
+      expect(recased.spec?.email).toBe("recase@example.test");
     });
 
     it("an email change re-validates uniqueness (ALREADY_EXISTS on clash) and moves the natural key", async () => {
-      await client.create(userInput("taken@firm.example"), asBearer(operatorKey));
-      const created = await client.create(userInput("movable@firm.example"), asBearer(operatorKey));
+      await client.create(userInput("taken@example.test"), asBearer(operatorKey));
+      const created = await client.create(userInput("movable@example.test"), asBearer(operatorKey));
       const id = created.metadata?.id as string;
       const reader = asBearer(await issuer.issue("user_reader"));
 
       await expectCode(
-        client.update(updateInput(id, { email: "taken@firm.example" }), asBearer(operatorKey)),
+        client.update(updateInput(id, { email: "taken@example.test" }), asBearer(operatorKey)),
         Code.AlreadyExists,
-        /taken@firm\.example/,
+        /taken@example\.test/,
       );
 
-      await client.update(updateInput(id, { email: "moved@firm.example" }), asBearer(operatorKey));
-      expect((await client.get({ email: "moved@firm.example" }, reader)).metadata?.id).toBe(id);
+      await client.update(updateInput(id, { email: "moved@example.test" }), asBearer(operatorKey));
+      expect((await client.get({ email: "moved@example.test" }, reader)).metadata?.id).toBe(id);
       await expectCode(
-        client.get({ email: "movable@firm.example" }, reader),
+        client.get({ email: "movable@example.test" }, reader),
         Code.NotFound,
       );
     });
@@ -388,7 +388,7 @@ describe("User on the commons pipeline (identity edition)", () => {
     it("answers NOT_FOUND for an unknown target", async () => {
       await expectCode(
         client.update(
-          updateInput("user_00000000000000000000000000", { email: "ghost@firm.example" }),
+          updateInput("user_00000000000000000000000000", { email: "ghost@example.test" }),
           asBearer(operatorKey),
         ),
         Code.NotFound,

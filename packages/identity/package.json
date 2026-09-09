@@ -1,6 +1,6 @@
 {
   "name": "@stigmer/identity",
-  "version": "0.5.0",
+  "version": "0.0.0-dev",
   "description": "Shared identity for Stigmer vertical apps: the User resource, credential storage, token issuing/verification, and a pluggable authenticator chain. Owns the seam; ships the smallest correct issuer (DD-005).",
   "license": "Apache-2.0",
   "repository": {
@@ -9,6 +9,7 @@
     "directory": "packages/identity"
   },
   "type": "module",
+  "sideEffects": false,
   "engines": {
     "node": ">=22"
   },
@@ -28,6 +29,10 @@
     "proto",
     "migrations"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
@@ -36,10 +41,12 @@
   "dependencies": {
     "@bufbuild/protobuf": "^2.13.0",
     "@connectrpc/connect": "^2.1.2",
-    "@stigmer/resource-api": "^0.5.0",
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.8",
     "pg": "^8.22.0"
+  },
+  "peerDependencies": {
+    "@stigmer/resource-api": "*"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.1.0",

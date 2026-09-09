@@ -55,7 +55,11 @@ export function registerLeadMembershipHandler(
       );
     } catch (err) {
       if (ConnectError.from(err).code === Code.AlreadyExists) {
-        return; // lost a benign race to another writer — the fact exists
+        // Lost a benign race to another writer — the fact exists. A
+        // CaseMember's status (active) is not spec, so the idempotent
+        // natural-key mode would compare the wrong thing; the code is
+        // the honest answer for a membership fact.
+        return;
       }
       throw err; // dispatcher contains and logs; the case write stands
     }

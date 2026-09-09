@@ -82,19 +82,6 @@ export function caseMemberResource(deps: {
     },
   };
 
-  /** Partner-or-lead (FR-CASE-003) — the create-input twin of the
-   * remove rule the authorize slot applies to loaded resources. Skipped
-   * for the system principal: lead materialization IS the invariant. */
-  const manageMembersOnCreate: PipelineStep<WriteContext<CaseMember>> = {
-    name: "assert-manage-members",
-    async execute(ctx) {
-      const caseId = (ctx.newState as CaseMember).spec?.caseId;
-      if (ctx.caller && ctx.caller.kind === "user" && caseId) {
-        await deps.guards.assertManageMembers(ctx.caller, caseId);
-      }
-    },
-  };
-
   return defineResource({
     definition: {
       kind: "CaseMember",
@@ -118,8 +105,10 @@ export function caseMemberResource(deps: {
     operations: {
       create: createOperation<CaseMember>({
         // Status initializes FIRST so the duplicate backstop keys on the
-        // active form the row will actually persist with.
-        beforePersist: [activeOnCreateStep, manageMembersOnCreate, referenceChecks],
+        // active form the row will actually persist with. Partner-or-lead
+        // (FR-CASE-003) is the policy's create cell over the input; the
+        // system principal's lead materialization passes its own branch.
+        beforePersist: [activeOnCreateStep, referenceChecks],
         afterPersist: [syncTuplesOnCreate],
       }),
       remove: customOperation<CaseMember, RemoveCaseMemberRequest, CaseMember>({

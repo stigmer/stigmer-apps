@@ -27,12 +27,16 @@
  * Per-operation chains are ports of the Java edition's canonical
  * pipelines, including their deliberate ordering:
  *
- *   create: validate → authorize → duplicate-check → build state →
+ *   create: validate → authorize(input) → duplicate-check → build state →
  *           [beforePersist…] → persist → publish
  *           (authorize precedes duplicate-check so an unauthorized caller
- *           cannot probe for existence via ALREADY_EXISTS)
- *   update: validate → load existing → authorize → duplicate-check(natural
- *           key changed) → build state → [beforePersist…] → persist → publish
+ *           cannot probe for existence via ALREADY_EXISTS; the policy sees
+ *           the validated input, so ownership and input-shaped rules are
+ *           policy, not domain steps — a create the policy refuses never
+ *           reaches the natural-key lookup)
+ *   update: validate → load existing → authorize(existing, input) →
+ *           duplicate-check(natural key changed) → build state →
+ *           [beforePersist…] → persist → publish
  *   get:    validate → load target → authorize
  *           (load precedes authorize: missing ⇒ NOT_FOUND, not
  *           PERMISSION_DENIED — stigmer/stigmer#224; enforced by the
@@ -52,7 +56,7 @@
  */
 
 import type { DescMessage, DescMethod, DescService, MessageInitShape } from "@bufbuild/protobuf";
-import { create } from "@bufbuild/protobuf";
+import { create, equals } from "@bufbuild/protobuf";
 import type { GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { ConnectError } from "@connectrpc/connect";
 import type { ConnectRouter, HandlerContext, ServiceImpl } from "@connectrpc/connect";
@@ -63,7 +67,15 @@ import {
   type EnvelopeIdentity,
 } from "./audit.js";
 import type { ResourceMessage } from "./envelope.js";
-import { alreadyExists, internal, invalidArgument, notFound, unauthenticated, permissionDenied } from "./errors.js";
+import {
+  alreadyExists,
+  alreadyExistsWithDifferentContent,
+  internal,
+  invalidArgument,
+  notFound,
+  unauthenticated,
+  permissionDenied,
+} from "./errors.js";
 import { Pipeline, type PipelineStep } from "./pipeline.js";
 import type { CallerPrincipal } from "./principal.js";
 import type { AuthorizationPolicy } from "./policy.js";
@@ -102,10 +114,31 @@ export interface ResourceDefinition<R extends ResourceMessage> {
   /**
    * The user-provided unique key (case number, email, …). `label` appears
    * in error messages; `get` reads the value from a resource message.
+   *
+   * `duplicate` says what a create does when the key is already held:
+   *
+   *   - "refuse" (default): ALREADY_EXISTS, whatever the caller sent.
+   *   - "idempotent": the create returns the holder as a no-op success
+   *     when its spec equals the spec the create would have persisted,
+   *     and answers ALREADY_EXISTS "with different content" otherwise.
+   *
+   * Idempotent is for kinds whose content is a pure function of the key
+   * (an append-only ledger record; an audit line keyed by the source
+   * version): a retried system write and a user's identical recovery
+   * write then converge on one row, while a writer that DISAGREES with
+   * the record is found, not kept. It is wrong for a kind whose content
+   * legitimately changes between deploys under the same key (a
+   * notification's copy): there the retry would become a conflict.
+   * Content is `spec` alone — provenance lives in metadata — compared
+   * AFTER build-state and every beforePersist step, so a normaliser that
+   * shapes what gets persisted (a lowercased email) is honoured and a
+   * holder equals its own retry. The option lives here because without
+   * a natural key there is no duplicate to resolve.
    */
   readonly naturalKey?: {
     readonly label: string;
     readonly get: (resource: R) => string;
+    readonly duplicate?: "refuse" | "idempotent";
   };
   readonly store: ResourceStore;
   readonly policy: AuthorizationPolicy;
@@ -140,6 +173,18 @@ export interface WriteContext<R extends ResourceMessage> {
   readonly input: R;
   existing?: R;
   newState?: R;
+  /**
+   * An idempotent create's holder of the natural key, recorded by
+   * check-duplicate for resolve-duplicate to compare against newState
+   * once the steps that shape it have run. Never set for `refuse` kinds.
+   */
+  holder?: R;
+  /**
+   * Set when an idempotent create found its content already recorded:
+   * the executor answers with this row and nothing is written or
+   * published. The write pipeline ends where this is set.
+   */
+  settled?: R;
 }
 
 export interface ReadContext<R extends ResourceMessage, I> {
@@ -239,16 +284,27 @@ function validateInputStep<C extends { input: unknown }>(
   };
 }
 
+/**
+ * What the policy is shown for an operation: the stored resource (loaded
+ * operations), the caller's input (writes), both (update), or neither
+ * (list). Two named fields rather than one "resource" so a policy can never
+ * mistake a proposal for a fact (policy.ts, AuthorizationRequest).
+ */
+interface AuthorizationSubject<R extends ResourceMessage> {
+  readonly resource?: R;
+  readonly input?: R;
+}
+
 function authorizeStep<C extends { caller: CallerPrincipal | undefined }, R extends ResourceMessage>(
   runtime: Runtime<R>,
   operation: string,
-  resourceOf: (ctx: C) => R | undefined,
+  subjectOf: (ctx: C) => AuthorizationSubject<R>,
 ): PipelineStep<C> {
   return {
     name: "authorize",
     traits: ["authorization"],
     async execute(ctx) {
-      await authorizeOrThrow(runtime, operation, ctx.caller, resourceOf(ctx));
+      await authorizeOrThrow(runtime, operation, ctx.caller, subjectOf(ctx));
     },
   };
 }
@@ -257,7 +313,7 @@ async function authorizeOrThrow<R extends ResourceMessage>(
   runtime: Runtime<R>,
   operation: string,
   caller: CallerPrincipal | undefined,
-  resource: R | undefined,
+  subject: AuthorizationSubject<R>,
 ): Promise<void> {
   if (!caller) {
     throw unauthenticated();
@@ -266,7 +322,8 @@ async function authorizeOrThrow<R extends ResourceMessage>(
     caller,
     kind: runtime.def.kind,
     operation,
-    resource,
+    resource: subject.resource,
+    input: subject.input,
   });
   if (!decision.allow) {
     throw permissionDenied(decision.reason);
@@ -302,6 +359,11 @@ function requireRef<R extends ResourceMessage>(runtime: Runtime<R>, ref: Resourc
   }
 }
 
+/**
+ * The write behind update and custom mutations: SAVES the row the chain
+ * loaded. A create never comes here — it INSERTS (insertNew below; the
+ * store port's `insert` says why an upsert is wrong for it).
+ */
 async function persist<R extends ResourceMessage>(runtime: Runtime<R>, resource: R): Promise<void> {
   const { def } = runtime;
   try {
@@ -315,6 +377,81 @@ async function persist<R extends ResourceMessage>(runtime: Runtime<R>, resource:
       throw alreadyExists(runtime.displayName, def.naturalKey.label, err.value);
     }
     throw err;
+  }
+}
+
+/**
+ * Whether two resources carry the same CONTENT: `spec` alone, compared as
+ * messages (unknown fields ignored, field order irrelevant), never
+ * metadata — provenance is a stamp, not content (the invest record's S29).
+ * The one definition of "already recorded" for idempotent creates, used
+ * by the pre-check and by the race backstop alike.
+ */
+function sameContent<R extends ResourceMessage>(runtime: Runtime<R>, a: R, b: R): boolean {
+  const spec = runtime.def.schema.fields.find((f) => f.localName === "spec");
+  if (!spec || spec.fieldKind !== "message") {
+    throw internal(`${runtime.displayName} has no spec message; idempotent create needs one`);
+  }
+  const specA = (a as { spec?: unknown }).spec;
+  const specB = (b as { spec?: unknown }).spec;
+  if (specA === undefined || specB === undefined) return specA === specB;
+  return equals(spec.message, specA as never, specB as never);
+}
+
+/**
+ * The idempotent verdict on a held key: the holder is the answer when its
+ * content equals what the create would persist, a conflict otherwise.
+ * Called from resolve-duplicate (the friendly pre-check found the holder)
+ * and from the insert's race arm (the constraint found it).
+ */
+function settleOnHolder<R extends ResourceMessage>(
+  runtime: Runtime<R>,
+  ctx: WriteContext<R>,
+  holder: R,
+): void {
+  const { def } = runtime;
+  if (!def.naturalKey) return;
+  if (sameContent(runtime, holder, ctx.newState as R)) {
+    ctx.settled = holder;
+    return;
+  }
+  throw alreadyExistsWithDifferentContent(
+    runtime.displayName,
+    def.naturalKey.label,
+    def.naturalKey.get(ctx.newState as R),
+  );
+}
+
+/**
+ * The create chain's write: a plain INSERT, never an upsert. A
+ * `DuplicateIdError` is deliberately not caught — a minted id colliding is
+ * a bug, and the pipeline's untyped-error mapping surfaces it as INTERNAL.
+ * A natural-key violation is the race backstop (two concurrent creates;
+ * the Java persist step's DuplicateKeyException handling): a `refuse` kind
+ * answers ALREADY_EXISTS like the pre-check would have; an `idempotent`
+ * kind re-reads the row that won and applies the same verdict the
+ * pre-check applies.
+ */
+async function insertNew<R extends ResourceMessage>(
+  runtime: Runtime<R>,
+  ctx: WriteContext<R>,
+): Promise<void> {
+  const { def } = runtime;
+  const state = ctx.newState as R;
+  try {
+    await def.store.insert(def.kind, state);
+  } catch (err) {
+    if (!(err instanceof DuplicateNaturalKeyError) || !def.naturalKey) {
+      throw err;
+    }
+    if (def.naturalKey.duplicate === "idempotent") {
+      const holder = (await def.store.getByNaturalKey(def.kind, err.value)) as R | undefined;
+      if (holder) {
+        settleOnHolder(runtime, ctx, holder);
+        return;
+      }
+    }
+    throw alreadyExists(runtime.displayName, def.naturalKey.label, err.value);
   }
 }
 
@@ -398,20 +535,38 @@ function buildCreateExecutor<R extends ResourceMessage>(
   options: CreateOperationOptions<R>,
 ): WriteExecutor<R> {
   const { def } = runtime;
+  const idempotent = def.naturalKey?.duplicate === "idempotent";
+
+  // Two linear pipelines, forked in this one function, so that an
+  // idempotent create that finds its content already recorded can stop
+  // after the write pipeline with nothing written and nothing published —
+  // without any consumer-supplied step needing a skip flag, and without
+  // touching Pipeline (a public export). A `refuse` kind never forks:
+  // check-duplicate throws as it always has.
+  //
   // Create speaks the resource message itself (asserted for bound
   // methods in defineResource), so validating against the definition's
   // schema keeps the chain identical with or without a transport.
-  const pipeline = new Pipeline<WriteContext<R>>(`${def.kind}-${operationName}`, [
+  const write = new Pipeline<WriteContext<R>>(`${def.kind}-${operationName}`, [
     validateInputStep(def.schema, runtime.displayName),
-    authorizeStep(runtime, operationName, () => undefined),
+    // The policy sees the validated input: "may THIS caller create THIS" is
+    // answered before the natural-key lookup, so a refused caller learns
+    // nothing from ALREADY_EXISTS (invest T03 D1, S28).
+    authorizeStep(runtime, operationName, (ctx) => ({ input: ctx.input })),
     {
       name: "check-duplicate",
       async execute(ctx) {
         if (!def.naturalKey) return;
         const value = def.naturalKey.get(ctx.input);
-        if (value && (await def.store.getByNaturalKey(def.kind, value))) {
+        if (!value) return;
+        const holder = (await def.store.getByNaturalKey(def.kind, value)) as R | undefined;
+        if (!holder) return;
+        if (!idempotent) {
           throw alreadyExists(runtime.displayName, def.naturalKey.label, value);
         }
+        // The verdict waits for resolve-duplicate: content is what the
+        // create WOULD persist, and the steps that shape it have not run.
+        ctx.holder = holder;
       },
     },
     {
@@ -428,12 +583,27 @@ function buildCreateExecutor<R extends ResourceMessage>(
       },
     },
     ...(options.beforePersist ?? []),
+    ...(idempotent
+      ? [
+          {
+            name: "resolve-duplicate",
+            execute(ctx: WriteContext<R>) {
+              if (ctx.holder) settleOnHolder(runtime, ctx, ctx.holder);
+            },
+          },
+        ]
+      : []),
     {
       name: "persist",
       async execute(ctx) {
-        await persist(runtime, ctx.newState as R);
+        if (ctx.settled) return;
+        await insertNew(runtime, ctx);
       },
     },
+  ]);
+
+  // Runs only when a row was written: same-request effects, then the event.
+  const announce = new Pipeline<WriteContext<R>>(`${def.kind}-${operationName}-announce`, [
     ...(options.afterPersist ?? []),
     {
       name: "publish",
@@ -451,7 +621,13 @@ function buildCreateExecutor<R extends ResourceMessage>(
 
   return async (input, caller) => {
     const ctx: WriteContext<R> = { caller, input };
-    await pipeline.execute(ctx);
+    await write.execute(ctx);
+    if (ctx.settled) {
+      // Already recorded: the holder is the answer, derived like any read.
+      await deriveAll(runtime, [ctx.settled]);
+      return ctx.settled;
+    }
+    await announce.execute(ctx);
     const created = ctx.newState as R;
     await deriveAll(runtime, [created]);
     return created;
@@ -501,7 +677,7 @@ function buildUpdateExecutor<R extends ResourceMessage>(
         ctx.existing = existing;
       },
     },
-    authorizeStep(runtime, operationName, (ctx) => ctx.existing),
+    authorizeStep(runtime, operationName, (ctx) => ({ resource: ctx.existing, input: ctx.input })),
     {
       name: "check-duplicate",
       async execute(ctx) {
@@ -604,7 +780,7 @@ export function getOperation<R extends ResourceMessage, I>(
           ctx.target = target;
         },
       },
-      authorizeStep(runtime, operationName, (ctx) => ctx.target),
+      authorizeStep(runtime, operationName, (ctx) => ({ resource: ctx.target })),
     ]);
 
     return async (input, caller) => {
@@ -660,7 +836,7 @@ export function listOperation<R extends ResourceMessage, I, O>(
     // pipeline): there is no single resource to load.
     const pipeline = new Pipeline<ReadContext<R, I>>(`${def.kind}-${operationName}`, [
       validateInputStep(method.input, runtime.displayName),
-      authorizeStep(runtime, operationName, () => undefined),
+      authorizeStep(runtime, operationName, () => ({})),
     ]);
 
     return async (input, caller) => {
@@ -719,12 +895,12 @@ export function customOperation<R extends ResourceMessage, I, O>(
           if (!resource) {
             throw notFound(runtime.displayName, refDescription(runtime, ref));
           }
-          await authorizeOrThrow(runtime, operationName, caller, resource);
+          await authorizeOrThrow(runtime, operationName, caller, { resource });
           authorized = true;
           return resource;
         },
         async authorize() {
-          await authorizeOrThrow(runtime, operationName, caller, undefined);
+          await authorizeOrThrow(runtime, operationName, caller, {});
           authorized = true;
         },
         async save(resource) {

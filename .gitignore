@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Packed release tarballs (scripts/publish-packages.mjs); the lane's artefact, never committed.
+dist-release/
 *.log
 .DS_Store
 

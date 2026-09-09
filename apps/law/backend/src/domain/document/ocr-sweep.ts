@@ -398,7 +398,8 @@ async function ocrOne(
       } catch (err) {
         // ALREADY_EXISTS is the idempotency answering (a prior partial
         // sweep or a concurrent replica wrote this page) — anything else
-        // is transient and throws.
+        // is transient and throws. DocumentPage stays a `refuse` kind:
+        // OCR output is not a function of the page key (extraction-sweep.ts).
         if (ConnectError.from(err).code !== Code.AlreadyExists) {
           throw err;
         }

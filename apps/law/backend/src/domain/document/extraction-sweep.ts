@@ -177,6 +177,9 @@ async function extractOne(deps: ExtractionSweepDeps, document: Document): Promis
     } catch (err) {
       // ALREADY_EXISTS is the idempotency answering (a prior partial
       // sweep wrote this page) — anything else is transient and throws.
+      // DocumentPage stays a `refuse` kind: its text is extraction output
+      // and can differ run to run, so a content compare would refuse a
+      // legitimate re-run instead of skipping it.
       if (ConnectError.from(err).code !== Code.AlreadyExists) {
         throw err;
       }

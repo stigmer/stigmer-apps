@@ -10,10 +10,8 @@ import { create } from "@bufbuild/protobuf";
 import type {
   AuthorizationPolicy,
   CallerExtractor,
-  PipelineStep,
   ResourceEventPublisher,
   ResourceStore,
-  WriteContext,
 } from "@stigmer/resource-api";
 import {
   createOperation,
@@ -54,19 +52,6 @@ export function ledgerEntryResource(deps: {
     { kind: "Case", label: "case", get: (e) => e.spec?.caseId || undefined },
   ]);
 
-  /** The receipts-only rule for office staff (FR-AUTHZ-004) — the
-   * create-input check the authorize slot cannot make; the rule itself
-   * lives in the policy module's guard. */
-  const ledgerCreateRule: PipelineStep<WriteContext<LedgerEntry>> = {
-    name: "assert-ledger-create",
-    async execute(ctx) {
-      const spec = (ctx.newState as LedgerEntry).spec;
-      if (ctx.caller && spec) {
-        await deps.guards.assertLedgerCreate(ctx.caller, spec.entryKind);
-      }
-    },
-  };
-
   return defineResource({
     definition: {
       kind: "LedgerEntry",
@@ -80,8 +65,11 @@ export function ledgerEntryResource(deps: {
     },
     service: LedgerEntryService,
     operations: {
+      // The receipts-only rule for office staff (FR-AUTHZ-004) reads the
+      // entry kind off the input in the policy's create cell (the
+      // authorize slot sees the input since resource-api 0.6).
       create: createOperation<LedgerEntry>({
-        beforePersist: [ledgerCreateRule, referenceChecks],
+        beforePersist: [referenceChecks],
       }),
       list: listOperation<LedgerEntry, ListLedgerEntriesRequest, ListLedgerEntriesResponse>({
         // How a partner reads a ledger: newest value date first.

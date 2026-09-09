@@ -1,0 +1,140 @@
+# The commons release lane: one annotated `v*` tag publishes the three
+# @stigmer/* packages to npm in lockstep and pushes both proto modules to the
+# Buf Schema Registry under the same label. The tag IS the version — every
+# package.json carries the `0.0.0-dev` sentinel and scripts/publish-packages.mjs
+# stamps the tag's version into the tarballs (the platform's convention, see
+# stigmer/stigmer release.npm-libs.yaml). How to cut a release, including the
+# release-notes grammar the tag body must follow, is
+# .cursor/rules/release-stigmer-apps.mdc.
+#
+# Two deliberate hardenings over the platform's lane, recorded so they are not
+# mistaken for drift: authentication is npm trusted publishing (the runner's
+# OIDC token; no long-lived token exists anywhere) with --provenance, and the
+# BSR push is labelled with the tag so a version is addressable on the
+# registry. The platform lane predates both and may adopt them later.
+#
+# The lane publishes the very tarballs it verified — `pack`, then
+# `verify-publish --from-manifest`, then `publish` — never a re-pack (the
+# image job's principle: what ships is byte-for-byte what booted). Everything
+# that runs on a PR runs here too, so a tag on an unchecked commit cannot
+# publish.
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# Least privilege by default; the one job elevates exactly what it needs.
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # the GitHub Release
+      id-token: write # npm trusted publishing and provenance
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The annotated tag's body is the release notes; a shallow
+          # checkout of a tag push carries the tag object, but the
+          # rc-to-final comparison the rule describes wants history.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Release version from the tag
+        id: version
+        # Strip the leading v; the script refuses anything that is not a
+        # semver or a semver pre-release.
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Customer-data guard
+        # Same guard as ci.yml, same reason: this repo is public and
+        # customer strings are a failure on EVERY path (DD-A10).
+        env:
+          CUSTOMER_DENYLIST: ${{ secrets.CUSTOMER_DENYLIST }}
+        run: node scripts/check-customer-data.mjs
+
+      - name: Upgrade npm for trusted publishing
+        # OIDC publishing needs npm 11.5.1 or later; the Node 22 image
+        # bundles npm 10.
+        run: npm install -g npm@latest && npm --version
+
+      - name: Install
+        run: npm ci
+
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Codegen drift check
+        run: |
+          npm run codegen
+          git diff --exit-code -- packages/resource-api/src/gen packages/identity/src/gen apps/law/backend/src/gen apps/law/web/src/gen
+
+      - name: Proto lint
+        run: buf lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        # Integration tests need the Docker daemon ubuntu-latest provides.
+        run: npm test
+
+      - name: Pack
+        run: node scripts/publish-packages.mjs pack --version "${{ steps.version.outputs.version }}"
+
+      - name: Verify the tarballs a consumer will install
+        run: node scripts/verify-publish.mjs --from-manifest
+
+      - name: Publish to npm
+        # No NODE_AUTH_TOKEN: the registry accepts the workflow's OIDC
+        # identity because each package's trusted publisher names this
+        # file. A misconfigured trusted publisher fails loudly here rather
+        # than falling back to a token.
+        run: node scripts/publish-packages.mjs publish --version "${{ steps.version.outputs.version }}"
+
+      - name: Push proto modules to the BSR
+        # Pushes every named module in the workspace (resourceapi and
+        # identity) in one act, labelled with the tag. --create is
+        # idempotent: it creates buf.build/stigmer/identity on the first
+        # push and is a no-op for the modules that already exist.
+        env:
+          BUF_TOKEN: ${{ secrets.BUF_TOKEN }}
+        run: buf push --create --create-visibility public --label "${GITHUB_REF_NAME}"
+
+      - name: Release notes from the tag body
+        id: notes
+        # `git tag -l --format` reads the annotated tag's message; the rule
+        # writes it with --cleanup=verbatim so the Markdown headings
+        # survive. A lightweight tag has no body and the release says so.
+        run: |
+          body="$(git tag -l --format='%(contents:body)' "${GITHUB_REF_NAME}")"
+          if [ -z "$body" ]; then
+            body="Release ${GITHUB_REF_NAME} (the tag carried no release notes; see the commits)."
+          fi
+          {
+            echo "body<<STIGMER_RELEASE_NOTES_EOF"
+            echo "$body"
+            echo "STIGMER_RELEASE_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: ${{ steps.notes.outputs.body }}
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: dist-release/*.tgz

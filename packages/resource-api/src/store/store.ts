@@ -150,10 +150,10 @@ export interface ListResult<R extends ResourceMessage> {
 }
 
 /**
- * Thrown by `save` when a database uniqueness constraint on the resource's
- * natural key fires — the backstop for the race window between the
- * pipeline's duplicate-check step and persist (two concurrent creates).
- * The operation layer maps this to ALREADY_EXISTS.
+ * Thrown by `insert` and `save` when a database uniqueness constraint on
+ * the resource's natural key fires — the backstop for the race window
+ * between the pipeline's duplicate-check step and persist (two concurrent
+ * creates). The operation layer maps this to ALREADY_EXISTS.
  */
 export class DuplicateNaturalKeyError extends Error {
   constructor(
@@ -165,8 +165,39 @@ export class DuplicateNaturalKeyError extends Error {
   }
 }
 
+/**
+ * Thrown by `insert` when a row with the same `metadata.id` already exists.
+ * Ids are minted by the pipeline (ULIDs), so this is never a client
+ * condition: it is a bug or a corrupted store, and the pipeline surfaces it
+ * as INTERNAL like any other untyped failure. Named so the store contract
+ * can assert the refusal.
+ */
+export class DuplicateIdError extends Error {
+  constructor(
+    readonly kind: string,
+    readonly id: string,
+  ) {
+    super(`${kind} with id '${id}' already exists`);
+    this.name = "DuplicateIdError";
+  }
+}
+
 export interface ResourceStore {
-  /** Upsert by `metadata.id`. Throws DuplicateNaturalKeyError (see above). */
+  /**
+   * Insert a NEW row; refuses a held `metadata.id` (DuplicateIdError) and
+   * a held natural key (DuplicateNaturalKeyError). The create chain's
+   * write: it never updates, so a database role without UPDATE privilege
+   * can run every create — the grant shape an append-only kind needs
+   * (the ledger contract in stigmer-cloud invest-autopilot, FR-LEDGER-001).
+   * An upsert would need UPDATE whether or not a conflict occurred.
+   */
+  insert(kind: string, resource: ResourceMessage): Promise<void>;
+
+  /**
+   * Upsert by `metadata.id` — the update and custom-mutation write, whose
+   * row the pipeline has already loaded. Throws DuplicateNaturalKeyError
+   * (see above).
+   */
   save(kind: string, resource: ResourceMessage): Promise<void>;
 
   getById(kind: string, id: string): Promise<ResourceMessage | undefined>;

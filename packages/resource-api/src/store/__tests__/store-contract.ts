@@ -16,7 +16,7 @@ import {
   type Widget,
 } from "../../gen/stigmer/resourceapi/testing/v1/widget_pb.js";
 import { ActorSchema, ResourceMetadataSchema } from "../../envelope.js";
-import { DuplicateNaturalKeyError, type ResourceStore } from "../store.js";
+import { DuplicateIdError, DuplicateNaturalKeyError, type ResourceStore } from "../store.js";
 
 export function makeWidget(overrides: {
   id: string;
@@ -36,9 +36,9 @@ export function makeWidget(overrides: {
       id: overrides.id,
       version: overrides.version ?? 1n,
       createdAt: timestampFromDate(new Date(overrides.createdAt ?? "2026-08-08T05:00:00Z")),
-      createdBy: create(ActorSchema, { id: "tester" }),
+      createdBy: create(ActorSchema, { id: "tester", kind: "user" }),
       updatedAt: timestampFromDate(new Date(overrides.createdAt ?? "2026-08-08T05:00:00Z")),
-      updatedBy: create(ActorSchema, { id: "tester" }),
+      updatedBy: create(ActorSchema, { id: "tester", kind: "user" }),
     }),
     spec: {
       serialNumber: overrides.serialNumber,
@@ -82,6 +82,7 @@ export function runStoreContractTests(
         // Envelope fidelity: bigint version, timestamps, actors.
         expect(loaded.metadata?.version).toBe(3n);
         expect(loaded.metadata?.createdBy?.id).toBe("tester");
+        expect(loaded.metadata?.createdBy?.kind).toBe("user");
         expect(loaded.metadata?.createdAt?.seconds).toBe(
           widget.metadata?.createdAt?.seconds,
         );
@@ -107,6 +108,32 @@ export function runStoreContractTests(
         const loaded = (await store.getById("Widget", "wdg_1")) as Widget;
         expect(loaded.spec?.name).toBe("renamed");
         expect(loaded.metadata?.version).toBe(2n);
+        const listed = await store.list("Widget", { limit: 10, offset: 0 });
+        expect(listed.totalCount).toBe(1);
+      });
+    });
+
+    it("insert refuses a held id — a create never overwrites (DuplicateIdError)", async () => {
+      // The create chain's write. Ids are minted, so a collision is a bug;
+      // the refusal is named so the pipeline can surface it as INTERNAL
+      // rather than silently replacing a row the way save would.
+      await withStore(async (store) => {
+        await store.insert("Widget", makeWidget({ id: "wdg_1", serialNumber: "SN-1" }));
+        await expect(
+          store.insert("Widget", makeWidget({ id: "wdg_1", serialNumber: "SN-2", name: "clobber" })),
+        ).rejects.toBeInstanceOf(DuplicateIdError);
+        const loaded = (await store.getById("Widget", "wdg_1")) as Widget;
+        expect(loaded.spec?.serialNumber).toBe("SN-1");
+        expect(loaded.spec?.name).not.toBe("clobber");
+      });
+    });
+
+    it("insert refuses a held natural key (DuplicateNaturalKeyError)", async () => {
+      await withStore(async (store) => {
+        await store.insert("Widget", makeWidget({ id: "wdg_1", serialNumber: "SN-1" }));
+        await expect(
+          store.insert("Widget", makeWidget({ id: "wdg_2", serialNumber: "SN-1" })),
+        ).rejects.toBeInstanceOf(DuplicateNaturalKeyError);
         const listed = await store.list("Widget", { limit: 10, offset: 0 });
         expect(listed.totalCount).toBe(1);
       });

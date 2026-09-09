@@ -38,6 +38,10 @@ export function auditEntryResource(deps: {
       naturalKey: {
         label: "audit key",
         get: (e) => e.spec?.dedupKey ?? "",
+        // One entry per source version: the key names the version and
+        // the changes derive from it, so a redelivery converges on the
+        // row that exists (see systemOperations below).
+        duplicate: "idempotent",
       },
       store: deps.store,
       policy: deps.policy,
@@ -60,7 +64,11 @@ export function auditEntryResource(deps: {
     },
     systemOperations: {
       // The subscriber's write path — the full pipeline as the system
-      // principal; the dedup natural key absorbs duplicate delivery.
+      // principal; the idempotent natural key absorbs duplicate delivery
+      // (the holder comes back, nothing is written) and REFUSES a
+      // redelivery whose derived changes differ — an audit line's
+      // content is a function of its source version, so a difference is
+      // a bug in the derivation, never a second truth to keep.
       create: {},
     },
   });

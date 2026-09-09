@@ -42,6 +42,7 @@ import {
   NotificationSchema,
   NotificationType,
 } from "../../../gen/stigmer/law/notification/v1/notification_pb.js";
+import { DocumentSchema } from "../../../gen/stigmer/law/document/v1/document_pb.js";
 import { TaskSchema } from "../../../gen/stigmer/law/task/v1/task_pb.js";
 import { reconcileTuples } from "@stigmer/authorization";
 import { startTestAuthz, type TestAuthz } from "../../../__tests__/test-authz.js";
@@ -143,6 +144,7 @@ beforeEach(async () => {
       fields: { createdAt: "metadata.createdAt" },
     },
     Task: { schema: TaskSchema },
+    Document: { schema: DocumentSchema },
   });
 
   await store.save("FirmMember", firmMember("fmem_mp", "usr_mp", FirmRole.MANAGING_PARTNER));
@@ -179,6 +181,27 @@ async function decide(
   resource?: unknown,
 ) {
   return firm.policy.authorize({ caller, kind, operation, resource: resource as never });
+}
+
+/** A create, as the pipeline asks it: the validated input, no stored resource. */
+async function decideCreate(caller: CallerPrincipal | undefined, kind: string, input: unknown) {
+  return firm.policy.authorize({ caller, kind, operation: "create", input: input as never });
+}
+
+/** An update, as the pipeline asks it: the stored resource AND the proposal. */
+async function decideUpdate(
+  caller: CallerPrincipal | undefined,
+  kind: string,
+  resource: unknown,
+  input: unknown,
+) {
+  return firm.policy.authorize({
+    caller,
+    kind,
+    operation: "update",
+    resource: resource as never,
+    input: input as never,
+  });
 }
 
 function expectDeny(decision: { allow: boolean; reason?: string }, why: RegExp) {
@@ -282,10 +305,35 @@ describe("document intelligence (FR-DOC-003/004)", () => {
     expectDeny(await decide(callers.staff, "DocumentAnnotation", "create"), /Office staff/);
     expectDeny(await decide(callers.staff, "DocumentAnnotation", "list"), /Office staff/);
     // The clerk decision: whoever works the case may mark its documents
-    // (DD-001's tasks/notes/comments row applied to annotations). The
-    // role gate passes here; case MEMBERSHIP is the guard's check in
-    // the resource pipeline (proven in the acceptance suite).
+    // (DD-001's tasks/notes/comments row applied to annotations). With
+    // no input there is no case to be a member of, so the role gate is
+    // the whole answer; the membership half is the next test.
     expect((await decide(callers.clerk, "DocumentAnnotation", "create")).allow).toBe(true);
+  });
+
+  it("a proposed mark's case is read from its DOCUMENT, never trusted from the input (DD-010)", async () => {
+    await store.save(
+      "Document",
+      create(DocumentSchema, {
+        metadata: meta("doc_a"),
+        spec: { caseId: "case_a", fileName: "order.pdf" },
+      }),
+    );
+    // The junior is not on case A: lying about the case on the input
+    // changes nothing, because the policy asks the document.
+    expectDeny(
+      await decideCreate(callers.junior, "DocumentAnnotation", {
+        spec: { documentId: "doc_a", caseId: "case_b" },
+      }),
+      /case members and partners/,
+    );
+    expect(
+      (
+        await decideCreate(callers.clerk, "DocumentAnnotation", {
+          spec: { documentId: "doc_a", caseId: "case_a" },
+        })
+      ).allow,
+    ).toBe(true);
   });
 
   it("extraction machinery is system-written: every PERSON is refused, the system passes its named seams only", async () => {
@@ -332,6 +380,77 @@ describe("case management (FR-CASE-002/003)", () => {
     const membership = { spec: { caseId: "case_a", memberId: "fmem_clerk" } };
     expectDeny(await decide(callers.clerk, "CaseMember", "remove", membership), /lead lawyer/);
     expect((await decide(callers.associate, "CaseMember", "remove", membership)).allow).toBe(true);
+  });
+
+  it("only partners or the lead ADD case members — the create-input twin of remove", async () => {
+    // The junior is a lawyer (passes the role gate) but leads nothing:
+    // the case the input names decides, before any duplicate check.
+    const proposal = { spec: { caseId: "case_a", memberId: "fmem_junior" } };
+    expectDeny(await decideCreate(callers.junior, "CaseMember", proposal), /lead lawyer/);
+    expect((await decideCreate(callers.associate, "CaseMember", proposal)).allow).toBe(true);
+    expect((await decideCreate(callers.partner, "CaseMember", proposal)).allow).toBe(true);
+  });
+});
+
+describe("case content on the way IN (the create input; resource-api 0.6)", () => {
+  it("a lawyer who is not on the matter cannot add content to it", async () => {
+    for (const kind of ["Hearing", "CaseNote", "Task", "Document", "CitationUse"]) {
+      expectDeny(
+        await decideCreate(callers.junior, kind, { spec: { caseId: "case_a" } }),
+        /case members and partners/,
+      );
+      expect((await decideCreate(callers.clerk, kind, { spec: { caseId: "case_a" } })).allow).toBe(
+        true,
+      );
+    }
+  });
+
+  it("a case-less document is library material: any case worker files it (FR-DOC-005), office staff never", async () => {
+    // proto3 renders an unset case as "" — that is "no case", never a
+    // case named "" (the regression the acceptance suite caught first).
+    expect((await decideCreate(callers.junior, "Document", { spec: { caseId: "" } })).allow).toBe(
+      true,
+    );
+    expectDeny(await decideCreate(callers.staff, "Document", { spec: { caseId: "" } }), /Office staff/);
+  });
+
+  it("a comment reaches its case THROUGH the task on the way in too", async () => {
+    await store.save(
+      "Task",
+      create(TaskSchema, { metadata: meta("task_2"), spec: { caseId: "case_a", title: "t" } }),
+    );
+    const comment = { spec: { taskId: "task_2", body: "hello" } };
+    expectDeny(await decideCreate(callers.junior, "TaskComment", comment), /case members/);
+    expect((await decideCreate(callers.clerk, "TaskComment", comment)).allow).toBe(true);
+    // An unknown task is not a permission matter: the policy passes the
+    // role gate and the pipeline's reference check answers.
+    expect(
+      (await decideCreate(callers.junior, "TaskComment", { spec: { taskId: "task_missing" } })).allow,
+    ).toBe(true);
+  });
+
+  it("deadlines are entered by LAWYERS ON THE MATTER: a member clerk and an off-matter lawyer are both refused", async () => {
+    const proposal = { spec: { caseId: "case_a", title: "file reply" } };
+    expectDeny(await decideCreate(callers.clerk, "Deadline", proposal), /lawyers/);
+    expectDeny(await decideCreate(callers.junior, "Deadline", proposal), /lawyers on this matter/);
+    expect((await decideCreate(callers.associate, "Deadline", proposal)).allow).toBe(true);
+  });
+
+  it("moving content between matters needs membership of BOTH (the update slot shows fact and proposal)", async () => {
+    const stored = { spec: { caseId: "case_a", title: "t" } };
+    // The associate leads case A but is not on case B.
+    expectDeny(
+      await decideUpdate(callers.associate, "Task", stored, { spec: { caseId: "case_b", title: "t" } }),
+      /case members and partners/,
+    );
+    expect(
+      (await decideUpdate(callers.associate, "Task", stored, { spec: { caseId: "case_a", title: "u" } }))
+        .allow,
+    ).toBe(true);
+    expect(
+      (await decideUpdate(callers.partner, "Task", stored, { spec: { caseId: "case_b", title: "t" } }))
+        .allow,
+    ).toBe(true);
   });
 });
 
@@ -393,16 +512,27 @@ describe("money is the sharpest boundary (FR-AUTHZ-004)", () => {
     expectDeny(await decide(callers.associate, "LedgerEntry", "create"), /partners and office staff/);
   });
 
-  it("office staff record RECEIPTS only — the guard refuses a charge", async () => {
-    await expect(
-      firm.guards.assertLedgerCreate(callers.staff, LedgerEntryKind.CHARGE),
-    ).rejects.toThrowError(/receipts only/);
-    await expect(
-      firm.guards.assertLedgerCreate(callers.staff, LedgerEntryKind.RECEIPT),
-    ).resolves.toBeDefined();
-    await expect(
-      firm.guards.assertLedgerCreate(callers.partner, LedgerEntryKind.CHARGE),
-    ).resolves.toBeDefined();
+  it("office staff record RECEIPTS only — the policy reads the entry kind off the create input", async () => {
+    expectDeny(
+      await decideCreate(callers.staff, "LedgerEntry", {
+        spec: { caseId: "case_a", entryKind: LedgerEntryKind.CHARGE },
+      }),
+      /receipts only/,
+    );
+    expect(
+      (
+        await decideCreate(callers.staff, "LedgerEntry", {
+          spec: { caseId: "case_a", entryKind: LedgerEntryKind.RECEIPT },
+        })
+      ).allow,
+    ).toBe(true);
+    expect(
+      (
+        await decideCreate(callers.partner, "LedgerEntry", {
+          spec: { caseId: "case_a", entryKind: LedgerEntryKind.CHARGE },
+        })
+      ).allow,
+    ).toBe(true);
   });
 });
 

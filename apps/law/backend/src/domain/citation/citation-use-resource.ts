@@ -80,16 +80,6 @@ export function citationUseResource(deps: {
     }
   };
 
-  const membershipOnWrite: PipelineStep<WriteContext<CitationUse>> = {
-    name: "assert-case-membership",
-    async execute(ctx) {
-      const caseId = (ctx.newState as CitationUse).spec?.caseId;
-      if (ctx.caller && caseId) {
-        await deps.guards.assertCaseContent(ctx.caller, caseId);
-      }
-    },
-  };
-
   /** The judgment-side invariants (module header): shelf-listed, and
    * readable by the caller — checked through the same policy the
    * document's own reads enforce (one policy, N enforcement points). */
@@ -147,9 +137,12 @@ export function citationUseResource(deps: {
     },
     service: CitationUseService,
     operations: {
+      // Membership of the USING case is the policy's create cell (the
+      // authorize slot sees the input since resource-api 0.6); the
+      // judgment side stays a step because it authorizes a REFERENCED
+      // document after loading it.
       create: createOperation<CitationUse>({
         beforePersist: [
-          membershipOnWrite,
           referencesExistStep<CitationUse>(deps.store, [
             { kind: "Case", label: "case", get: (u) => u.spec?.caseId || undefined },
             { kind: "Document", label: "document", get: (u) => u.spec?.documentId || undefined },

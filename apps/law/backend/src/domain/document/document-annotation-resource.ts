@@ -69,28 +69,6 @@ export function documentAnnotationResource(deps: {
     return document;
   }
 
-  const membershipOnWrite: PipelineStep<WriteContext<DocumentAnnotation>> = {
-    name: "assert-case-membership",
-    async execute(ctx) {
-      const spec = (ctx.newState as DocumentAnnotation).spec;
-      if (ctx.caller && spec?.documentId) {
-        const document = await documentOrRefuse(spec.documentId);
-        if (document.spec?.caseId) {
-          // A matter's own paper: marks are case-team records.
-          await deps.guards.assertCaseContent(ctx.caller, document.spec.caseId);
-        } else if (spec.caseId) {
-          // Library paper, case-badged layer (DD-012 D2): the author
-          // must be able to work the matter the mark carries — the
-          // badge is a claim of case context, never decoration.
-          await deps.guards.assertCaseContent(ctx.caller, spec.caseId);
-        }
-        // Library paper, firm layer (empty case): the policy's role
-        // gate is the whole check — firm knowledge is written by
-        // anyone who works cases, same rule that lets them read it.
-      }
-    },
-  };
-
   /** The cross-field invariants (see the module header). */
   const anchorIntegrity: PipelineStep<WriteContext<DocumentAnnotation>> = {
     name: "verify-annotation-anchor",
@@ -127,9 +105,12 @@ export function documentAnnotationResource(deps: {
     },
     service: DocumentAnnotationService,
     operations: {
+      // Membership of the mark's case — its document's, or the layer a
+      // library mark claims (DD-012 D2) — is the policy's create cell,
+      // which reads the document the same way (the authorize slot sees
+      // the input since resource-api 0.6).
       create: createOperation<DocumentAnnotation>({
         beforePersist: [
-          membershipOnWrite,
           referencesExistStep<DocumentAnnotation>(deps.store, [
             {
               kind: "Document",

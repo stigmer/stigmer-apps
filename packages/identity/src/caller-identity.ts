@@ -6,7 +6,7 @@
  * - `whatsapp_phone` — a messaging-channel-verified sender (a WhatsApp
  *   wa_id, verified by Meta and asserted by the agent platform),
  *   matched by exact E.164 phone.
- * - `stigmer_user` — a platform-authenticated user (a lawyer signed
+ * - `stigmer_user` — a platform-authenticated user (a person signed
  *   into the embedding app, whose backend minted them a platform token;
  *   the platform asserts the email it provisioned at mint time),
  *   matched by exact email — the User resource's natural key.
@@ -22,7 +22,7 @@
  * assumed a separate MCP server process presenting one bearer
  * credential. Everything in the chain guards EVERY request (web login
  * included), so wiring caller headers into it would let anyone who can
- * set two headers sign in as any lawyer. This resolver is a separate
+ * set two headers sign in as any user. This resolver is a separate
  * seam the app consumes ONLY behind its MCP entrance's shared-secret
  * gate; the trust model lives in the consuming app's design record
  * (first consumer: stigmer-law DD-008).
@@ -42,7 +42,7 @@
  *   at the database, so its branch resolves through getByNaturalKey and
  *   has no ambiguous arm.
  * - Failure propagates: a store error must surface as an outage, never
- *   degrade to "unknown" — refusing a known lawyer during a database
+ *   degrade to "unknown" — refusing a known user during a database
  *   blip reads as confidently wrong, and confidently wrong is the one
  *   thing an identity layer may never be.
  */

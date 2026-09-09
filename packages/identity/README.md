@@ -13,6 +13,22 @@ the authentication seam, ship the smallest correct issuer behind it
 (bcrypt password → locally-signed RS256 tokens), keep "bring your own
 identity provider" one authenticator away.
 
+## Install
+
+```bash
+npm install @stigmer/identity @stigmer/resource-api
+```
+
+`@stigmer/resource-api` is a peer dependency pinned to the same release
+(the commons publish in lockstep from one tag — the repo README's
+"Releasing"), so one copy of the pipeline serves both. The package ships
+`dist/`, its protos and its migrations; a consumer's boot resolves the
+migrations through `@stigmer/identity/package.json` and runs them before
+its own. The protos are also on the Buf Schema Registry as
+`buf.build/stigmer/identity` for a browser client that must not bundle
+this package's server-side dependencies: generate the `AuthService` and
+`UserService` clients from the registry module instead.
+
 ## The pieces
 
 | Piece | What it is |
@@ -31,8 +47,8 @@ identity provider" one authenticator away.
 The identity `User` carries **identity attributes only**: email (natural
 key), name, phone (E.164 — a channel binding is an identity attribute).
 
-Vertical-specific person data — a lawyer's bar number, a gym member's
-plan — lives in **vertical-owned profile resources that reference the
+Vertical-specific person data — a professional licence number, a
+membership tier — lives in **vertical-owned profile resources that reference the
 user id**. Verticals extend by reference, never by widening this
 package's proto. A field proposed for `UserSpec` must be an attribute of
 *identity itself*, meaningful to every vertical, or it does not land.
@@ -77,7 +93,7 @@ const resolver = createCallerResolver([
 // Storage: spread the identity kinds into the app's one store.
 const store = new PostgresResourceStore(pool, {
   ...identityStoreKinds(),
-  Case: { /* the app's own kinds */ },
+  Widget: { /* the app's own kinds */ },
 });
 
 // Migrations: identity's source first, so app tables can reference users(id).

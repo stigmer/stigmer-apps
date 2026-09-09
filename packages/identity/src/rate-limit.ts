@@ -11,13 +11,13 @@
  *   and single-replica (DD-001: no Redis), so in-memory process state IS
  *   the deployment's state; the port is the seam if that ever changes.
  *
- * Only FAILURES consume budget: a clerk who signs in successfully five
+ * Only FAILURES consume budget: a user who signs in successfully five
  * times is not an attack. Success clears the email's window.
  */
 
 export interface RateLimitDecision {
   readonly allowed: boolean;
-  /** Present when denied — clerk-facing "try again in N minutes". */
+  /** Present when denied — user-facing "try again in N minutes". */
   readonly retryAfterSeconds?: number;
 }
 

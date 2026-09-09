@@ -1,7 +1,7 @@
 // The shared User resource — identity attributes ONLY (DD-005 profile
 // pattern): email is the login identity, name the display identity, phone
-// the channel-binding identity. Vertical-specific person data (a lawyer's
-// bar number, a gym member's plan) lives in vertical-owned profile
+// the channel-binding identity. Vertical-specific person data (a
+// professional licence number, a membership tier) lives in vertical-owned profile
 // resources that reference this user's id — verticals extend by
 // reference, never by widening this message.
 //
@@ -307,7 +307,7 @@ export const UserService: GenService<{
    * Operator-only (consumer policy), the same tier as Create/SetPassword
    * — and not one notch lower: spec.phone is the WhatsApp channel
    * binding, so whoever may update a user decides which verified sender
-   * RESOLVES TO that user. A firm member allowed to update even their
+   * RESOLVES TO that user. A user allowed to update even their
    * own profile would hold a self-service impersonation lever (the class
    * of mistake recorded as the first consumer's wrong-assumptions/001).
    *

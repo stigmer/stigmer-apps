@@ -30,6 +30,7 @@ import { type DescMessage, fromJson, toJson } from "@bufbuild/protobuf";
 import type pg from "pg";
 import type { ResourceMessage } from "../envelope.js";
 import {
+  DuplicateIdError,
   DuplicateNaturalKeyError,
   type FilterValue,
   type ListQuery,
@@ -84,24 +85,51 @@ export class PostgresResourceStore implements ResourceStore {
     this.#kinds = kinds;
   }
 
+  async insert(kind: string, resource: ResourceMessage): Promise<void> {
+    // A plain INSERT: no ON CONFLICT arm, so Postgres never needs UPDATE
+    // privilege for a create, and a held id surfaces as the primary-key
+    // violation it is (`<table>_pkey`, Postgres's default constraint name
+    // for `id text PRIMARY KEY`).
+    await this.#write(
+      kind,
+      resource,
+      (table) => `INSERT INTO ${table} (id, resource) VALUES ($1, $2::jsonb)`,
+    );
+  }
+
   async save(kind: string, resource: ResourceMessage): Promise<void> {
+    await this.#write(
+      kind,
+      resource,
+      (table) =>
+        `INSERT INTO ${table} (id, resource) VALUES ($1, $2::jsonb)
+         ON CONFLICT (id) DO UPDATE SET resource = EXCLUDED.resource`,
+    );
+  }
+
+  async #write(
+    kind: string,
+    resource: ResourceMessage,
+    statement: (table: string) => string,
+  ): Promise<void> {
     const config = this.#config(kind);
     const id = resource.metadata?.id;
     if (!id) {
-      throw new Error(`Cannot save ${kind} without metadata.id (pipeline bug)`);
+      throw new Error(`Cannot write ${kind} without metadata.id (pipeline bug)`);
     }
     const json = toJson(config.schema, resource as never);
     try {
-      await this.#pool.query(
-        `INSERT INTO ${config.table} (id, resource) VALUES ($1, $2::jsonb)
-         ON CONFLICT (id) DO UPDATE SET resource = EXCLUDED.resource`,
-        [id, JSON.stringify(json)],
-      );
+      await this.#pool.query(statement(config.table), [id, JSON.stringify(json)]);
     } catch (err) {
-      if (isUniqueViolation(err) && err.constraint === `${config.table}_natural_key`) {
-        const spec = (json as { spec?: Record<string, unknown> }).spec;
-        const value = config.naturalKey ? String(spec?.[config.naturalKey.jsonField] ?? "") : "";
-        throw new DuplicateNaturalKeyError(kind, value);
+      if (isUniqueViolation(err)) {
+        if (err.constraint === `${config.table}_natural_key`) {
+          const spec = (json as { spec?: Record<string, unknown> }).spec;
+          const value = config.naturalKey ? String(spec?.[config.naturalKey.jsonField] ?? "") : "";
+          throw new DuplicateNaturalKeyError(kind, value);
+        }
+        if (err.constraint === `${config.table}_pkey`) {
+          throw new DuplicateIdError(kind, id);
+        }
       }
       throw err;
     }

@@ -89,18 +89,6 @@ export function taskResource(deps: {
     { kind: "FirmMember", label: "assignee", get: (t) => t.spec?.assigneeId || undefined },
   ]);
 
-  // Tasks are case content: writes carry the create-input membership
-  // check the authorize slot cannot make (policy.ts, rule shapes).
-  const membershipOnWrite: PipelineStep<WriteContext<Task>> = {
-    name: "assert-case-membership",
-    async execute(ctx) {
-      const caseId = (ctx.newState as Task).spec?.caseId;
-      if (ctx.caller && caseId) {
-        await deps.guards.assertCaseContent(ctx.caller, caseId);
-      }
-    },
-  };
-
   // Page-shaped (T03 D4): overdue is pure computation; the file number
   // (T04b D9) is ONE bulk lookup per response — lawyers speak in file
   // numbers, and every task-listing consumer (web lists, the assistant's
@@ -143,11 +131,14 @@ export function taskResource(deps: {
     },
     service: TaskService,
     operations: {
+      // Case membership on create and on a move between matters is the
+      // policy's (the authorize slot sees the input since resource-api
+      // 0.6); the steps here are defaults and reference checks.
       create: createOperation<Task>({
-        beforePersist: [priorityDefaultStep, openOnCreateStep, membershipOnWrite, referenceChecks],
+        beforePersist: [priorityDefaultStep, openOnCreateStep, referenceChecks],
       }),
       update: updateOperation<Task>({
-        beforePersist: [priorityDefaultStep, membershipOnWrite, referenceChecks],
+        beforePersist: [priorityDefaultStep, referenceChecks],
       }),
       updateStatus: customOperation<Task, UpdateTaskStatusRequest, Task>({
         async handler(ctx) {

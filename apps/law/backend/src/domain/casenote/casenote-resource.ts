@@ -5,20 +5,18 @@
  * are the envelope's created_by/created_at; the spec carries only the
  * reference and the content.
  *
- * Notes are case content (FR-AUTHZ-002): the create-input membership
- * check rides a guard step, and the list is a custom operation because
- * its case gate loads asynchronously (the policy module's two rule
- * shapes).
+ * Notes are case content (FR-AUTHZ-002): the policy's create cell checks
+ * membership of the case the input names, and the list is a custom
+ * operation because its case gate scopes a query the authorize slot
+ * cannot see.
  */
 
 import { create } from "@bufbuild/protobuf";
 import type {
   AuthorizationPolicy,
   CallerExtractor,
-  PipelineStep,
   ResourceEventPublisher,
   ResourceStore,
-  WriteContext,
 } from "@stigmer/resource-api";
 import {
   createOperation,
@@ -44,16 +42,6 @@ export function caseNoteResource(deps: {
   publisher?: ResourceEventPublisher;
   caller: CallerExtractor;
 }) {
-  const membershipOnWrite: PipelineStep<WriteContext<CaseNote>> = {
-    name: "assert-case-membership",
-    async execute(ctx) {
-      const caseId = (ctx.newState as CaseNote).spec?.caseId;
-      if (ctx.caller && caseId) {
-        await deps.guards.assertCaseContent(ctx.caller, caseId);
-      }
-    },
-  };
-
   return defineResource({
     definition: {
       kind: "CaseNote",
@@ -67,9 +55,10 @@ export function caseNoteResource(deps: {
     },
     service: CaseNoteService,
     operations: {
+      // Case membership on create is the policy's (the authorize slot
+      // sees the input since resource-api 0.6).
       create: createOperation<CaseNote>({
         beforePersist: [
-          membershipOnWrite,
           referencesExistStep<CaseNote>(deps.store, [
             { kind: "Case", label: "case", get: (n) => n.spec?.caseId || undefined },
           ]),

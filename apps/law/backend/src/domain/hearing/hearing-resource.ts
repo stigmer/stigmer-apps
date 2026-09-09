@@ -62,19 +62,6 @@ export function hearingResource(deps: {
     { kind: "Case", label: "case", get: (h) => h.spec?.caseId || undefined },
   ]);
 
-  /** Create-input membership check (module header of policy.ts: the
-   * authorize slot never sees create input). Clerks included — the
-   * clerk records hearings. */
-  const membershipOnWrite: PipelineStep<WriteContext<Hearing>> = {
-    name: "assert-case-membership",
-    async execute(ctx) {
-      const caseId = (ctx.newState as Hearing).spec?.caseId;
-      if (ctx.caller && caseId) {
-        await deps.guards.assertCaseContent(ctx.caller, caseId);
-      }
-    },
-  };
-
   /** A completed hearing's record is frozen — including its listing
    * details (FR-HEAR-006's freeze clause). */
   const scheduledOnly: PipelineStep<WriteContext<Hearing>> = {
@@ -109,11 +96,14 @@ export function hearingResource(deps: {
     },
     service: HearingService,
     operations: {
+      // Case membership on create and on a move between matters is the
+      // policy's (the authorize slot sees the input since resource-api
+      // 0.6); the steps here are invariants and reference checks.
       create: createOperation<Hearing>({
-        beforePersist: [membershipOnWrite, referenceChecks],
+        beforePersist: [referenceChecks],
       }),
       update: updateOperation<Hearing>({
-        beforePersist: [scheduledOnly, membershipOnWrite, referenceChecks],
+        beforePersist: [scheduledOnly, referenceChecks],
       }),
       recordOutcome: customOperation<Hearing, RecordOutcomeRequest, RecordOutcomeResponse>({
         async handler(ctx) {

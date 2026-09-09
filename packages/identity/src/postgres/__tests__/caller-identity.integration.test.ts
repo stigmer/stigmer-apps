@@ -37,13 +37,13 @@ beforeAll(async () => {
 
   // Seeded through the store directly: this suite tests resolution, not
   // the create pipeline (user-resource.integration.test.ts owns that).
-  await seedUser("user_lawyer1", "asha@firm.example", "+91123456");
-  await seedUser("user_lawyer2", "ravi@firm.example", "+91123457");
-  await seedUser("user_nophone", "clerk@firm.example", undefined);
+  await seedUser("user_asha", "asha@example.test", "+91123456");
+  await seedUser("user_ravi", "ravi@example.test", "+91123457");
+  await seedUser("user_nophone", "nophone@example.test", undefined);
   // Two users deliberately sharing one number — the ambiguity fixture
   // (phone is non-unique by recorded deferral, migration 0002).
-  await seedUser("user_shared_a", "shared-a@firm.example", "+91123999");
-  await seedUser("user_shared_b", "shared-b@firm.example", "+91123999");
+  await seedUser("user_shared_a", "shared-a@example.test", "+91123999");
+  await seedUser("user_shared_b", "shared-b@example.test", "+91123999");
 }, 120_000);
 
 afterAll(async () => {
@@ -69,15 +69,15 @@ describe("caller identity resolution (T05) — whatsapp_phone", () => {
     const result = await resolve({ kind: WHATSAPP_PHONE_KIND, value: "91123456" });
     expect(result.outcome).toBe("resolved");
     if (result.outcome !== "resolved") return;
-    expect(result.principal).toEqual({ id: "user_lawyer1", kind: "user" });
-    expect(result.user.spec?.email).toBe("asha@firm.example");
+    expect(result.principal).toEqual({ id: "user_asha", kind: "user" });
+    expect(result.user.spec?.email).toBe("asha@example.test");
   });
 
   it("kind comparison is case-insensitive and trimmed (header values travel through YAML)", async () => {
     const result = await resolve({ kind: " Whatsapp_Phone ", value: "91123457" });
     expect(result.outcome).toBe("resolved");
     if (result.outcome !== "resolved") return;
-    expect(result.principal.id).toBe("user_lawyer2");
+    expect(result.principal.id).toBe("user_ravi");
   });
 
   it("an unknown number is unknown — no fuzzy fallback exists to guess with", async () => {
@@ -97,23 +97,23 @@ describe("caller identity resolution (T05) — whatsapp_phone", () => {
 
 describe("caller identity resolution (T05) — stigmer_user", () => {
   it("resolves an asserted email to exactly the user carrying it as natural key", async () => {
-    const result = await resolve({ kind: STIGMER_USER_KIND, value: "clerk@firm.example" });
+    const result = await resolve({ kind: STIGMER_USER_KIND, value: "nophone@example.test" });
     expect(result.outcome).toBe("resolved");
     if (result.outcome !== "resolved") return;
     expect(result.principal).toEqual({ id: "user_nophone", kind: "user" });
-    expect(result.user.spec?.email).toBe("clerk@firm.example");
+    expect(result.user.spec?.email).toBe("nophone@example.test");
   });
 
   it("email comparison is case-insensitive and trimmed — stored emails are lowercase by pipeline", async () => {
-    const result = await resolve({ kind: " Stigmer_User ", value: "  Asha@Firm.Example " });
+    const result = await resolve({ kind: " Stigmer_User ", value: "  Asha@Example.Test " });
     expect(result.outcome).toBe("resolved");
     if (result.outcome !== "resolved") return;
-    expect(result.principal.id).toBe("user_lawyer1");
+    expect(result.principal.id).toBe("user_asha");
   });
 
   it("an unknown email is unknown — the stale-email failure mode (#377) fails closed here", async () => {
     expect(
-      (await resolve({ kind: STIGMER_USER_KIND, value: "gone@firm.example" })).outcome,
+      (await resolve({ kind: STIGMER_USER_KIND, value: "gone@example.test" })).outcome,
     ).toBe("unknown");
   });
 
@@ -150,7 +150,7 @@ describe("caller identity resolution (T05) — shared rules", () => {
         deadResolve({ kind: WHATSAPP_PHONE_KIND, value: "91123456" }),
       ).rejects.toThrowError();
       await expect(
-        deadResolve({ kind: STIGMER_USER_KIND, value: "asha@firm.example" }),
+        deadResolve({ kind: STIGMER_USER_KIND, value: "asha@example.test" }),
       ).rejects.toThrowError();
     } finally {
       await deadPool.end();
