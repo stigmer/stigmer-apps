@@ -1,6 +1,6 @@
 {
   "name": "@stigmer/authorization",
-  "version": "0.1.0",
+  "version": "0.0.0-dev",
   "description": "Shared FGA authorization machinery for Stigmer vertical apps: an OpenFGA-backed engine, idempotent store/model bootstrap, and a set-diff tuple reconciler. Business-agnostic by contract — models and policy live in each app.",
   "license": "Apache-2.0",
   "repository": {
@@ -9,6 +9,7 @@
     "directory": "packages/authorization"
   },
   "type": "module",
+  "sideEffects": false,
   "engines": {
     "node": ">=22"
   },
@@ -26,6 +27,10 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",

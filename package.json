@@ -15,7 +15,8 @@
   "scripts": {
     "build": "npm run build -w @stigmer/resource-api && npm run build -w @stigmer/identity && npm run build -w @stigmer/authorization && npm run build -w @law/web && npm run build -w @law/backend",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
+    "test": "node --test scripts/*.test.mjs && npm run test --workspaces --if-present",
+    "verify-publish": "node scripts/verify-publish.mjs",
     "codegen": "npx @bufbuild/buf generate --template packages/resource-api/buf.gen.yaml && npx @bufbuild/buf generate --template packages/identity/buf.gen.yaml && npx @bufbuild/buf generate --template apps/law/buf.gen.yaml && npx @bufbuild/buf generate --template apps/law/web/buf.gen.yaml"
   }
 }

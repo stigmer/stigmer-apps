@@ -30,6 +30,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: `buf breaking`'s git input below reads main from
+          # this clone's .git directory.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -62,11 +66,38 @@ jobs:
           npm run codegen
           git diff --exit-code -- packages/resource-api/src/gen packages/identity/src/gen apps/law/backend/src/gen apps/law/web/src/gen
 
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Proto breaking-change gate
+        # Two of the workspace's modules are published contracts
+        # (buf.build/stigmer/resourceapi and buf.build/stigmer/identity);
+        # a field removal or type change must fail here, not in a
+        # consumer's codegen. A PR checkout is a detached HEAD with only
+        # remote-tracking refs, so materialize the local main ref buf's
+        # `branch=main` input resolves (`|| true` covers runs ON main,
+        # where the ref exists and the refspec is a no-op rejection).
+        # Main-vs-main is vacuous, so this step is PR-only.
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin main:main || true
+          buf breaking --against ".git#branch=main"
+
       - name: Build
         run: npm run build
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Verify the publishable tarballs
+        # Packs the three commons packages at a throwaway version, installs
+        # them together into an empty project and imports every exports
+        # subpath under plain Node — the same script the release lane runs
+        # against the tarballs it ships, so a broken `files` whitelist or
+        # an extension-less specifier (DD-A8) fails on the PR, not on the
+        # tag.
+        run: npm run verify-publish
 
       - name: Test
         # Integration tests run against real Postgres (and MinIO for the
