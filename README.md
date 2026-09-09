@@ -24,12 +24,17 @@ any rebrand.
 |---------|---------|---------|
 | [`@stigmer/resource-api`](packages/resource-api) | Proto-first resource API pipeline: common envelope, per-operation step chains (create / update / get / list / custom), store port with Postgres adapter, error contract. The TypeScript sibling of the Java commons (`stigmer-cloud/backend/libs/java`) and the Go commons (`stigmer/backend/libs/go`). | Apache-2.0 |
 | [`@stigmer/identity`](packages/identity) | Shared identity for the verticals: the User resource, authenticator chain (password / RS256 bearer / operator key), dual-transport caller resolver, credential + rotating-refresh stores, AuthService, login rate limiter. | Apache-2.0 |
+| [`@stigmer/authorization`](packages/authorization) | Shared FGA authorization machinery: an OpenFGA-backed engine, idempotent store/model bootstrap, a set-diff tuple reconciler. Models and policy live in each app. | Apache-2.0 |
 
 Commons are business-agnostic by contract: nothing in `packages/` may know
 about any particular product or customer. The placement test for every new
 piece of code: **"would vertical #2 need this?"** Yes → `packages/`;
 no → the app that owns it. See `.cursor/rules/stigmer-apps-architecture.mdc`
 for the full architecture rules and `LICENSE.md` for the licensing map.
+
+The commons are published to npm under `@stigmer/*` and consumed from there
+by apps outside this repository; inside it, apps resolve them through the
+workspace. See "Releasing" below.
 
 ## Development
 
@@ -45,10 +50,31 @@ npm run codegen    # regenerate committed proto stubs (run from the root;
                    # CI fails on drift)
 ```
 
-Protos live in one buf workspace (root `buf.yaml`). The envelope module is
-published to the BSR as `buf.build/stigmer/resourceapi` for external
-consumers; inside this repo, apps resolve it in-workspace — one definition,
-nothing vendored, nothing pinned between siblings.
+Protos live in one buf workspace (root `buf.yaml`). The two commons modules
+are published to the BSR — `buf.build/stigmer/resourceapi` (the envelope)
+and `buf.build/stigmer/identity` — for external consumers; inside this
+repo, apps resolve them in-workspace — one definition, nothing vendored,
+nothing pinned between siblings.
+
+## Releasing
+
+One annotated `v*` tag releases the commons: `@stigmer/resource-api`,
+`@stigmer/identity` and `@stigmer/authorization` publish to npm in lockstep
+at the tag's version, and both proto modules push to the BSR labelled with
+the tag. The version lives in the tag alone — every `package.json` carries
+the `0.0.0-dev` sentinel and workspace ranges are `*`, stamped and pinned
+into the tarballs at publish (`scripts/publish-packages.mjs`). A
+pre-release tag (`v0.6.0-rc.1`) publishes to the `next` dist-tag, a release
+to `latest`. The tag body is the release notes and becomes the GitHub
+Release. Authentication is npm trusted publishing with provenance: no token
+is stored anywhere, and each package's trusted publisher names
+`.github/workflows/release.yaml`.
+
+`npm run verify-publish` packs the three tarballs, installs them into an
+empty project and imports every `exports` subpath under plain Node — the
+check every PR runs and the lane runs against the very tarballs it ships.
+How to cut a release, including the release-notes grammar, is
+`.cursor/rules/release-stigmer-apps.mdc`.
 
 ## Quality bar
 

@@ -9,8 +9,8 @@
 
 -- The email generated column reads the stored spec, which the pipeline
 -- normalizes to lowercase before persist — so the unique constraint and
--- the natural-key lookup agree by construction, and 'NK@Firm.com' can
--- never coexist with 'nk@firm.com'.
+-- the natural-key lookup agree by construction, and 'NK@Example.com' can
+-- never coexist with 'nk@example.com'.
 CREATE TABLE users (
   id       text PRIMARY KEY,
   resource jsonb NOT NULL,

@@ -44,7 +44,7 @@ import { ACCESS_TOKEN_TTL_SECONDS, type AccessTokenIssuer } from "./token.js";
 import { USER_KIND } from "./user-resource.js";
 
 /**
- * The one clerk-facing credential failure (DD-005's recorded exception to
+ * The one user-facing credential failure (DD-005's recorded exception to
  * the errors-name-the-value rule): wrong email and wrong password answer
  * identically, so a failed attempt teaches an attacker nothing.
  */

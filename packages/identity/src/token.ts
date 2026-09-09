@@ -16,7 +16,7 @@ import { SIGNING_ALGORITHM, type SigningKeys } from "./keys.js";
 /**
  * Issuer claim: the identity commons, not a product brand (DD-A2 — the
  * wire carries capability names). Per-deployment keys carry the
- * firm-isolation guarantee; `iss` guards against cross-SYSTEM confusion.
+ * deployment-isolation guarantee; `iss` guards against cross-SYSTEM confusion.
  */
 export const TOKEN_ISSUER = "stigmer-identity";
 

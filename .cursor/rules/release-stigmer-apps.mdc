@@ -1,0 +1,122 @@
+---
+description: Action rule to cut a lockstep release of the @stigmer/* commons packages — pick the semver bump, write the release notes into an annotated v* tag, push it, and let release.yaml publish to npm (trusted publishing, provenance) and the BSR.
+alwaysApply: false
+---
+
+# Rule: Release Stigmer Apps (the commons)
+
+## Purpose
+
+One annotated `v*` tag on `main` releases every commons package
+(`@stigmer/resource-api`, `@stigmer/identity`, `@stigmer/authorization`)
+at the same version and pushes both proto modules to the BSR under the same
+label. The tag IS the version: no `package.json` is edited to release
+(every manifest carries the `0.0.0-dev` sentinel; `scripts/publish-packages.mjs`
+stamps the tarballs). This rule writes the tag; `.github/workflows/release.yaml`
+does the rest.
+
+## Rule Type
+
+**Action Rule** — creates and pushes an annotated git tag.
+
+## When to Use
+
+- The owner asks to "release", "cut a release", "tag a release", or "publish the commons".
+- Never as part of finishing a PR: merging and releasing are separate acts.
+
+## Execution Steps
+
+### 1. Preconditions
+
+- On `main`, at the commit to release, with a clean tree (`git status --short` empty) and `git pull --ff-only` done.
+- CI green on that commit (the lane re-runs everything, but a red main should never be tagged).
+- For a package's FIRST release only: the owner has claimed the name on npm and configured its trusted publisher for `release.yaml` (see "First publish" below). The lane cannot do either.
+
+### 2. Identify the previous release
+
+```bash
+git tag -l "v*" | sort -V | tail -n1
+git log --oneline <previous-tag>..HEAD
+```
+
+Report the previous tag and list the commits.
+
+### 3. Choose the bump (impact-based, 0.x)
+
+While the major is 0, a breaking change to any commons API — a store-port method added or changed, a pipeline behaviour changed, a proto field removed or renamed — is a **minor** bump; everything else is a **patch**. Default to patch when in doubt. Present the reasoning and the proposed version; the owner confirms.
+
+### 4. Pre-release first, then the release
+
+A change to the store port, the pipeline or the envelope proto is rehearsed as `vX.Y.Z-rc.N` before `vX.Y.Z`: the rc publishes to the `next` dist-tag (inferred from the `-` in the version) and a consumer proves it before the final tag goes to `latest`. Same notes, same steps, twice.
+
+### 5. Compose the release notes
+
+The tag body. Start with a plain-language highlights paragraph for the people who consume the packages, then group by Conventional Commit type:
+
+```
+Release vX.Y.Z
+
+## Highlights
+
+<1-3 sentences: what changes for a consumer and why to upgrade. Name any
+consumer-forced change (DD-A11) plainly.>
+
+## What's Changed
+
+### Features
+- **<scope>**: <description>
+
+### Bug Fixes
+- **<scope>**: <description>
+
+### CI/CD
+- **<scope>**: <description>
+
+### Documentation
+- <description>
+
+**Full Changelog**: https://github.com/stigmer/stigmer-apps/compare/<PREV>...<NEW>
+```
+
+Omit empty sections; skip merge commits; one line per bullet, imperative mood.
+
+### 6. Create and push the tag
+
+```bash
+git tag --cleanup=verbatim -a "vX.Y.Z" -m "<the notes>"
+git push origin "vX.Y.Z"
+```
+
+`--cleanup=verbatim` is load-bearing: git's default cleanup treats the Markdown `#` headings as comments and drops them.
+
+### 7. Watch the lane and confirm
+
+`gh run watch` on the `release` workflow. Then confirm:
+
+```bash
+npm view @stigmer/resource-api@X.Y.Z version
+npm view @stigmer/identity@X.Y.Z peerDependencies   # pinned to X.Y.Z exactly
+gh release view vX.Y.Z
+```
+
+The BSR shows the label on `buf.build/stigmer/resourceapi` and `buf.build/stigmer/identity`.
+
+## First publish (owner, once per package)
+
+npm's trusted publishing is configured on a package's settings page, which exists only after the package's first publish, so a NEW package needs one manual publish from the owner's machine (2FA) before the lane can publish it:
+
+```bash
+# in a throwaway directory: a stub package.json with the name, version 0.0.0, a README
+npm publish --access public --tag bootstrap
+npm trust github @stigmer/<name> --repo stigmer/stigmer-apps --file release.yaml --allow-publish
+# after the first real version is on the registry:
+npm deprecate @stigmer/<name>@0.0.0 "name claim; use a released version"
+```
+
+The `bootstrap` dist-tag keeps the stub off `latest`. The lane needs the `BUF_TOKEN` repository secret for the BSR push.
+
+## Important Notes
+
+- **Never force-push or move a tag.** A wrong release is followed by a new one.
+- **Never hand-publish a real version.** Hand publishes bypass the verified-tarball gate and carry no provenance. The only hand publish is the name-claim stub.
+- **Never tag with uncommitted changes**, and never tag a branch other than `main`.

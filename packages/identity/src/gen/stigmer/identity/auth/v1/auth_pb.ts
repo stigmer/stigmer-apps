@@ -250,7 +250,7 @@ export const AuthService: GenService<{
    * Verify email + password; mint the token pair. Failures are uniform
    * ("email or password is incorrect") — the one recorded exception to
    * the errors-name-the-value rule (DD-005): for credentials, precision
-   * helps an attacker more than a clerk. Rate-limited, fail-closed.
+   * helps an attacker more than a user. Rate-limited, fail-closed.
    *
    * @generated from rpc stigmer.identity.auth.v1.AuthService.Login
    */

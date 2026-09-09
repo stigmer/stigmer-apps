@@ -23,6 +23,17 @@ authorization models and policy decisions live in each app.
   keeps tuples current synchronously in its own write path between
   reconciles.
 
+## Install
+
+```bash
+npm install @stigmer/authorization
+```
+
+Publishes in lockstep with the other commons packages from one `v*` tag
+(the repo README's "Releasing"). The `./testing` subpath starts a real
+OpenFGA container for a consumer's test suite and needs the optional peer
+`testcontainers`.
+
 ## Usage
 
 ```ts

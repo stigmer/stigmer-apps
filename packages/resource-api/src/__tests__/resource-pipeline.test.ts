@@ -73,13 +73,13 @@ describe("create", () => {
     input.metadata = create(ResourceMetadataSchema, { id: "wdg_forged", version: 99n });
     input.status = create(WidgetStatusSchema, { retired: true, nameLength: 42 });
 
-    const created = await client.create(input, asCaller("lawyer-1"));
+    const created = await client.create(input, asCaller("user-1"));
 
     expect(created.metadata?.id).toMatch(/^wdg_[0-9a-z]{26}$/);
     expect(created.metadata?.id).not.toBe("wdg_forged");
     expect(created.metadata?.version).toBe(1n);
-    expect(created.metadata?.createdBy?.id).toBe("lawyer-1");
-    expect(created.metadata?.updatedBy?.id).toBe("lawyer-1");
+    expect(created.metadata?.createdBy?.id).toBe("user-1");
+    expect(created.metadata?.updatedBy?.id).toBe("user-1");
     // Both audit fields carry the caller's kind: the envelope is the one
     // home of provenance, so no spec ever needs a copy (S29).
     expect(created.metadata?.createdBy?.kind).toBe("user");

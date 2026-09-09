@@ -14,7 +14,7 @@
 -- constraint to a friendly ALREADY_EXISTS — a second constraint would
 -- surface as an opaque internal error. Two users sharing a phone instead
 -- resolve as AMBIGUOUS at the channel entrance, which refuses rather
--- than guessing. Revisit if a real firm hits it.
+-- than guessing. Revisit if a real deployment hits it.
 ALTER TABLE users
   ADD COLUMN phone text GENERATED ALWAYS AS (resource->'spec'->>'phone') STORED;
 

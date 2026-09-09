@@ -41,8 +41,21 @@ Two seams completed by the first vertical's agent surface (T05):
 | `@stigmer/resource-api` | Pipeline, operations, store port, error contract |
 | `@stigmer/resource-api/postgres` | Postgres store adapter and plain-SQL migration runner |
 
+## Install
+
+```bash
+npm install @stigmer/resource-api
+```
+
+The envelope proto ships in the package (`proto/`) and is published to the
+Buf Schema Registry as `buf.build/stigmer/resourceapi`; a consumer's own
+protos declare it as a buf dependency and import
+`stigmer/resourceapi/v1/resource.proto` — nothing is vendored.
+
 ## Status
 
-`0.x` — the API is being shaped against its first consumer and may change
-without notice. Not yet published to npm; consume via the sibling checkout
-(see the repo README).
+`0.x` — the API is a contract with every consumer, but breaking changes
+still land as minor versions; pin an exact version. Every `@stigmer/*`
+commons package publishes in lockstep from one `v*` tag (the repo README's
+"Releasing"), so a release's `@stigmer/identity` depends on exactly that
+release's `@stigmer/resource-api`.

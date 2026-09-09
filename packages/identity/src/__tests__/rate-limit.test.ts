@@ -15,41 +15,41 @@ describe("createMemoryRateLimiter", () => {
   it("only failures consume budget; success clears the email's window", () => {
     const { limiter } = limiterWithClock({ maxFailuresPerEmail: 2 });
 
-    limiter.recordFailure("a@firm.example");
-    limiter.recordFailure("a@firm.example");
-    expect(limiter.check("a@firm.example").allowed).toBe(false);
+    limiter.recordFailure("a@example.test");
+    limiter.recordFailure("a@example.test");
+    expect(limiter.check("a@example.test").allowed).toBe(false);
 
-    limiter.recordSuccess("a@firm.example");
-    expect(limiter.check("a@firm.example").allowed).toBe(true);
+    limiter.recordSuccess("a@example.test");
+    expect(limiter.check("a@example.test").allowed).toBe(true);
   });
 
   it("denies per email without touching other emails", () => {
     const { limiter } = limiterWithClock({ maxFailuresPerEmail: 1 });
 
-    limiter.recordFailure("a@firm.example");
-    expect(limiter.check("a@firm.example").allowed).toBe(false);
-    expect(limiter.check("b@firm.example").allowed).toBe(true);
+    limiter.recordFailure("a@example.test");
+    expect(limiter.check("a@example.test").allowed).toBe(false);
+    expect(limiter.check("b@example.test").allowed).toBe(true);
   });
 
   it("the global budget caps enumeration across many emails", () => {
     const { limiter } = limiterWithClock({ maxFailuresPerEmail: 100, maxFailuresGlobal: 3 });
 
-    limiter.recordFailure("a@firm.example");
-    limiter.recordFailure("b@firm.example");
-    limiter.recordFailure("c@firm.example");
-    expect(limiter.check("d@firm.example").allowed).toBe(false);
+    limiter.recordFailure("a@example.test");
+    limiter.recordFailure("b@example.test");
+    limiter.recordFailure("c@example.test");
+    expect(limiter.check("d@example.test").allowed).toBe(false);
   });
 
   it("windows expire: a denial heals after the window passes, with retry advice", () => {
     const { limiter, advance } = limiterWithClock({ maxFailuresPerEmail: 1 });
 
-    limiter.recordFailure("a@firm.example");
-    const denied = limiter.check("a@firm.example");
+    limiter.recordFailure("a@example.test");
+    const denied = limiter.check("a@example.test");
     expect(denied.allowed).toBe(false);
     expect(denied.retryAfterSeconds).toBeGreaterThan(0);
     expect(denied.retryAfterSeconds).toBeLessThanOrEqual(900);
 
     advance(901);
-    expect(limiter.check("a@firm.example").allowed).toBe(true);
+    expect(limiter.check("a@example.test").allowed).toBe(true);
   });
 });

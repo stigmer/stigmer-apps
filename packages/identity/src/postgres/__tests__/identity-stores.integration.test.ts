@@ -44,7 +44,7 @@ function expiry(secondsFromNow = REFRESH_TOKEN_TTL_SECONDS): Date {
 describe("PgCredentialStore", () => {
   it("sets, reads, and overwrites a password hash", async () => {
     const pool = await migratedPool();
-    await insertUser(pool, "user_1", "a@firm.example");
+    await insertUser(pool, "user_1", "a@example.test");
     const store = createPgCredentialStore(pool);
 
     expect(await store.getPasswordHash("user_1")).toBeUndefined();
@@ -58,7 +58,7 @@ describe("PgCredentialStore", () => {
 describe("PgRefreshTokenStore", () => {
   it("consumes a valid token exactly once", async () => {
     const pool = await migratedPool();
-    await insertUser(pool, "user_1", "a@firm.example");
+    await insertUser(pool, "user_1", "a@example.test");
     const store = createPgRefreshTokenStore(pool);
     const { sha256Hex } = generateRefreshToken();
 
@@ -68,7 +68,7 @@ describe("PgRefreshTokenStore", () => {
 
   it("detects reuse and revokes the user's every session atomically", async () => {
     const pool = await migratedPool();
-    await insertUser(pool, "user_1", "a@firm.example");
+    await insertUser(pool, "user_1", "a@example.test");
     const store = createPgRefreshTokenStore(pool);
     const stolen = generateRefreshToken();
     const rotatedTo = generateRefreshToken();
@@ -88,7 +88,7 @@ describe("PgRefreshTokenStore", () => {
 
   it("answers invalid for unknown and expired tokens", async () => {
     const pool = await migratedPool();
-    await insertUser(pool, "user_1", "a@firm.example");
+    await insertUser(pool, "user_1", "a@example.test");
     const store = createPgRefreshTokenStore(pool);
     const expired = generateRefreshToken();
 
@@ -101,7 +101,7 @@ describe("PgRefreshTokenStore", () => {
 
   it("serializes concurrent presentations: exactly one ok", async () => {
     const pool = await migratedPool();
-    await insertUser(pool, "user_1", "a@firm.example");
+    await insertUser(pool, "user_1", "a@example.test");
     const store = createPgRefreshTokenStore(pool);
     const { sha256Hex } = generateRefreshToken();
     await store.insert("user_1", sha256Hex, expiry());
@@ -115,8 +115,8 @@ describe("PgRefreshTokenStore", () => {
 
   it("revokeAllForUser kills only that user's sessions", async () => {
     const pool = await migratedPool();
-    await insertUser(pool, "user_1", "a@firm.example");
-    await insertUser(pool, "user_2", "b@firm.example");
+    await insertUser(pool, "user_1", "a@example.test");
+    await insertUser(pool, "user_2", "b@example.test");
     const store = createPgRefreshTokenStore(pool);
     const mine = generateRefreshToken();
     const theirs = generateRefreshToken();
@@ -131,7 +131,7 @@ describe("PgRefreshTokenStore", () => {
 
   it("purges expired rows opportunistically on insert", async () => {
     const pool = await migratedPool();
-    await insertUser(pool, "user_1", "a@firm.example");
+    await insertUser(pool, "user_1", "a@example.test");
     const store = createPgRefreshTokenStore(pool);
     const old = generateRefreshToken();
     await store.insert("user_1", old.sha256Hex, expiry(-60));
