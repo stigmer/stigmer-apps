@@ -74,15 +74,20 @@ jobs:
         # Two of the workspace's modules are published contracts
         # (buf.build/stigmer/resourceapi and buf.build/stigmer/identity);
         # a field removal or type change must fail here, not in a
-        # consumer's codegen. A PR checkout is a detached HEAD with only
-        # remote-tracking refs, so materialize the local main ref buf's
-        # `branch=main` input resolves (`|| true` covers runs ON main,
-        # where the ref exists and the refspec is a no-op rejection).
-        # Main-vs-main is vacuous, so this step is PR-only.
+        # consumer's codegen. Each module is compared BY PATH against the
+        # same path on main: a workspace-level compare matches modules by
+        # name, so a module gaining its BSR name (identity, 2026-09-10)
+        # reads as "every file deleted". A PR checkout is a detached HEAD
+        # with only remote-tracking refs, so materialize the local main
+        # ref buf's `branch=main` input resolves (`|| true` covers runs ON
+        # main, where the ref exists and the refspec is a no-op
+        # rejection). Main-vs-main is vacuous, so this step is PR-only.
         if: github.event_name == 'pull_request'
         run: |
           git fetch origin main:main || true
-          buf breaking --against ".git#branch=main"
+          for module in packages/resource-api/proto packages/identity/proto; do
+            buf breaking "$module" --against ".git#branch=main,subdir=$module"
+          done
 
       - name: Build
         run: npm run build
