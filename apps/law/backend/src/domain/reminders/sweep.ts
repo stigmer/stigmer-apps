@@ -213,7 +213,11 @@ async function notify(
     await deps.createNotification(create(NotificationSchema, { spec }), SYSTEM_PRINCIPAL);
   } catch (err) {
     if (ConnectError.from(err).code === Code.AlreadyExists) {
-      return; // already sent — the dedup key doing its one job
+      // Already sent — the dedup key doing its one job. Notification stays
+      // a `refuse` kind rather than an idempotent one: its title and body
+      // are copy that may change between deploys under the same key, and
+      // a content compare would turn "already sent" into a conflict.
+      return;
     }
     throw err;
   }

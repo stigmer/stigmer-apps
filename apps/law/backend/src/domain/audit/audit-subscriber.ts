@@ -21,7 +21,6 @@
 
 import { create, toJson } from "@bufbuild/protobuf";
 import type { DescMessage } from "@bufbuild/protobuf";
-import { Code, ConnectError } from "@connectrpc/connect";
 import type {
   CallerPrincipal,
   InProcessEventDispatcher,
@@ -74,14 +73,12 @@ export function registerAuditSubscriber(
     const entry = buildEntry(event, audited);
     if (!entry) return;
 
-    try {
-      await createEntry(entry, SYSTEM_PRINCIPAL);
-    } catch (err) {
-      if (ConnectError.from(err).code === Code.AlreadyExists) {
-        return; // duplicate delivery — one entry per version, by design
-      }
-      throw err; // dispatcher contains and logs; the audited write stands
-    }
+    // Duplicate delivery is the resource's own business: AuditEntry's
+    // natural key is idempotent, so a redelivered version answers with
+    // the entry that exists and writes nothing. Anything thrown — a
+    // DIFFERENT derivation for the same version included — is a bug the
+    // dispatcher contains and logs; the audited write stands.
+    await createEntry(entry, SYSTEM_PRINCIPAL);
   });
 }
 

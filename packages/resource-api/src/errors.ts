@@ -34,6 +34,24 @@ export function alreadyExists(
 }
 
 /**
+ * The idempotent-create refusal: the natural key is held AND the holder's
+ * content differs from what the caller sent, so returning the holder
+ * would silently keep a writer's disagreement with the record. The
+ * sentence names the difference so a client can tell it from the plain
+ * `alreadyExists` a `refuse` kind answers.
+ */
+export function alreadyExistsWithDifferentContent(
+  resource: string,
+  keyLabel: string,
+  value: string,
+): ConnectError {
+  return new ConnectError(
+    `${resource} with ${keyLabel} '${value}' already exists with different content`,
+    Code.AlreadyExists,
+  );
+}
+
+/**
  * The request was well-formed but system state does not support it — the
  * canonical answer for a missing *referenced* resource (the Go edition's
  * ValidateReferencesStep precedent; NOT_FOUND is reserved for the target

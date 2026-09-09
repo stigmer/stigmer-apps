@@ -76,7 +76,11 @@ export function registerTaskAssignmentHandler(
       );
     } catch (err) {
       if (ConnectError.from(err).code === Code.AlreadyExists) {
-        return; // already notified for this exact event — by design
+        // Already notified for this exact event — by design. Notification
+        // is a `refuse` kind (its copy is not a function of the key; see
+        // reminders/sweep.ts), so the code, not a content compare, is
+        // the idempotency answer here.
+        return;
       }
       throw err; // dispatcher contains and logs; the write already stands
     }

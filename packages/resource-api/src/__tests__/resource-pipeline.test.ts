@@ -16,7 +16,9 @@ import {
 } from "../gen/stigmer/resourceapi/testing/v1/widget_pb.js";
 import { ResourceMetadataSchema } from "../envelope.js";
 import { ALLOW, deny, type AuthorizationPolicy } from "../policy.js";
+import type { PipelineStep } from "../pipeline.js";
 import { InProcessEventDispatcher, type ResourceEvent } from "../publisher.js";
+import type { WriteContext } from "../resource.js";
 import type { ResourceStore } from "../store/store.js";
 import { asCaller, widgetMemoryStore, widgetResource } from "./widget-fixture.js";
 
@@ -24,12 +26,16 @@ function makeClient(options: {
   store?: ResourceStore;
   policy?: AuthorizationPolicy;
   publisher?: InProcessEventDispatcher;
+  duplicate?: "refuse" | "idempotent";
+  beforePersist?: readonly PipelineStep<WriteContext<Widget>>[];
 } = {}) {
   const store = options.store ?? widgetMemoryStore();
   const resource = widgetResource({
     store,
     policy: options.policy,
     publisher: options.publisher,
+    duplicate: options.duplicate,
+    beforePersist: options.beforePersist,
   });
   const transport = createRouterTransport(resource.routes);
   return { client: createClient(WidgetService, transport), store };
@@ -180,31 +186,125 @@ describe("create", () => {
   });
 
   it("maps the store's duplicate backstop to ALREADY_EXISTS (concurrent-create race)", async () => {
-    // Simulate the race: the friendly pre-check misses (another writer
-    // commits in between), so persist hits the uniqueness constraint.
-    const real = widgetMemoryStore();
-    let misses = 0;
-    const racy: ResourceStore = {
-      insert: (kind, r) => real.insert(kind, r),
-      save: (kind, r) => real.save(kind, r),
-      getById: (kind, id) => real.getById(kind, id),
-      getByNaturalKey: async (kind, value) => {
-        if (misses++ === 1) return undefined; // second create's pre-check lies
-        return real.getByNaturalKey(kind, value);
-      },
-      list: (kind, q) => real.list(kind, q),
-      countBy: (kind, field, values, filter) => real.countBy(kind, field, values, filter),
-      sumBy: (kind, groupField, valueField, values, filter) =>
-        real.sumBy(kind, groupField, valueField, values, filter),
-      searchText: (kind, field, query, limit) => real.searchText(kind, field, query, limit),
-      getByIds: (kind, ids) => real.getByIds(kind, ids),
-    };
-    const { client } = makeClient({ store: racy });
+    const { client } = makeClient({ store: racyStore() });
     await client.create(widgetInput({ serialNumber: "SN-RACE" }), asCaller("u1"));
     await expectCode(
       client.create(widgetInput({ serialNumber: "SN-RACE" }), asCaller("u2")),
       Code.AlreadyExists,
       /SN-RACE/,
+    );
+  });
+});
+
+/**
+ * Simulates the two-concurrent-creates race: the second create's friendly
+ * pre-check misses (another writer commits in between), so the insert
+ * hits the uniqueness constraint. The store's answers otherwise are real.
+ */
+function racyStore(): ResourceStore {
+  const real = widgetMemoryStore();
+  let lookups = 0;
+  return {
+    insert: (kind, r) => real.insert(kind, r),
+    save: (kind, r) => real.save(kind, r),
+    getById: (kind, id) => real.getById(kind, id),
+    getByNaturalKey: async (kind, value) => {
+      if (lookups++ === 1) return undefined; // second create's pre-check lies
+      return real.getByNaturalKey(kind, value);
+    },
+    list: (kind, q) => real.list(kind, q),
+    countBy: (kind, field, values, filter) => real.countBy(kind, field, values, filter),
+    sumBy: (kind, groupField, valueField, values, filter) =>
+      real.sumBy(kind, groupField, valueField, values, filter),
+    searchText: (kind, field, query, limit) => real.searchText(kind, field, query, limit),
+    getByIds: (kind, ids) => real.getByIds(kind, ids),
+  };
+}
+
+describe("idempotent create (naturalKey.duplicate: idempotent)", () => {
+  // The append-only ledger's contract (invest FR-LEDGER-002, gap 8): a
+  // second write under a held key with the same content is "already
+  // recorded" — the holder comes back, nothing is written or published;
+  // a writer that disagrees with the record is refused, not kept.
+  function idempotentClient(extra: { store?: ResourceStore; beforePersist?: readonly PipelineStep<WriteContext<Widget>>[] } = {}) {
+    const events: ResourceEvent[] = [];
+    const publisher = new InProcessEventDispatcher();
+    publisher.subscribe("Widget", (e) => {
+      events.push(e);
+    });
+    const made = makeClient({ ...extra, publisher, duplicate: "idempotent" });
+    return { ...made, events };
+  }
+
+  it("returns the holder for identical content — same id, nothing written, no second event", async () => {
+    const { client, store, events } = idempotentClient();
+    const first = await client.create(widgetInput({ serialNumber: "SN-I" }), asCaller("u1"));
+    const again = await client.create(widgetInput({ serialNumber: "SN-I" }), asCaller("u2", "system"));
+
+    expect(again.metadata?.id).toBe(first.metadata?.id);
+    expect(again.metadata?.version).toBe(1n);
+    // The first writer's stamp stands: content converged, provenance did not move.
+    expect(again.metadata?.createdBy?.id).toBe("u1");
+    expect((await store.list("Widget", { limit: 10, offset: 0 })).totalCount).toBe(1);
+    expect(events.map((e) => e.type)).toEqual(["created"]);
+  });
+
+  it("refuses different content under the held key, naming the difference", async () => {
+    const { client, events } = idempotentClient();
+    await client.create(widgetInput({ serialNumber: "SN-I", name: "one" }), asCaller("u1"));
+    await expectCode(
+      client.create(widgetInput({ serialNumber: "SN-I", name: "two" }), asCaller("u1")),
+      Code.AlreadyExists,
+      /Widget with serial number 'SN-I' already exists with different content/,
+    );
+    expect(events).toHaveLength(1);
+  });
+
+  it("compares the content the create WOULD persist: a beforePersist normaliser is honoured", async () => {
+    // identity's normalize-user lowercases the email in beforePersist
+    // ("shapes exactly what gets persisted"); a compare on the raw input
+    // would call the holder and its own retry different.
+    const normalizeName: PipelineStep<WriteContext<Widget>> = {
+      name: "normalize-name",
+      execute(ctx) {
+        const state = ctx.newState as Widget;
+        if (state.spec) state.spec.name = state.spec.name.trim().toUpperCase();
+      },
+    };
+    const { client, store } = idempotentClient({ beforePersist: [normalizeName] });
+    const first = await client.create(
+      widgetInput({ serialNumber: "SN-N", name: "  widget " }),
+      asCaller("u1"),
+    );
+    expect(first.spec?.name).toBe("WIDGET");
+    const again = await client.create(widgetInput({ serialNumber: "SN-N", name: "widget" }), asCaller("u1"));
+    expect(again.metadata?.id).toBe(first.metadata?.id);
+    expect((await store.list("Widget", { limit: 10, offset: 0 })).totalCount).toBe(1);
+  });
+
+  it("applies the same verdict when the duplicate is only found at insert (the race backstop)", async () => {
+    const { client, events } = idempotentClient({ store: racyStore() });
+    const first = await client.create(widgetInput({ serialNumber: "SN-IR" }), asCaller("u1"));
+    const again = await client.create(widgetInput({ serialNumber: "SN-IR" }), asCaller("u2"));
+    expect(again.metadata?.id).toBe(first.metadata?.id);
+    expect(events).toHaveLength(1);
+
+    const { client: other } = idempotentClient({ store: racyStore() });
+    await other.create(widgetInput({ serialNumber: "SN-IR2", name: "one" }), asCaller("u1"));
+    await expectCode(
+      other.create(widgetInput({ serialNumber: "SN-IR2", name: "two" }), asCaller("u1")),
+      Code.AlreadyExists,
+      /different content/,
+    );
+  });
+
+  it("a refuse kind is unchanged: identical content is still ALREADY_EXISTS", async () => {
+    const { client } = makeClient();
+    await client.create(widgetInput({ serialNumber: "SN-R" }), asCaller("u1"));
+    await expectCode(
+      client.create(widgetInput({ serialNumber: "SN-R" }), asCaller("u1")),
+      Code.AlreadyExists,
+      /Widget with serial number 'SN-R' already exists$/,
     );
   });
 });

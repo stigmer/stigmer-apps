@@ -17,7 +17,7 @@ import type { AddressInfo } from "node:net";
 import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError, createClient, type Client } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
-import { InProcessEventDispatcher } from "@stigmer/resource-api";
+import { InProcessEventDispatcher, SYSTEM_PRINCIPAL } from "@stigmer/resource-api";
 import { runMigrations } from "@stigmer/resource-api/postgres";
 import { UserSchema, UserService } from "@stigmer/identity";
 import {
@@ -39,7 +39,7 @@ import {
   CaseMemberService,
   RoleOnCase,
 } from "../gen/stigmer/law/casemember/v1/casemember_pb.js";
-import { AuditEntryService } from "../gen/stigmer/law/auditentry/v1/auditentry_pb.js";
+import { AuditEntrySchema, AuditEntryService } from "../gen/stigmer/law/auditentry/v1/auditentry_pb.js";
 import { ClientSchema, ClientService } from "../gen/stigmer/law/client/v1/client_pb.js";
 import {
   DeadlineSchema,
@@ -100,6 +100,8 @@ describe("the rebuilt firm, end to end", () => {
   let authz: TestAuthz;
   let engine: AuthorizationEngine;
   let store: ReturnType<typeof createResourceStore>;
+  // Held so a test can redeliver an event the way a retried bus would.
+  const dispatcher = new InProcessEventDispatcher();
 
   // Service clients (created once the port is known).
   let clients: Client<typeof ClientService>;
@@ -144,7 +146,7 @@ describe("the rebuilt firm, end to end", () => {
       refreshTokens: createPgRefreshTokenStore(pool),
       activationCodes: createPgActivationCodeStore(pool),
       objectStore: memoryObjectStore(),
-      dispatcher: new InProcessEventDispatcher(),
+      dispatcher,
     });
     await new Promise<void>((resolve) => server.listen(0, resolve));
     const baseUrl = `http://localhost:${(server.address() as AddressInfo).port}`;
@@ -630,6 +632,42 @@ describe("the rebuilt firm, end to end", () => {
       Code.PermissionDenied,
       /partners only/,
     );
+  });
+
+  it("FR-AUDIT-001: a redelivered event converges on the entry that exists (idempotent natural key, real Postgres)", async () => {
+    // A retried bus delivers the same version twice. The entry's content
+    // derives from that version, so the second write is ANSWERED by the
+    // row that exists — the same id, no second row, and nothing thrown
+    // for the subscriber to swallow. Driven through the system create the
+    // subscriber calls, so a `refuse` regression would fail here (the
+    // dispatcher's own containment would otherwise hide it).
+    const app = createApp({
+      store,
+      objectStore: memoryObjectStore(),
+      caller: auth.kit.resolver.fromConnect,
+      authz: engine,
+      credentials: createPgCredentialStore(pool),
+      refreshTokens: createPgRefreshTokenStore(pool),
+      activationCodes: createPgActivationCodeStore(pool),
+    });
+    const record = app.resources.auditEntries.invoke.create!;
+    const entry = create(AuditEntrySchema, {
+      spec: {
+        subjectKind: "Case",
+        subjectId: caseId,
+        caseId,
+        changeType: 1,
+        actorId: people.mp.userId,
+        actorKind: "user",
+        dedupKey: `Case:${caseId}:v999-redelivered`,
+      },
+    });
+    const before = await audit.list({ caseId, pageSize: 100 }, auth.as(people.mp.userId));
+    const first = await record(entry, SYSTEM_PRINCIPAL);
+    const again = await record(entry, SYSTEM_PRINCIPAL);
+    expect(again.metadata?.id).toBe(first.metadata?.id);
+    const after = await audit.list({ caseId, pageSize: 100 }, auth.as(people.mp.userId));
+    expect(after.totalCount).toBe(before.totalCount + 1n);
   });
 
   /* --------- list/detail agreement (FR-AUTHZ-002, "my" scopes) ------ */
