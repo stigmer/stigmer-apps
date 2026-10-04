@@ -1,32 +1,23 @@
 /**
- * Manifest drift: every tool the MCP server registers MUST carry a
- * `requires_approval: false` override in the agent manifest TEMPLATE.
+ * The firm's MCP surface runs unattended: no tool may declare itself
+ * destructive.
  *
  * Why this is a test and not a comment: WhatsApp is an unattended
- * surface. The platform's connect-time classifier approval-gates any
- * tool without an override, and an approval-gated tool on an unattended
- * surface is SILENTLY SKIPPED — the lawyer hears "I couldn't do that",
- * nothing is logged, and no test at any other level notices. Adding a
- * tool to the server without adding it to the manifest ships a verb
- * that cannot run, and the failure is invisible until a person in a
- * corridor needs it.
+ * surface. The Stigmer platform asks for approval before an MCP tool
+ * whose server marks it destructive (`annotations.destructiveHint:
+ * true`), and an approval-gated tool on an unattended surface is
+ * SILENTLY SKIPPED — the lawyer hears "I couldn't do that", nothing is
+ * logged, and no test at any other level notices. A tool that gains the
+ * hint ships a verb that cannot run on the channel the firm uses most.
+ * The writes do not need the hint: their consent is conversational (the
+ * instructions' read-back-and-confirm) and their authority is the firm's
+ * policy module.
  *
- * SCOPE — what this test can and cannot see: it guards ONLY the
- * template in this repo (deploy/stigmer/agent.yaml). The per-firm
- * concretions live in the private ops repo (DD-A10: no customer
- * strings here), and the resource a firm's assistant actually runs on
- * is the APPLIED agent, which drifts independently of every committed
- * file — a rename here once left a firm's applied overrides sixteen
- * hours stale while this test stayed green. The deployed reality is
- * guarded where it is observable: the ops repo's
- * review-agent-tool-drift check compares the applied agent's overrides
- * against the running backend's live tools/list at cutover and on
- * demand.
- *
- * The manifest is parsed with a narrow regex rather than a YAML
- * dependency: `- tool_name: <name>` is the only shape this block has
- * ever had, and the assertion below fails loudly if the file stops
- * matching it at all (an empty parse cannot pass).
+ * The test enumerates the surface the way the server builds it, through
+ * every registrar, and reads each tool's declared annotations. It also
+ * checks that the agent manifest template carries no tool lists or
+ * approval settings, which would narrow or gate that surface behind the
+ * server's back.
  */
 
 import { readFileSync } from "node:fs";
@@ -37,54 +28,45 @@ import type { ToolDeps } from "../tools/shared.js";
 
 const MANIFEST = new URL("../../../../deploy/stigmer/agent.yaml", import.meta.url);
 
+interface RegisteredTool {
+  readonly name: string;
+  readonly destructiveHint: unknown;
+}
+
 /** The registrars only ever call `registerTool(name, config, handler)`;
- * capturing that call enumerates the surface without touching the MCP
- * SDK's internals. */
-function registeredToolNames(): string[] {
-  const names: string[] = [];
+ * capturing that call enumerates the surface and its annotations without
+ * touching the MCP SDK's internals. */
+function registeredTools(): RegisteredTool[] {
+  const tools: RegisteredTool[] = [];
   const capturingServer = {
-    registerTool(name: string) {
-      names.push(name);
+    registerTool(name: string, config: { annotations?: { destructiveHint?: unknown } }) {
+      tools.push({ name, destructiveHint: config.annotations?.destructiveHint });
     },
   } as unknown as McpServer;
   // Registration may read deps.ocrEnabled (read_document's description
-  // is deployment-conditional, DD-009) but nothing else; handlers are
-  // gated at call time (server.ts). Empty deps leaves ocrEnabled
-  // undefined, which reads as OCR-off — this registration exercises
-  // the OCR-off shape of the surface.
+  // is deployment-conditional) but nothing else; handlers are gated at
+  // call time (server.ts). Empty deps leaves ocrEnabled undefined, which
+  // reads as OCR-off — this registration exercises the OCR-off shape.
   const deps = {} as ToolDeps;
   for (const register of FIRM_TOOL_REGISTRARS) {
     register(capturingServer, undefined, deps);
   }
-  return names;
+  return tools;
 }
 
-function manifestApprovalOverrides(): string[] {
-  const yaml = readFileSync(MANIFEST, "utf8");
-  return [...yaml.matchAll(/^\s*-\s*tool_name:\s*(\S+)\s*$/gm)].map((m) => m[1] as string);
-}
-
-describe("the agent manifest template and the MCP surface agree", () => {
-  it("declares an approval override for EVERY registered tool", () => {
-    const registered = registeredToolNames().sort();
-    const declared = manifestApprovalOverrides().sort();
-
-    // A parse that found nothing would make the comparison vacuous.
-    expect(declared.length).toBeGreaterThan(0);
-    expect(
-      declared,
-      "a registered tool missing from agent.yaml is silently skipped on WhatsApp",
-    ).toEqual(registered);
+describe("the firm's MCP surface runs on an unattended channel", () => {
+  it("has no tool that declares destructiveHint: true", () => {
+    const tools = registeredTools();
+    // A capture that found nothing would make the assertion vacuous.
+    expect(tools.length).toBeGreaterThan(0);
+    const destructive = tools.filter((t) => t.destructiveHint === true).map((t) => t.name);
+    expect(destructive, "a destructive tool is approval-gated and silently skipped on WhatsApp").toEqual([]);
   });
 
-  it("declares no override for a tool that does not exist", () => {
-    // The other direction: a stale entry is a rename that half-landed,
-    // which leaves the real tool gated and dead.
-    const registered = new Set(registeredToolNames());
-    for (const declared of manifestApprovalOverrides()) {
-      expect(registered.has(declared), `agent.yaml declares unknown tool '${declared}'`).toBe(
-        true,
-      );
+  it("the agent manifest template carries no tool lists or approval settings", () => {
+    const yaml = readFileSync(MANIFEST, "utf8");
+    for (const key of ["tools:", "disallowed_tools:", "disallowedTools:", "tool_approval_overrides:", "enabled_tools:"]) {
+      expect(new RegExp(`^\\s*${key}`, "m").test(yaml), `agent.yaml carries ${key}`).toBe(false);
     }
   });
 });
