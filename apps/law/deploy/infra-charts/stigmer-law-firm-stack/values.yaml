@@ -87,7 +87,7 @@ params:
   # the platform-client id below and the platform-client-secret key in
   # the firm's auth-keys secret (fail-closed at apply/boot, never at
   # first use). The PlatformClient itself is created in the platform
-  # console/API with auto_grant_role=member FROM THE FIRST APPLY — see
+  # console/API with sign_in_role=member FROM THE FIRST APPLY — see
   # the deploy/stigmer README's web-assistant runbook.
   - name: assistant_agent_instance_id
     description: The firm's org-visible web AgentInstance id (ain_…); empty = no Ask AI
