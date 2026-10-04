@@ -13,9 +13,11 @@
  *    engine is immutable after its first turn, so HERE is the only
  *    chance; `showHarnessSelector` stays false because engines are not
  *    a lawyer decision.
- * 2. The org-visible AgentInstance whose environment refs deliver the
- *    MCP secret (`sessionSpec.agentInstanceId`) — the agent is bound at
- *    creation, so the composer needs no agent picker at all.
+ * 2. The firm's agent (`sessionSpec.agentRef`, from the backend's
+ *    config) — the agent is bound at creation, so the composer needs no
+ *    agent picker at all. The MCP secret does not ride the session: the
+ *    PlatformClient that minted the lawyer's token carries the
+ *    environment that delivers it (stigmer/stigmer#1894).
  *
  * The contextual entries ("Ask about this matter") seed prefill text
  * (through the composer's imperative handle — the view is remounted per
@@ -75,7 +77,11 @@ export function NewConversationView(props: {
       attachments: context?.attachments,
       interactionMode: context?.interactionMode,
       sessionSpec: {
-        agentInstanceId: props.config.agentInstanceId,
+        // Always present when the assistant is enabled (the backend's
+        // config group refuses boot without it).
+        agentRef: props.config.agent
+          ? { org: props.config.agent.org, slug: props.config.agent.slug }
+          : undefined,
         // The engine pin (see the module doc). A session's engine is
         // immutable after its first turn, so HERE is the only chance.
         harness: "cursor",

@@ -82,7 +82,7 @@ export function assistantService(deps: AssistantServiceDeps): {
             enabled: true,
             apiBaseUrl: config.apiBaseUrl,
             org: config.org,
-            agentInstanceId: config.agentInstanceId,
+            agent: { org: config.agent.org, slug: config.agent.slug },
             consoleUrl: config.consoleUrl,
           });
         },

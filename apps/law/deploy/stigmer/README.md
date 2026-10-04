@@ -50,7 +50,10 @@ start without one.
 ## The web assistant ("Ask AI") — additional onboarding
 
 The web app drives the SAME agent through PlatformClient-minted user
-tokens. Two more platform resources, then the backend's config:
+tokens: every web conversation names the agent itself (`org/slug`), and
+the PlatformClient that mints the lawyers carries the environment that
+delivers the MCP secret to their runs. One more platform resource, then
+the backend's config:
 
 6. **PlatformClient — a Console step, and the settings are one-way.**
    The kind is not manifest-appliable (it is absent from the CLI's verb
@@ -64,24 +67,33 @@ tokens. Two more platform resources, then the backend's config:
    - `allowed_origins` = the firm's web origin. Declared-but-unenforced
      today (stigmer/stigmer#375) — set it anyway so enforcement, when
      it lands, finds the right value.
+   - `environment_refs` = the firm's MCP-credentials environment
+     (`kind: environment`, `org: <stigmer-org>`,
+     `slug: <firm>-law-mcp-credentials`). A PlatformClient's
+     environments are a layer every execution of a user it minted
+     receives, so this binding is what carries `LAW_MCP_SHARED_SECRET`
+     to web conversations; without it every web execution fails a
+     precondition (the MCP server requires the secret and nothing else
+     delivers it). The reference must be in the client's own
+     organization (an execution in any other org receives nothing).
+     The console form does not render this binding (it keeps whatever
+     is stored); set it through the SDK's `platformclient.update`,
+     sending the client's full spec back with the reference added — an
+     update replaces the spec.
    The client id + secret go into the firm's config-manager secrets;
    the secret never enters either repo or the browser.
-7. **AgentInstance** (`agent-instance.yaml`): fill `agent_id` with the
-   applied agent's RESOURCE ID (agt_… — from
-   `stigmer get agent <firm>-law-assistant`) and apply. VERIFY the
-   applied instance is org-visible (a private instance refuses every
-   lawyer's session bootstrap). This instance is what carries the MCP
-   secret to web sessions; without it every web create fails a
-   precondition (the minted-user path has no environment carrier of
-   its own).
-8. **Backend config** (the chart's values): the all-or-nothing
+7. **Backend config** (the chart's values): the all-or-nothing
    STIGMER_* group — `STIGMER_API_BASE_URL`,
    `STIGMER_PLATFORM_CLIENT_ID`, `STIGMER_PLATFORM_CLIENT_SECRET`,
-   `STIGMER_ORG`, `STIGMER_AGENT_INSTANCE_ID` (the applied instance's
-   ain_… id) — all five or none (a partial group refuses boot);
-   optional `STIGMER_CONSOLE_URL` for self-hosted consoles. No
-   variables set = the web app simply has no Ask AI (the open-source
-   posture).
+   `STIGMER_ORG`, `STIGMER_AGENT` (the applied agent as
+   `<stigmer-org>/<firm>-law-assistant`; the chart's `assistant_agent`
+   value) — all five or none (a partial group, or an agent that is not
+   `org/slug`, refuses boot); optional `STIGMER_CONSOLE_URL` for
+   self-hosted consoles. No variables set = the web app simply has no
+   Ask AI (the open-source posture). VERIFY the applied agent is
+   org-visible (`agent.yaml` sets `visibility_org`): the platform runs
+   an agent only for a caller who can read it, so a private agent
+   refuses every lawyer's first message.
 
 ## The traps, so nobody re-learns them
 

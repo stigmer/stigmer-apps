@@ -40,7 +40,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file stigmer/law/assistant/v1/assistant.proto.
  */
 export const file_stigmer_law_assistant_v1_assistant: GenFile = /*@__PURE__*/
-  fileDesc("CihzdGlnbWVyL2xhdy9hc3Npc3RhbnQvdjEvYXNzaXN0YW50LnByb3RvEhhzdGlnbWVyLmxhdy5hc3Npc3RhbnQudjEiGwoZR2V0QXNzaXN0YW50Q29uZmlnUmVxdWVzdCKAAQoaR2V0QXNzaXN0YW50Q29uZmlnUmVzcG9uc2USDwoHZW5hYmxlZBgBIAEoCBIUCgxhcGlfYmFzZV91cmwYAiABKAkSCwoDb3JnGAMgASgJEhkKEWFnZW50X2luc3RhbmNlX2lkGAQgASgJEhMKC2NvbnNvbGVfdXJsGAUgASgJIhsKGU1pbnRBc3Npc3RhbnRUb2tlblJlcXVlc3QiTgoaTWludEFzc2lzdGFudFRva2VuUmVzcG9uc2USFAoMYWNjZXNzX3Rva2VuGAEgASgJEhoKEmV4cGlyZXNfaW5fc2Vjb25kcxgCIAEoBTKCAgoQQXNzaXN0YW50U2VydmljZRJ2CglHZXRDb25maWcSMy5zdGlnbWVyLmxhdy5hc3Npc3RhbnQudjEuR2V0QXNzaXN0YW50Q29uZmlnUmVxdWVzdBo0LnN0aWdtZXIubGF3LmFzc2lzdGFudC52MS5HZXRBc3Npc3RhbnRDb25maWdSZXNwb25zZRJ2CglNaW50VG9rZW4SMy5zdGlnbWVyLmxhdy5hc3Npc3RhbnQudjEuTWludEFzc2lzdGFudFRva2VuUmVxdWVzdBo0LnN0aWdtZXIubGF3LmFzc2lzdGFudC52MS5NaW50QXNzaXN0YW50VG9rZW5SZXNwb25zZWIGcHJvdG8z");
+  fileDesc("CihzdGlnbWVyL2xhdy9hc3Npc3RhbnQvdjEvYXNzaXN0YW50LnByb3RvEhhzdGlnbWVyLmxhdy5hc3Npc3RhbnQudjEiGwoZR2V0QXNzaXN0YW50Q29uZmlnUmVxdWVzdCIuChFBc3Npc3RhbnRBZ2VudFJlZhILCgNvcmcYASABKAkSDAoEc2x1ZxgCIAEoCSK6AQoaR2V0QXNzaXN0YW50Q29uZmlnUmVzcG9uc2USDwoHZW5hYmxlZBgBIAEoCBIUCgxhcGlfYmFzZV91cmwYAiABKAkSCwoDb3JnGAMgASgJEhMKC2NvbnNvbGVfdXJsGAUgASgJEjoKBWFnZW50GAYgASgLMisuc3RpZ21lci5sYXcuYXNzaXN0YW50LnYxLkFzc2lzdGFudEFnZW50UmVmSgQIBBAFUhFhZ2VudF9pbnN0YW5jZV9pZCIbChlNaW50QXNzaXN0YW50VG9rZW5SZXF1ZXN0Ik4KGk1pbnRBc3Npc3RhbnRUb2tlblJlc3BvbnNlEhQKDGFjY2Vzc190b2tlbhgBIAEoCRIaChJleHBpcmVzX2luX3NlY29uZHMYAiABKAUyggIKEEFzc2lzdGFudFNlcnZpY2USdgoJR2V0Q29uZmlnEjMuc3RpZ21lci5sYXcuYXNzaXN0YW50LnYxLkdldEFzc2lzdGFudENvbmZpZ1JlcXVlc3QaNC5zdGlnbWVyLmxhdy5hc3Npc3RhbnQudjEuR2V0QXNzaXN0YW50Q29uZmlnUmVzcG9uc2USdgoJTWludFRva2VuEjMuc3RpZ21lci5sYXcuYXNzaXN0YW50LnYxLk1pbnRBc3Npc3RhbnRUb2tlblJlcXVlc3QaNC5zdGlnbWVyLmxhdy5hc3Npc3RhbnQudjEuTWludEFzc2lzdGFudFRva2VuUmVzcG9uc2ViBnByb3RvMw");
 
 /**
  * @generated from message stigmer.law.assistant.v1.GetAssistantConfigRequest
@@ -54,6 +54,36 @@ export type GetAssistantConfigRequest = Message<"stigmer.law.assistant.v1.GetAss
  */
 export const GetAssistantConfigRequestSchema: GenMessage<GetAssistantConfigRequest> = /*@__PURE__*/
   messageDesc(file_stigmer_law_assistant_v1_assistant, 0);
+
+/**
+ * The agent a web conversation runs, named the way the platform's
+ * session spec names it: an organization and a slug. The platform pins
+ * the agent's current version when the conversation starts.
+ *
+ * @generated from message stigmer.law.assistant.v1.AssistantAgentRef
+ */
+export type AssistantAgentRef = Message<"stigmer.law.assistant.v1.AssistantAgentRef"> & {
+  /**
+   * The platform organization that owns the agent.
+   *
+   * @generated from field: string org = 1;
+   */
+  org: string;
+
+  /**
+   * The agent's slug within that organization.
+   *
+   * @generated from field: string slug = 2;
+   */
+  slug: string;
+};
+
+/**
+ * Describes the message stigmer.law.assistant.v1.AssistantAgentRef.
+ * Use `create(AssistantAgentRefSchema)` to create a new message.
+ */
+export const AssistantAgentRefSchema: GenMessage<AssistantAgentRef> = /*@__PURE__*/
+  messageDesc(file_stigmer_law_assistant_v1_assistant, 1);
 
 /**
  * @generated from message stigmer.law.assistant.v1.GetAssistantConfigResponse
@@ -85,22 +115,22 @@ export type GetAssistantConfigResponse = Message<"stigmer.law.assistant.v1.GetAs
   org: string;
 
   /**
-   * The org-visible AgentInstance the web session bootstrap must pass:
-   * it carries the environment_refs that deliver the MCP shared secret
-   * to embed-path executions — without it, execution create fails a
-   * precondition (the platform's "fifth session origin" gap).
-   *
-   * @generated from field: string agent_instance_id = 4;
-   */
-  agentInstanceId: string;
-
-  /**
    * The platform console's base URL, for user-facing deep links (e.g.
    * the billing/recharge page when the org runs out of credits).
    *
    * @generated from field: string console_url = 5;
    */
   consoleUrl: string;
+
+  /**
+   * The agent every web conversation runs (the session bootstrap's
+   * agent reference). The MCP shared secret does not travel with it:
+   * the PlatformClient that mints the firm's users carries the
+   * environment that delivers it to every execution those users start.
+   *
+   * @generated from field: stigmer.law.assistant.v1.AssistantAgentRef agent = 6;
+   */
+  agent?: AssistantAgentRef | undefined;
 };
 
 /**
@@ -108,7 +138,7 @@ export type GetAssistantConfigResponse = Message<"stigmer.law.assistant.v1.GetAs
  * Use `create(GetAssistantConfigResponseSchema)` to create a new message.
  */
 export const GetAssistantConfigResponseSchema: GenMessage<GetAssistantConfigResponse> = /*@__PURE__*/
-  messageDesc(file_stigmer_law_assistant_v1_assistant, 1);
+  messageDesc(file_stigmer_law_assistant_v1_assistant, 2);
 
 /**
  * @generated from message stigmer.law.assistant.v1.MintAssistantTokenRequest
@@ -121,7 +151,7 @@ export type MintAssistantTokenRequest = Message<"stigmer.law.assistant.v1.MintAs
  * Use `create(MintAssistantTokenRequestSchema)` to create a new message.
  */
 export const MintAssistantTokenRequestSchema: GenMessage<MintAssistantTokenRequest> = /*@__PURE__*/
-  messageDesc(file_stigmer_law_assistant_v1_assistant, 2);
+  messageDesc(file_stigmer_law_assistant_v1_assistant, 3);
 
 /**
  * @generated from message stigmer.law.assistant.v1.MintAssistantTokenResponse
@@ -150,7 +180,7 @@ export type MintAssistantTokenResponse = Message<"stigmer.law.assistant.v1.MintA
  * Use `create(MintAssistantTokenResponseSchema)` to create a new message.
  */
 export const MintAssistantTokenResponseSchema: GenMessage<MintAssistantTokenResponse> = /*@__PURE__*/
-  messageDesc(file_stigmer_law_assistant_v1_assistant, 3);
+  messageDesc(file_stigmer_law_assistant_v1_assistant, 4);
 
 /**
  * @generated from service stigmer.law.assistant.v1.AssistantService

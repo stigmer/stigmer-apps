@@ -69,7 +69,7 @@ export function fakeAssistant(config?: {
   enabled?: boolean;
   apiBaseUrl?: string;
   org?: string;
-  agentInstanceId?: string;
+  agent?: { org: string; slug: string };
   consoleUrl?: string;
 }) {
   return {

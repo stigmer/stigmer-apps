@@ -25,6 +25,12 @@
 # module for authority. The MCP server's own gate is the single
 # authority over which tools exist, so the agent carries no `tools` list.
 #
+# visibility_org is LOAD-BEARING for the web app: a lawyer's web
+# conversation names THIS agent (the law backend's STIGMER_AGENT), and
+# the platform runs an agent only for a caller who can read it. The
+# lawyers are minted into the org as members, so a private agent refuses
+# every lawyer's first message (stigmer/stigmer#1894).
+#
 # Authorization does NOT live in these instructions. Prompts shape
 # behavior; the MCP server (and behind it the firm's one policy module)
 # enforces security. Nothing that must hold 100% of the time is written
@@ -34,6 +40,7 @@ kind: Agent
 metadata:
   name: <firm>-law-assistant
   org: <stigmer-org>
+  visibility: visibility_org
 spec:
   description: >-
     The <firm> law firm's assistant, on WhatsApp and in the firm's web
