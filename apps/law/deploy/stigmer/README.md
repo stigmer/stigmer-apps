@@ -59,11 +59,14 @@ the backend's config:
    The kind is not manifest-appliable (it is absent from the CLI's verb
    matrix); create it in the platform console (IAM → Platform Clients)
    with:
-   - `auto_provision_accounts: true`, `auto_grant_on_org: true`, and
-     **`auto_grant_role: member` FROM THE FIRST APPLY** — `viewer` (the
-     default) cannot start executions, and role edits never reach
+   - `create_accounts_on_sign_in: true` and **`sign_in_role: member`
+     FROM THE FIRST APPLY** — an unset role grants nothing and `viewer`
+     cannot start executions, and role edits never reach
      already-provisioned users (stigmer/stigmer#380): a wrong first
      value is manual IAM surgery per lawyer, not a settings fix.
+   - Every user token the client mints works in the firm's organization
+     only. The backend mints for that one organization, so nothing it
+     does changes; a token can never reach another organization.
    - `allowed_origins` = the firm's web origin. Declared-but-unenforced
      today (stigmer/stigmer#375) — set it anyway so enforcement, when
      it lands, finds the right value.
