@@ -292,7 +292,7 @@ describe("loadConfigFromEnv", () => {
         STIGMER_PLATFORM_CLIENT_ID: "stgm_cid_test",
         STIGMER_PLATFORM_CLIENT_SECRET: "stgm_cs_test",
         STIGMER_ORG: "test-org",
-        STIGMER_AGENT_INSTANCE_ID: "agi_test",
+        STIGMER_AGENT: "test-org/test-assistant",
       };
     }
 
@@ -306,7 +306,7 @@ describe("loadConfigFromEnv", () => {
         clientId: "stgm_cid_test",
         clientSecret: "stgm_cs_test",
         org: "test-org",
-        agentInstanceId: "agi_test",
+        agent: { org: "test-org", slug: "test-assistant" },
         consoleUrl: "https://app.stigmer.ai",
       });
     });
@@ -322,10 +322,35 @@ describe("loadConfigFromEnv", () => {
       // A half-configured assistant must fail at deploy, not at first use.
       const env = assistantEnv();
       delete env.STIGMER_PLATFORM_CLIENT_SECRET;
-      delete env.STIGMER_AGENT_INSTANCE_ID;
+      delete env.STIGMER_AGENT;
 
       expect(() => loadConfigFromEnv(env)).toThrowError(
-        /STIGMER_PLATFORM_CLIENT_SECRET, STIGMER_AGENT_INSTANCE_ID are required \(the assistant group must be complete/,
+        /STIGMER_PLATFORM_CLIENT_SECRET, STIGMER_AGENT are required \(the assistant group must be complete/,
+      );
+    });
+
+    it("names the agent in another organization as written", () => {
+      const env = assistantEnv();
+      env.STIGMER_AGENT = "shared-agents/case-assistant";
+
+      expect(loadConfigFromEnv(env).assistant?.agent).toEqual({
+        org: "shared-agents",
+        slug: "case-assistant",
+      });
+    });
+
+    it.each([
+      ["a bare slug", "test-assistant"],
+      ["an empty org", "/test-assistant"],
+      ["an empty slug", "test-org/"],
+      ["a third segment", "test-org/test-assistant/v2"],
+      ["whitespace", "test-org/test assistant"],
+    ])("refuses %s as the agent reference — it must be org/slug", (_label, value) => {
+      const env = assistantEnv();
+      env.STIGMER_AGENT = value;
+
+      expect(() => loadConfigFromEnv(env)).toThrowError(
+        /STIGMER_AGENT must name the agent as 'org\/slug'/,
       );
     });
 

@@ -49,7 +49,7 @@ const ASSISTANT_CONFIG: AssistantConfig = {
   clientId: "stgm_cid_test",
   clientSecret: "stgm_cs_test",
   org: "test-org",
-  agentInstanceId: "agi_test",
+  agent: { org: "test-org", slug: "test-assistant" },
   consoleUrl: "https://console.firm.example",
 };
 
@@ -177,7 +177,7 @@ describe("AssistantService (T05 web leg)", () => {
         enabled: true,
         apiBaseUrl: "https://api.stigmer.example",
         org: "test-org",
-        agentInstanceId: "agi_test",
+        agent: { org: "test-org", slug: "test-assistant" },
         consoleUrl: "https://console.firm.example",
       });
     });

@@ -65,7 +65,7 @@ const fakeAssistantRuntime = (): AssistantRuntime => ({
     clientId: "stgm_cid_e2e_fake",
     clientSecret: "stgm_cs_e2e_fake",
     org: "e2e-fake-org",
-    agentInstanceId: "ain_e2e_fake",
+    agent: { org: "e2e-fake-org", slug: "e2e-fake-assistant" },
     consoleUrl: "http://127.0.0.1:9",
   },
   minter: async () => ({ accessToken: "e2e-fake-platform-token", expiresInSeconds: 900 }),

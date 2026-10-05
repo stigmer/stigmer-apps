@@ -81,16 +81,17 @@ params:
     value: ""
 
   # ─── The web assistant (T05 web leg) — OPTIONAL AS A GROUP ──────────────────
-  # Empty agent-instance id = the firm has no Ask AI (the backend group
+  # Empty agent reference = the firm has no Ask AI (the backend group
   # is all-or-nothing and absent config disables the feature cleanly).
   # Setting it renders the STIGMER_* env block, which then also expects
   # the platform-client id below and the platform-client-secret key in
   # the firm's auth-keys secret (fail-closed at apply/boot, never at
   # first use). The PlatformClient itself is created in the platform
-  # console/API with auto_grant_role=member FROM THE FIRST APPLY — see
-  # the deploy/stigmer README's web-assistant runbook.
-  - name: assistant_agent_instance_id
-    description: The firm's org-visible web AgentInstance id (ain_…); empty = no Ask AI
+  # console/API with auto_grant_role=member FROM THE FIRST APPLY, and
+  # binds the firm's MCP-credentials environment — see the
+  # deploy/stigmer README's web-assistant runbook.
+  - name: assistant_agent
+    description: The firm's assistant agent as org/slug (web conversations run it); empty = no Ask AI
     value: ""
 
   - name: assistant_platform_client_id

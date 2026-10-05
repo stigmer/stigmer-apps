@@ -119,7 +119,7 @@ const ENABLED = {
   enabled: true,
   apiBaseUrl: "https://api.stigmer.example",
   org: "test-org",
-  agentInstanceId: "agi_test",
+  agent: { org: "test-org", slug: "test-assistant" },
   consoleUrl: "https://console.stigmer.example",
 };
 
@@ -298,7 +298,7 @@ describe("The conversation bootstrap", () => {
     expect(composer).toHaveAttribute("data-enable-attachments", "true");
   });
 
-  it("bootstraps with the org, the instance, the CURSOR engine pin, the seeded context — and the lawyer's model, attachments, and mode — then hands off to the endUser conversation", async () => {
+  it("bootstraps with the org, the agent, the CURSOR engine pin, the seeded context — and the lawyer's model, attachments, and mode — then hands off to the endUser conversation", async () => {
     const user = userEvent.setup();
     renderScreen(
       { assistant: fakeAssistant(ENABLED) },
@@ -318,7 +318,9 @@ describe("The conversation bootstrap", () => {
         attachments: [{ storageKey: "att_1" }],
         interactionMode: "agent",
         sessionSpec: {
-          agentInstanceId: "agi_test",
+          // The firm's agent, by reference — no instance id: the
+          // platform names the agent on the session itself.
+          agentRef: { org: "test-org", slug: "test-assistant" },
           // THE pin: a session's engine is immutable after its first
           // turn, and the platform default is a different engine than
           // WhatsApp's (and currently broken in production).
