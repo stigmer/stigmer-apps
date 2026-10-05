@@ -14,15 +14,22 @@
 # the caller-identity keys appearing on the live resource are that merge
 # at work — not drift. Do not add them here to "fix" the difference.
 #
-# tool_approval_overrides — EVERY tool, reads included. WhatsApp is an
-# unattended surface: nobody is present to approve, so an
-# approval-gated tool is silently SKIPPED — the person hears "I
-# couldn't do that" and nothing is logged anywhere. The platform's
-# connect-time classifier gates read tools too (observed on the
-# reference deployment), so overrides cover the whole surface. There is
-# deliberately NO enabled_tools list: the MCP server's own gate is the
-# single authority, and the runner does not enforce the list for root
-# agents anyway.
+# No tool lists and no approval settings. WhatsApp is an unattended
+# surface: nobody is present to approve, so an approval-gated tool is
+# silently SKIPPED — the person hears "I couldn't do that" and nothing is
+# logged anywhere. The platform asks only before shell commands, file
+# writes and deletes, and MCP tools their server marks destructive
+# (`destructiveHint: true`), and no firm tool declares that hint, so every
+# firm tool runs here. The writes rely on the CONVERSATION for consent
+# (the instructions' read-back-and-confirm) and on the firm's policy
+# module for authority. The MCP server's own gate is the single
+# authority over which tools exist, so the agent carries no `tools` list.
+#
+# visibility_org is LOAD-BEARING for the web app: a lawyer's web
+# conversation names THIS agent (the law backend's STIGMER_AGENT), and
+# the platform runs an agent only for a caller who can read it. The
+# lawyers are minted into the org as members, so a private agent refuses
+# every lawyer's first message (stigmer/stigmer#1894).
 #
 # Authorization does NOT live in these instructions. Prompts shape
 # behavior; the MCP server (and behind it the firm's one policy module)
@@ -33,6 +40,7 @@ kind: Agent
 metadata:
   name: <firm>-law-assistant
   org: <stigmer-org>
+  visibility: visibility_org
 spec:
   description: >-
     The <firm> law firm's assistant, on WhatsApp and in the firm's web
@@ -216,56 +224,6 @@ spec:
         kind: mcp_server
         org: <stigmer-org>
         slug: <firm>-law-firm
-      # EVERY tool the MCP server registers must appear here. A tool
-      # missing from this list is approval-gated by the platform's
-      # connect-time classifier and therefore SILENTLY SKIPPED on the
-      # unattended WhatsApp surface — the lawyer hears "I couldn't do
-      # that" and nothing is logged. Adding a tool to the server without
-      # adding it here ships a verb that cannot run.
-      tool_approval_overrides:
-        - tool_name: my_day
-          requires_approval: false
-        - tool_name: what_happened_today
-          requires_approval: false
-        - tool_name: my_deadlines
-          requires_approval: false
-        - tool_name: find_tasks
-          requires_approval: false
-        - tool_name: case_story
-          requires_approval: false
-        - tool_name: find_documents
-          requires_approval: false
-        - tool_name: search_documents
-          requires_approval: false
-        - tool_name: read_document
-          requires_approval: false
-        - tool_name: upcoming_hearings
-          requires_approval: false
-        - tool_name: firm_overview
-          requires_approval: false
-        # Partner-gated by the firm's policy module, not by approvals:
-        # a non-partner asking gets the policy's refusal relayed, which
-        # is the correct answer. Gating it here would instead make it
-        # vanish for everyone.
-        - tool_name: outstanding_balances
-          requires_approval: false
-        # The writes are un-gated because the CONVERSATION carries the
-        # consent (the instructions' read-back-and-confirm), and the
-        # caller is a verified firm member acting within their own
-        # permissions — the two-consents distinction the platform's
-        # approval model documents.
-        - tool_name: record_hearing_outcome
-          requires_approval: false
-        - tool_name: update_task_status
-          requires_approval: false
-        - tool_name: add_case_note
-          requires_approval: false
-        - tool_name: record_citation_use
-          requires_approval: false
-        - tool_name: find_citation_uses
-          requires_approval: false
-        - tool_name: attach_document
-          requires_approval: false
   env:
     LAW_MCP_SHARED_SECRET:
       is_secret: true

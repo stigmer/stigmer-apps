@@ -32,7 +32,24 @@ package stigmer.law.assistant.v1;
 
 message GetAssistantConfigRequest {}
 
+// The agent a web conversation runs, named the way the platform's
+// session spec names it: an organization and a slug. The platform pins
+// the agent's current version when the conversation starts.
+message AssistantAgentRef {
+  // The platform organization that owns the agent.
+  string org = 1;
+  // The agent's slug within that organization.
+  string slug = 2;
+}
+
 message GetAssistantConfigResponse {
+  // Field 4 was the org-visible AgentInstance id the session bootstrap
+  // passed. The platform names the agent on the session itself now
+  // (stigmer/stigmer#1894), so the instance is gone; `agent` (6)
+  // replaces it.
+  reserved 4;
+  reserved "agent_instance_id";
+
   // False when the deployment has no assistant configuration (the
   // open-source posture: the feature is absent, not broken). Every
   // other field is empty in that case.
@@ -43,14 +60,14 @@ message GetAssistantConfigResponse {
   string api_base_url = 2;
   // The platform organization hosting the firm's assistant.
   string org = 3;
-  // The org-visible AgentInstance the web session bootstrap must pass:
-  // it carries the environment_refs that deliver the MCP shared secret
-  // to embed-path executions — without it, execution create fails a
-  // precondition (the platform's "fifth session origin" gap).
-  string agent_instance_id = 4;
   // The platform console's base URL, for user-facing deep links (e.g.
   // the billing/recharge page when the org runs out of credits).
   string console_url = 5;
+  // The agent every web conversation runs (the session bootstrap's
+  // agent reference). The MCP shared secret does not travel with it:
+  // the PlatformClient that mints the firm's users carries the
+  // environment that delivers it to every execution those users start.
+  AssistantAgentRef agent = 6;
 }
 
 message MintAssistantTokenRequest {}

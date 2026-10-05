@@ -55,6 +55,14 @@ export type DatabaseConfig =
       readonly ssl?: DatabaseSsl;
     };
 
+/** An agent named by reference: the organization that owns it and its slug. */
+export interface AssistantAgentRef {
+  /** The platform organization that owns the agent. */
+  readonly org: string;
+  /** The agent's slug within that organization. */
+  readonly slug: string;
+}
+
 /**
  * The assistant integration (T05, the web leg): the agent platform's
  * PlatformClient credentials this backend exchanges law sessions for
@@ -73,11 +81,14 @@ export interface AssistantConfig {
   /** The platform organization hosting the firm's assistant. */
   readonly org: string;
   /**
-   * The org-visible AgentInstance the web session bootstrap passes — it
-   * carries the environment_refs that deliver the MCP shared secret to
-   * embed-path executions (the platform's "fifth session origin" gap).
+   * The agent every web conversation runs, named by reference
+   * (STIGMER_AGENT, `org/slug`); the web session bootstrap passes it as
+   * the session's agent reference (stigmer/stigmer#1894). The MCP
+   * shared secret is not carried here: the PlatformClient above binds
+   * the environment that delivers it to every execution its minted
+   * users start.
    */
-  readonly agentInstanceId: string;
+  readonly agent: AssistantAgentRef;
   /** The platform console base URL for user-facing deep links (billing). */
   readonly consoleUrl: string;
 }
@@ -393,7 +404,7 @@ function loadAssistantFromEnv(
     "STIGMER_PLATFORM_CLIENT_ID",
     "STIGMER_PLATFORM_CLIENT_SECRET",
     "STIGMER_ORG",
-    "STIGMER_AGENT_INSTANCE_ID",
+    "STIGMER_AGENT",
   ] as const;
   const present = names.filter((name) => env[name]);
   if (present.length === 0) {
@@ -408,14 +419,34 @@ function loadAssistantFromEnv(
     );
     return undefined;
   }
+  const agent = parseAgentRef(env.STIGMER_AGENT as string);
+  if (!agent) {
+    problems.push(
+      `STIGMER_AGENT must name the agent as 'org/slug' (got '${env.STIGMER_AGENT}')`,
+    );
+    return undefined;
+  }
   return {
     apiBaseUrl: env.STIGMER_API_BASE_URL as string,
     clientId: env.STIGMER_PLATFORM_CLIENT_ID as string,
     clientSecret: env.STIGMER_PLATFORM_CLIENT_SECRET as string,
     org: env.STIGMER_ORG as string,
-    agentInstanceId: env.STIGMER_AGENT_INSTANCE_ID as string,
+    agent,
     consoleUrl: env.STIGMER_CONSOLE_URL || "https://app.stigmer.ai",
   };
+}
+
+/**
+ * `org/slug`: exactly two non-empty segments, no whitespace. Anything
+ * else is refused rather than guessed at — a mistyped reference would
+ * otherwise surface as every lawyer's first conversation failing.
+ */
+function parseAgentRef(value: string): AssistantAgentRef | undefined {
+  const match = /^([^/\s]+)\/([^/\s]+)$/.exec(value);
+  if (!match) {
+    return undefined;
+  }
+  return { org: match[1] as string, slug: match[2] as string };
 }
 
 /**
