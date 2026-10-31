@@ -21,10 +21,11 @@ spec:
     gitRepoProvider: github
     projectRoot: apps/ledger-demo # a change under it triggers a build, and the kustomize tree is read from here
   build:
-    # The folder is its own package with its own lockfile, so it builds from itself.
+    # The folder is its own package with its own lockfile, so it builds from itself; the Dockerfile's
+    # path is read relative to the context.
     dockerfile:
       context: apps/ledger-demo
-      dockerfilePath: apps/ledger-demo/Dockerfile
+      dockerfilePath: Dockerfile
     registry: gar-stigmer # the hosted service's Artifact Registry repository, which its clusters read
     imageRepositoryPath: acme-books
   deploy:
