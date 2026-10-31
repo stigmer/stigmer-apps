@@ -1,0 +1,39 @@
+{
+  "name": "@ledger-demo/app",
+  "private": true,
+  "type": "module",
+  "description": "Acme Books, a small accounting product with Stigmer's chat panel inside it: each customer in its own organization, a ledger MCP server that asks before it posts, and the setup that builds that world on any Stigmer with child organizations.",
+  "license": "AGPL-3.0-only",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "tsx server/main.ts",
+    "setup": "tsx setup/main.ts",
+    "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "2.12.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@stigmer/apis": "0.1.0-dev.20261030061315.ge5c33ea8d795",
+    "@stigmer/client": "0.1.0-dev.20261030061315.ge5c33ea8d795",
+    "tsx": "^4.23.11",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@stigmer/react-sdk": "0.1.0-dev.20261030061315.ge5c33ea8d795",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "lucide-react": "^1.31.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1",
+    "vitest": "^3.2.7"
+  }
+}

@@ -1,0 +1,15 @@
+# demo's overlay: the base, the app's public name on demo (door.yaml), and one patch file. The openapi
+# schema is what makes the env lists MERGE with the base's instead of replacing them. Regenerated with
+# `planton service kustomize patch-schema --dir _kustomize`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+openapi:
+  path: ../../planton-schema.json
+
+resources:
+  - ../../base
+  - door.yaml
+
+patches:
+  - path: service.yaml

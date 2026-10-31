@@ -1,0 +1,71 @@
+# Acme Books: one Node process serving the page, Acme's /api, the ledger MCP server at /mcp and /healthz,
+# and the route that sends its public name to it. The name, its certificate and its listener are the
+# overlay's: the app brings its own public name, so the environment's front door is unchanged and
+# deleting this service takes the name with it.
+apiVersion: kubernetes.planton.dev/v1alpha1
+kind: KubernetesDeployment
+metadata:
+  name: acme-books
+  org: stigmer
+  annotations:
+    planton.dev/provisioner: tofu # the organization's engine; named on each manifest until Planton makes OpenTofu its default
+spec:
+  container:
+    app:
+      image:
+        # Inside the hosted service's Artifact Registry repository; Service Hub replaces it with the image
+        # it built and injects the tag.
+        repo: us-central1-docker.pkg.dev/pc-stigmer-foundation/stigmer/acme-books
+      # A demo's load: one presenter, two customers. The books live in memory, so one replica holds them.
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 384Mi
+      ports:
+        - name: app
+          appProtocol: http
+          networkProtocol: TCP
+          servicePort: 80
+          containerPort: 8080
+      env:
+        variables:
+          # The session cookie is marked Secure: the page is only ever served over https.
+          - name: ACME_SECURE_COOKIES
+            value: "true"
+  # The app never calls the Kubernetes API.
+  pod:
+    automountServiceAccountToken: false
+  # One replica: the books are in memory, and a second would keep a second set. A rollout starts the
+  # new pod before stopping the old one, which starts the quarter over.
+  availability:
+    replicas: 1
+    strategy:
+      maxUnavailable: '0'
+      maxSurge: '1'
+---
+# Every path on the app's public name goes to it. Attached to the app's own listener set (the overlay's),
+# not to the environment's front door.
+apiVersion: kubernetes.planton.dev/v1alpha1
+kind: KubernetesHttpRoute
+metadata:
+  name: acme-books
+  org: stigmer
+  annotations:
+    planton.dev/provisioner: tofu
+spec:
+  parentRefs:
+  - kind: ListenerSet
+    name:
+      value: acme-books
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name:
+        value: acme-books
+      port: 80 # the app port

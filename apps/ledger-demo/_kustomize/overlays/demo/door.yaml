@@ -1,0 +1,64 @@
+# Acme Books' public name on demo: its own certificate and its own HTTPS listener on the cluster's one
+# Gateway, the same shape as each of the environment's doors (hosted-environment's front-door
+# templates in stigmer-cloud), kept here so the environment's own list of public names never changes
+# for a demo. external-dns writes the name's DNS record from the route that attaches, not proxied
+# through Cloudflare.
+apiVersion: kubernetes.planton.dev/v1alpha1
+kind: KubernetesCertificate
+metadata:
+  name: acme-books-cert
+  org: stigmer
+  annotations:
+    planton.dev/provisioner: tofu
+spec:
+  namespace:
+    value: stigmer-demo # the listener reads the Secret from here
+  secretName: acme-books-tls
+  issuerRef:
+    # The preprod cluster's Let's Encrypt issuer (DNS-01 through Cloudflare), referenced across environments.
+    clusterIssuer:
+      name:
+        valueFrom:
+          kind: KubernetesClusterIssuer
+          name: stigmer-hosted-preprod-cluster-letsencrypt
+          env: preprod
+          fieldPath: status.outputs.cluster_issuer_name
+  dnsNames:
+    - acme.demo.stigmer.ai # that name alone, for the reason the environment's doors give
+---
+apiVersion: kubernetes.planton.dev/v1alpha1
+kind: KubernetesListenerSet
+metadata:
+  name: acme-books
+  org: stigmer
+  annotations:
+    planton.dev/provisioner: tofu
+spec:
+  namespace:
+    value: stigmer-demo
+  parentRef:
+    # The cluster's one Gateway, which admits listener sets from every namespace.
+    kind: Gateway
+    namespace: istio-ingress
+    name:
+      valueFrom:
+        kind: KubernetesGateway
+        name: stigmer-hosted-preprod-cluster-gateway
+        env: preprod
+        fieldPath: status.outputs.gateway_name
+  listeners:
+    - name: https-acme
+      hostname: acme.demo.stigmer.ai
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name:
+              valueFrom:
+                kind: KubernetesCertificate
+                name: acme-books-cert
+                fieldPath: status.outputs.secret_name
+      allowedRoutes:
+        namespaces:
+          from: Same

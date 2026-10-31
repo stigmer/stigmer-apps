@@ -1,0 +1,32 @@
+# demo's settings for Acme Books: demo's namespace, demo's Stigmer, its secrets, and its public name.
+apiVersion: kubernetes.planton.dev/v1alpha1
+kind: KubernetesDeployment
+metadata:
+  name: acme-books
+spec:
+  namespace:
+    value: stigmer-demo # the environment's namespace, which the environment owns
+  createNamespace: false
+  container:
+    app:
+      env:
+        variables:
+          - name: STIGMER_URL
+            value: https://api.demo.stigmer.ai # demo's API door, the Stigmer Acme's customers run on
+        secrets:
+          # What `npm run setup` made: each customer's minting key and ledger key, as one JSON value.
+          - name: ACME_SECRETS_JSON
+            value: $secret/@demo/acme-books-secrets
+          # The passcode the presenter signs in with: the page is on a public address.
+          - name: ACME_PASSCODE
+            value: $secret/@demo/acme-books-passcode
+---
+apiVersion: kubernetes.planton.dev/v1alpha1
+kind: KubernetesHttpRoute
+metadata:
+  name: acme-books
+spec:
+  namespace:
+    value: stigmer-demo
+  hostnames:
+  - acme.demo.stigmer.ai

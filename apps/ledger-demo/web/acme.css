@@ -1,0 +1,437 @@
+/*
+ * Acme Books looks like a plain business product, not like Stigmer: light, system type, grey rules.
+ * The point of the page is that the panel on the right is someone else's product inside it. Black
+ * and white only; emphasis is weight and rules, never a hue. The stage page is the presenter's dark
+ * full screen.
+ */
+:root {
+  --acme-bg: #f6f6f5;
+  --acme-surface: #ffffff;
+  --acme-ink: #1c1c1c;
+  --acme-muted: #6b6b6b;
+  --acme-rule: #e2e2e0;
+  --acme-strong-rule: #c9c9c6;
+  --acme-highlight: #ededeb;
+  --stage-bg: #0a0a0a;
+  --stage-ink: #f5f5f5;
+  --stage-dim: #7a7a7a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--acme-bg);
+  color: var(--acme-ink);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.acme {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+}
+
+.acme-bar {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  padding: 0 20px;
+  height: 52px;
+  background: var(--acme-surface);
+  border-bottom: 1px solid var(--acme-rule);
+}
+
+.acme-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 650;
+  font-size: 15px;
+}
+
+.acme-mark {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--acme-ink);
+  color: var(--acme-surface);
+  font-size: 13px;
+}
+
+.acme-nav {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+  color: var(--acme-muted);
+}
+
+.acme-nav-item.is-current {
+  color: var(--acme-ink);
+  font-weight: 600;
+}
+
+.acme-account select {
+  font: inherit;
+  padding: 6px 10px;
+  border: 1px solid var(--acme-strong-rule);
+  border-radius: 6px;
+  background: var(--acme-surface);
+  color: var(--acme-ink);
+}
+
+.acme-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.acme-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 460px;
+  min-height: 0;
+}
+
+.acme-ledger {
+  overflow: auto;
+  padding: 24px 32px 48px;
+}
+
+.acme-ledger-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.acme-ledger h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+}
+
+.acme-ledger h2 {
+  margin: 28px 0 10px;
+  font-size: 13px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--acme-muted);
+}
+
+.acme-sub {
+  margin: 4px 0 0;
+  color: var(--acme-muted);
+}
+
+.acme-button {
+  font: inherit;
+  padding: 6px 12px;
+  border: 1px solid var(--acme-strong-rule);
+  border-radius: 6px;
+  background: var(--acme-surface);
+  color: var(--acme-ink);
+  cursor: pointer;
+}
+
+.acme-link {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--acme-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.acme-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--acme-surface);
+  border: 1px solid var(--acme-rule);
+}
+
+.acme-table th,
+.acme-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--acme-rule);
+  text-align: left;
+}
+
+.acme-table th {
+  font-weight: 600;
+  color: var(--acme-muted);
+  font-size: 12px;
+}
+
+.acme-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.acme-table tr.is-flagged td {
+  font-weight: 650;
+}
+
+.acme-lines td {
+  font-size: 13px;
+}
+
+.acme-flag {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--acme-ink);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.acme-empty {
+  color: var(--acme-muted);
+  margin: 0;
+}
+
+.acme-adjustments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--acme-surface);
+  border: 1px solid var(--acme-rule);
+}
+
+.acme-adjustments li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--acme-rule);
+}
+
+.acme-adjustments li.is-fresh {
+  animation: acme-fresh 4s ease-out;
+}
+
+@keyframes acme-fresh {
+  from {
+    background: var(--acme-highlight);
+    box-shadow: inset 3px 0 0 var(--acme-ink);
+  }
+  to {
+    background: transparent;
+    box-shadow: inset 3px 0 0 transparent;
+  }
+}
+
+.acme-reason {
+  color: var(--acme-ink);
+}
+
+.acme-by {
+  color: var(--acme-muted);
+  font-size: 12px;
+}
+
+.acme-main.is-assistant-closed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.acme-main.is-assistant-closed .acme-panel {
+  display: none;
+}
+
+.acme-assistant-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.acme-assistant-toggle.is-open {
+  background: var(--acme-ink);
+  color: var(--acme-surface);
+  border-color: var(--acme-ink);
+}
+
+.acme-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.acme-panel {
+  min-height: 0;
+  border-left: 1px solid var(--acme-rule);
+  background: var(--acme-surface);
+  display: flex;
+  flex-direction: column;
+}
+
+.acme-panel > * {
+  flex: 1;
+  min-height: 0;
+}
+
+.acme-drawer {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  width: 420px;
+  padding: 16px;
+  background: var(--acme-surface);
+  border: 1px solid var(--acme-strong-rule);
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  z-index: 10;
+}
+
+.acme-drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.acme-drawer code,
+.acme-answer {
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.acme-answer {
+  margin: 12px 0 0;
+  padding: 10px;
+  white-space: pre-wrap;
+  background: var(--acme-bg);
+  border: 1px solid var(--acme-rule);
+  border-radius: 6px;
+}
+
+.acme-drawer hr {
+  border: 0;
+  border-top: 1px solid var(--acme-rule);
+  margin: 14px 0 10px;
+}
+
+.acme-loading,
+.acme-fatal {
+  padding: 40px;
+}
+
+.stage {
+  min-height: 100%;
+  padding: 72px 96px;
+  background: var(--stage-bg);
+  color: var(--stage-ink);
+  font-size: 22px;
+}
+
+.stage h1 {
+  margin: 0 0 48px;
+  font-size: 44px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.stage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 28px;
+}
+
+.stage-list li {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1.2fr;
+  gap: 32px;
+  align-items: baseline;
+}
+
+.stage-worry {
+  color: var(--stage-dim);
+}
+
+.stage-build {
+  font-weight: 600;
+}
+
+.stage-list li.is-done .stage-build {
+  text-decoration: line-through;
+  color: var(--stage-dim);
+}
+
+.stage-gives {
+  visibility: hidden;
+}
+
+.stage-list li.is-done .stage-gives {
+  visibility: visible;
+}
+
+.stage-figure {
+  display: block;
+  margin-top: 4px;
+  font-size: 15px;
+  color: var(--stage-dim);
+}
+
+.stage-turn {
+  margin: 64px 0 0;
+  font-size: 36px;
+  font-weight: 650;
+  visibility: hidden;
+}
+
+.stage-turn.is-shown {
+  visibility: visible;
+}
+
+.acme-signin {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+}
+
+.acme-signin-card {
+  display: grid;
+  gap: 16px;
+  width: 340px;
+  padding: 28px;
+  background: var(--acme-surface);
+  border: 1px solid var(--acme-rule);
+  border-radius: 10px;
+}
+
+.acme-signin-card label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.acme-signin-card select,
+.acme-signin-card input {
+  font: inherit;
+  font-weight: 400;
+  padding: 8px 10px;
+  border: 1px solid var(--acme-strong-rule);
+  border-radius: 6px;
+}
+
+.acme-primary {
+  background: var(--acme-ink);
+  color: var(--acme-surface);
+  border-color: var(--acme-ink);
+}
+
+.acme-problem {
+  margin: 0;
+  font-weight: 600;
+}

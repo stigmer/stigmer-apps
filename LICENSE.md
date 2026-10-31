@@ -8,6 +8,7 @@ follows the directory structure, one license per package:
 | `packages/resource-api/` | `@stigmer/resource-api` | [Apache-2.0](packages/resource-api/LICENSE) |
 | `packages/identity/` | `@stigmer/identity` | [Apache-2.0](packages/identity/LICENSE) |
 | `apps/law/` | Stigmer Law | [AGPL-3.0-only](apps/law/LICENSE) |
+| `apps/ledger-demo/` | Acme Books, the integrator demo | [AGPL-3.0-only](apps/ledger-demo/LICENSE) |
 
 The split is a design decision (project DD-002, reaffirmed in DD-003):
 

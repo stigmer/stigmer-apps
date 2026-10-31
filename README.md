@@ -11,6 +11,7 @@ from the commons instead of from scratch.
 | App | Product | Domain | License |
 |-----|---------|--------|---------|
 | [`apps/law`](apps/law) | **Stigmer Law** — case management for law practices (cases, tasks, notes, documents, hearing reminders), with WhatsApp Ops layered on top | `stigmer.law.*` / `law.stigmer.ai/v1` | AGPL-3.0-only |
+| [`apps/ledger-demo`](apps/ledger-demo) | **Acme Books**: the integrator demo, a small accounting product with Stigmer's chat panel inside it (its own package, not a workspace member) | none (no proto) | AGPL-3.0-only |
 
 Products are named after the platform (Stigmer Law, Stigmer Gym, ...) —
 the Frappe-style naming architecture (project DD-002). The brand never
