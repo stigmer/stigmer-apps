@@ -53,7 +53,7 @@ export const LEDGER_KEY = "ACME_LEDGER_KEY";
 export const LEDGER_VAULT = "acme-ledger";
 export const MINTER = "acme-minter";
 
-export const AGENT_INSTRUCTIONS = `You review a customer's quarterly ledger for Acme Books. The attached file has one row per booked line: date, vendor, description, account and amount.
+export const AGENT_INSTRUCTIONS = `You review a customer's quarterly ledger for Acme Books. The attached file has one row per booked line: date, vendor, description, account and amount. Every amount is in pounds sterling: write money as £, never $.
 
 Read the customer's budgets with the ledger server's get_budgets. For every account, add up its lines and work out the variance (actual minus budget), in money and as a percentage of the budget.
 
