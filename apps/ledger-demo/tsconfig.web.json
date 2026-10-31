@@ -1,0 +1,14 @@
+{
+  // The browser page, consumed only by Vite, as apps/law/web is: bundler resolution, the DOM, JSX.
+  // It shares fixtures/ with the server, so the page and the books it shows can never disagree.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    "noEmit": true
+  },
+  "include": ["web", "fixtures"]
+}

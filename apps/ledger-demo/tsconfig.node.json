@@ -1,0 +1,9 @@
+{
+  // The server, the setup and the shared fixtures: plain Node through tsx, on the repository's base
+  // options (strict ESM, ".js" on relative imports).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["server", "setup", "fixtures", "vite.config.ts", "vitest.config.ts"]
+}
