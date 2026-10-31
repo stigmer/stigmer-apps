@@ -242,6 +242,31 @@ body {
   font-size: 12px;
 }
 
+.acme-main.is-assistant-closed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.acme-main.is-assistant-closed .acme-panel {
+  display: none;
+}
+
+.acme-assistant-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.acme-assistant-toggle.is-open {
+  background: var(--acme-ink);
+  color: var(--acme-surface);
+  border-color: var(--acme-ink);
+}
+
+.acme-icon {
+  width: 15px;
+  height: 15px;
+}
+
 .acme-panel {
   min-height: 0;
   border-left: 1px solid var(--acme-rule);

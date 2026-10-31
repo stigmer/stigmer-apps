@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createTokenCache, Stigmer } from "@stigmer/client";
 import { AgentChat, StigmerProvider } from "@stigmer/react-sdk/chat";
+import { Sparkles } from "lucide-react";
 import { api, type AppConfig } from "./api.js";
 import { Ledger } from "./Ledger.js";
 import { PresenterDrawer } from "./PresenterDrawer.js";
@@ -20,6 +21,9 @@ export function AcmeBooks() {
   const [config, setConfig] = useState<AppConfig>();
   const [personId, setPersonId] = useState<string>();
   const [signedIn, setSignedIn] = useState<boolean>();
+  // The assistant starts closed: Acme's page comes first, and opening the assistant is the moment the
+  // product shows what it has inside. Closed, the panel stays mounted, so a turn keeps running.
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [error, setError] = useState<string>();
 
   useEffect(() => {
@@ -74,6 +78,15 @@ export function AcmeBooks() {
           <span className="acme-nav-item">Invoices</span>
           <span className="acme-nav-item">Reports</span>
         </nav>
+        <button
+          type="button"
+          className={assistantOpen ? "acme-button acme-assistant-toggle is-open" : "acme-button acme-assistant-toggle"}
+          aria-pressed={assistantOpen}
+          onClick={() => setAssistantOpen((o) => !o)}
+        >
+          <Sparkles className="acme-icon" aria-hidden />
+          Assistant
+        </button>
         <label className="acme-account">
           <span className="acme-visually-hidden">Signed in as</span>
           <select value={personId} onChange={(e) => void switchTo(e.target.value)}>
@@ -85,12 +98,14 @@ export function AcmeBooks() {
           </select>
         </label>
       </header>
-      <main className="acme-main">
+      <main className={assistantOpen ? "acme-main" : "acme-main is-assistant-closed"}>
         <Ledger key={personId} />
         <aside className="acme-panel" aria-label="Assistant">
           <StigmerProvider key={personId} client={client}>
             <AgentChat
               variant="panel"
+              open={assistantOpen}
+              onOpenChange={setAssistantOpen}
               agent={{ org: config.agent.org, slug: config.agent.slug }}
               org={person.customer.slug}
               title="Assistant"
