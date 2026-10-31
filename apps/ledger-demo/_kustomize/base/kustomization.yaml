@@ -1,0 +1,7 @@
+# The base is one file: the service's own blocks, the same in every environment. Overlays stack on it
+# with strategic-merge patches; they, not this file, load the schema that makes the merge work.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - service.yaml

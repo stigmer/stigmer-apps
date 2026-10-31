@@ -2,10 +2,10 @@
  * Acme Books: a customer's ledger on the left, Stigmer's chat panel docked on the right, the way an
  * integrator puts an agent in its product.
  *
- * The account switcher is the page's stand-in for Acme's own sign-in: switching posts the person to
- * Acme's server, which keeps who is signed in. The panel then remounts with a new client whose
- * token cache asks `/api/token` for that person's token, minted into their own customer's
- * organization. The Agent lives in Acme's organization and is shared with every customer's, so
+ * Acme's sign-in (a demo passcode, then a person) and the account switcher stand in for Acme's own
+ * sign-in: Acme's server keeps who is signed in, in a signed cookie. On a switch the panel remounts
+ * with a new client whose token cache asks `/api/token` for that person's token, minted into their
+ * own customer's organization. The Agent lives in Acme's organization and is shared with every customer's, so
  * the panel names the Agent by Acme's organization and the conversation by the customer's.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -14,27 +14,25 @@ import { AgentChat, StigmerProvider } from "@stigmer/react-sdk/chat";
 import { api, type AppConfig } from "./api.js";
 import { Ledger } from "./Ledger.js";
 import { PresenterDrawer } from "./PresenterDrawer.js";
+import { SignIn } from "./SignIn.js";
 
 export function AcmeBooks() {
   const [config, setConfig] = useState<AppConfig>();
   const [personId, setPersonId] = useState<string>();
+  const [signedIn, setSignedIn] = useState<boolean>();
   const [error, setError] = useState<string>();
 
   useEffect(() => {
     void (async () => {
-      const loaded = await api.config();
-      setConfig(loaded);
-      let me = await api.me();
-      if (!me) {
-        me = loaded.people[0]?.id;
-        if (me) await api.signIn(me);
-      }
-      setPersonId(me);
+      setConfig(await api.config());
+      const me = await api.me();
+      setSignedIn(me.signedIn);
+      if (me.signedIn) setPersonId(me.person.id);
     })().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
 
   const switchTo = useCallback(async (id: string) => {
-    await api.signIn(id);
+    await api.switchTo(id);
     setPersonId(id);
   }, []);
 
@@ -46,7 +44,19 @@ export function AcmeBooks() {
   }, [config, personId]);
 
   if (error) return <div className="acme-fatal">Acme Books could not start: {error}</div>;
-  if (!config || !personId || !client) return <div className="acme-loading">Loading…</div>;
+  if (!config || signedIn === undefined) return <div className="acme-loading">Loading…</div>;
+  if (!signedIn || !personId) {
+    return (
+      <SignIn
+        config={config}
+        onSignedIn={(id) => {
+          setSignedIn(true);
+          setPersonId(id);
+        }}
+      />
+    );
+  }
+  if (!client) return <div className="acme-loading">Loading…</div>;
   const person = config.people.find((p) => p.id === personId);
   if (!person) return <div className="acme-fatal">Unknown person {personId}.</div>;
 

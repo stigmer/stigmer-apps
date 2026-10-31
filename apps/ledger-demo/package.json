@@ -20,18 +20,18 @@
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@stigmer/apis": "0.1.0-dev.20261030061315.ge5c33ea8d795",
     "@stigmer/client": "0.1.0-dev.20261030061315.ge5c33ea8d795",
-    "@stigmer/react-sdk": "0.1.0-dev.20261030061315.ge5c33ea8d795",
-    "lucide-react": "^1.31.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
     "tsx": "^4.23.11",
     "zod": "^4.1.0"
   },
   "devDependencies": {
+    "@stigmer/react-sdk": "0.1.0-dev.20261030061315.ge5c33ea8d795",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.0.5",
+    "lucide-react": "^1.31.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "typescript": "^7.0.2",
     "vite": "^8.2.1",
     "vitest": "^3.2.7"

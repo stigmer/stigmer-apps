@@ -30,15 +30,21 @@ const post = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
+/** Who is signed in to Acme, or nobody. */
+export type Me = { readonly signedIn: false } | { readonly signedIn: true; readonly person: { readonly id: string } };
+
 export const api = {
   config: () => call<AppConfig>("/api/config"),
-  me: async (): Promise<string | undefined> => {
-    const res = await fetch("/api/me", { credentials: "same-origin" });
-    if (res.status === 401) return undefined;
-    if (!res.ok) throw new Error(`/api/me: ${res.status}`);
-    return ((await res.json()) as { person: { id: string } }).person.id;
+  me: () => call<Me>("/api/me"),
+  /** Signs in with Acme's passcode; the answer's status says why when it is refused. */
+  signIn: async (personId: string, passcode: string): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const res = await fetch("/api/sign-in", { credentials: "same-origin", ...post({ personId, passcode }) });
+    if (res.ok) return { ok: true };
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    return { ok: false, reason: body.error ?? `Sign-in failed (${res.status}).` };
   },
-  signIn: (personId: string) => call<unknown>("/api/sign-in", post({ personId })),
+  switchTo: (personId: string) => call<unknown>("/api/switch", post({ personId })),
+  signOut: () => call<unknown>("/api/sign-out", post({})),
   token: () => call<{ accessToken: string; expiresAt: string }>("/api/token"),
   ledger: () => call<BooksView>("/api/ledger"),
   rememberConversation: (sessionId: string) => call<unknown>("/api/conversations", post({ sessionId })),

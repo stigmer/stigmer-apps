@@ -367,3 +367,46 @@ body {
 .stage-turn.is-shown {
   visibility: visible;
 }
+
+.acme-signin {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+}
+
+.acme-signin-card {
+  display: grid;
+  gap: 16px;
+  width: 340px;
+  padding: 28px;
+  background: var(--acme-surface);
+  border: 1px solid var(--acme-rule);
+  border-radius: 10px;
+}
+
+.acme-signin-card label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.acme-signin-card select,
+.acme-signin-card input {
+  font: inherit;
+  font-weight: 400;
+  padding: 8px 10px;
+  border: 1px solid var(--acme-strong-rule);
+  border-radius: 6px;
+}
+
+.acme-primary {
+  background: var(--acme-ink);
+  color: var(--acme-surface);
+  border-color: var(--acme-ink);
+}
+
+.acme-problem {
+  margin: 0;
+  font-weight: 600;
+}

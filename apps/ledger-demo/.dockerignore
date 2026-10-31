@@ -1,0 +1,5 @@
+# Everything the image builds itself, or never needs.
+node_modules
+dist
+**/*.test.ts
+_kustomize

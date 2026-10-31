@@ -170,6 +170,31 @@ jobs:
       - name: Web E2E
         run: npm run test:e2e -w @law/web
 
+  # The integrator demo (apps/ledger-demo) is a package of its own, outside the workspace: it takes
+  # Stigmer's chat panel from Stigmer's npm store (its own .npmrc), which the workspace's @stigmer
+  # packages are not on, so it has its own lockfile and its own job. Its image is built and deployed
+  # by Planton's Service Hub (apps/ledger-demo/service.yaml), not here.
+  ledger-demo:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/ledger-demo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: apps/ledger-demo/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+
   # CI is the ONLY producer of the deployed image: every merge to main
   # pushes ghcr.io/stigmer/stigmer-apps/law-backend:<git-sha>. The push
   # sits behind the full suite (needs: check + e2e) and this job's own

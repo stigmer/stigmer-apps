@@ -1,13 +1,14 @@
 /**
- * Acme Books' server: two listeners, both on 127.0.0.1.
+ * Acme Books' server: one process, one port.
  *
- * - The app (`APP_PORT`, 5173 by default): the built page from `dist/` and `/api`. It mints Stigmer
- *   tokens, so it is never exposed beyond this machine.
- * - The ledger (`MCP_PORT`, 8787 by default): `/mcp` alone. This is the one port a tunnel puts on a
- *   public address, because a Stigmer Cloud sandbox reaches an Agent's MCP server over HTTPS; every
- *   request there must carry a customer's key.
+ * - `/mcp`: the ledger MCP server the Agent lists. A Stigmer Cloud sandbox reaches it over HTTPS at
+ *   the app's public address, and every request must carry a customer's key.
+ * - `/api`: Acme's own backend for its page, behind Acme's sign-in.
+ * - `/healthz`: for the platform's probes.
+ * - everything else: the built page (`npm run build` first), `/stage` included.
  *
- * Run `npm run build` first, then `ACME_SECRETS_FILE=<path> npm start`.
+ * Hosted, it runs in a container on PORT 8080 behind the environment's TLS. Locally:
+ * `ACME_PASSCODE=… ACME_SECRETS_FILE=… npm start`, then http://localhost:5173.
  */
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -19,6 +20,7 @@ import { apiHandler, type MintedToken } from "./api.js";
 import { Books } from "./books.js";
 import { loadConfig } from "./config.js";
 import { ledgerHandler } from "./ledger-mcp.js";
+import { Sessions } from "./session.js";
 
 const config = loadConfig();
 const books = new Books(CUSTOMERS);
@@ -32,6 +34,8 @@ const byLedgerKey = new Map<string, Customer>(CUSTOMERS.map((c) => [config.secre
 const api = apiHandler({
   books,
   stigmerUrl: config.stigmerUrl,
+  sessions: new Sessions(config.passcode),
+  secureCookies: config.secureCookies,
   mint: async (customer, person): Promise<MintedToken> => {
     const minted = await minters.get(customer.slug)!.tokens.mintUserToken({
       org: customer.slug,
@@ -41,6 +45,13 @@ const api = apiHandler({
     });
     return { accessToken: minted.accessToken, expiresAt: minted.expiresAt };
   },
+});
+
+const ledger = ledgerHandler({
+  books,
+  customerForKey: (key) => byLedgerKey.get(key),
+  onCall: (call) => console.log(`ledger: ${call.tool} for ${call.customer} (${call.by})`),
+  onRefused: () => console.log("ledger: refused a request with an unknown key"),
 });
 
 const TYPES: Record<string, string> = {
@@ -68,41 +79,24 @@ async function servePage(pathname: string): Promise<{ body: Buffer; type: string
 createServer((req, res) => {
   void (async () => {
     try {
+      const path = new URL(req.url ?? "/", "http://localhost").pathname;
+      if (path === "/mcp") return await ledger(req, res);
+      if (path === "/healthz") {
+        res.writeHead(200, { "content-type": "text/plain" }).end("ok");
+        return;
+      }
       if (await api(req, res)) return;
-      const page = await servePage(new URL(req.url ?? "/", "http://localhost").pathname);
+      const page = await servePage(path);
       if (!page) {
-        res.writeHead(404).end("Not found. Run npm run build first.");
+        res.writeHead(404).end("Not found.");
         return;
       }
       res.writeHead(200, { "content-type": page.type }).end(page.body);
     } catch (error) {
-      console.error("app:", error);
+      console.error("acme:", error);
       if (!res.headersSent) res.writeHead(500).end();
     }
   })();
-}).listen(config.appPort, "127.0.0.1", () => {
-  console.log(`Acme Books: http://localhost:${config.appPort} (Stigmer at ${config.stigmerUrl})`);
-});
-
-const ledger = ledgerHandler({
-  books,
-  customerForKey: (key) => byLedgerKey.get(key),
-  onCall: (call) => console.log(`ledger: ${call.tool} for ${call.customer} (${call.by})`),
-});
-
-createServer((req, res) => {
-  void (async () => {
-    try {
-      if (new URL(req.url ?? "/", "http://localhost").pathname !== "/mcp") {
-        res.writeHead(404).end();
-        return;
-      }
-      await ledger(req, res);
-    } catch (error) {
-      console.error("ledger:", error);
-      if (!res.headersSent) res.writeHead(500).end();
-    }
-  })();
-}).listen(config.mcpPort, "127.0.0.1", () => {
-  console.log(`Ledger MCP server: http://127.0.0.1:${config.mcpPort}/mcp (point the tunnel here)`);
+}).listen(config.port, () => {
+  console.log(`Acme Books on port ${config.port} (Stigmer at ${config.stigmerUrl}); the ledger MCP server at /mcp`);
 });

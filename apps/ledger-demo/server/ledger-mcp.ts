@@ -33,6 +33,8 @@ export interface LedgerServerDeps {
   readonly customerForKey: (key: string) => Customer | undefined;
   /** Each call that reached the books, for the presenter's console. */
   readonly onCall?: (call: { tool: string; customer: string; by: string }) => void;
+  /** A request refused for its key, for the same console. */
+  readonly onRefused?: () => void;
 }
 
 /** The person an adjustment is recorded for: the key's customer's person the identity names, or unknown. */
@@ -113,6 +115,7 @@ export function ledgerHandler(deps: LedgerServerDeps): (req: IncomingMessage, re
   return async (req, res) => {
     const customer = deps.customerForKey(bearerKey(req));
     if (!customer) {
+      deps.onRefused?.();
       res.writeHead(401, { "content-type": "text/plain" }).end("Unknown key.");
       return;
     }
