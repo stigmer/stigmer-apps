@@ -1,7 +1,8 @@
 /**
  * Acme Books' `ledger` MCP server, the one the Agent lists in its own `mcp_servers`: reading a
- * customer's budgets asks nobody, and posting an adjustment is marked destructive, so Stigmer stops
- * the turn on an approval card before the call reaches here.
+ * customer's budgets and booked lines asks nobody, and posting an adjustment is marked destructive,
+ * so Stigmer stops the turn on an approval card before the call reaches here. The lines come from
+ * Acme's own books, so the customer hands the agent nothing: they ask, and it reads.
  *
  * Who is calling is decided in two steps, in this order:
  *
@@ -70,6 +71,21 @@ export function ledgerServer(deps: LedgerServerDeps, customer: Customer, by: str
       const view = deps.books.view(customer);
       const budgets = { quarter: view.customer.quarter, budgets: view.accounts.map(({ account, budget }) => ({ account, budget })) };
       return { content: [{ type: "text", text: JSON.stringify(budgets) }] };
+    },
+  );
+
+  server.registerTool(
+    "get_lines",
+    {
+      description:
+        "Every line booked in the customer's ledger this quarter: date, vendor, description, account and amount, in pounds sterling.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => {
+      deps.onCall?.({ tool: "get_lines", customer: customer.slug, by });
+      const view = deps.books.view(customer);
+      return { content: [{ type: "text", text: JSON.stringify({ quarter: view.customer.quarter, lines: view.lines }) }] };
     },
   );
 

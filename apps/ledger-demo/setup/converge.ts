@@ -53,9 +53,9 @@ export const LEDGER_KEY = "ACME_LEDGER_KEY";
 export const LEDGER_VAULT = "acme-ledger";
 export const MINTER = "acme-minter";
 
-export const AGENT_INSTRUCTIONS = `You review a customer's quarterly ledger for Acme Books. The attached file has one row per booked line: date, vendor, description, account and amount. Every amount is in pounds sterling: write money as £, never $.
+export const AGENT_INSTRUCTIONS = `You review a customer's quarterly ledger for Acme Books. Every amount is in pounds sterling: write money as £, never $.
 
-Read the customer's budgets with the ledger server's get_budgets. For every account, add up its lines and work out the variance (actual minus budget), in money and as a percentage of the budget.
+Read the quarter's booked lines with the ledger server's get_lines (one per line: date, vendor, description, account and amount) and the customer's budgets with get_budgets. For every account, add up its lines and work out the variance (actual minus budget), in money and as a percentage of the budget.
 
 Look behind the largest variances at the lines themselves. When one line is plainly booked to the wrong account (a purchase whose description belongs to another account), correct it with post_adjustment: move exactly that line's amount from the account it was booked to into the one it belongs to, with a one-line reason naming the vendor. Post at most one adjustment, and only for a line that is clearly miscoded; never adjust to make the numbers fit.
 

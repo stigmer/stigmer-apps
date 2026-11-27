@@ -43,13 +43,15 @@ async function connect(headers: Record<string, string>): Promise<Client> {
 const dana = { "x-stigmer-caller-kind": "stigmer_user", "x-stigmer-caller-value": "dana@northwind.example" };
 
 describe("the ledger server", () => {
-  it("lists get_budgets as read-only and post_adjustment as destructive", async () => {
+  it("lists get_budgets and get_lines as read-only and post_adjustment as destructive", async () => {
     const client = await connect({ authorization: "Bearer key-northwind" });
     const { tools } = await client.listTools();
     const byName = Object.fromEntries(tools.map((t) => [t.name, t.annotations]));
-    expect(Object.keys(byName).sort()).toEqual(["get_budgets", "post_adjustment"]);
-    expect(byName.get_budgets).toMatchObject({ readOnlyHint: true });
-    expect(byName.get_budgets?.destructiveHint).not.toBe(true);
+    expect(Object.keys(byName).sort()).toEqual(["get_budgets", "get_lines", "post_adjustment"]);
+    for (const name of ["get_budgets", "get_lines"]) {
+      expect(byName[name]).toMatchObject({ readOnlyHint: true });
+      expect(byName[name]?.destructiveHint).not.toBe(true);
+    }
     expect(byName.post_adjustment).toMatchObject({ destructiveHint: true, readOnlyHint: false });
     await client.close();
   });
@@ -75,6 +77,18 @@ describe("the ledger server", () => {
     const text = (result.content as { text: string }[])[0]!.text;
     expect(JSON.parse(text).budgets).toContainEqual({ account: "Marketing", budget: blueFern.budgets.Marketing });
     expect(calls).toEqual([{ tool: "get_budgets", customer: "blue-fern-press", by: "Someone at Blue Fern Press, through the agent" }]);
+    await client.close();
+  });
+
+  it("answers each key with its own customer's lines, whatever person the identity headers name", async () => {
+    // Blue Fern's key with Dana's identity: the lines are Blue Fern's, never Northwind's.
+    const client = await connect({ authorization: "Bearer key-bluefern", ...dana });
+    const result = await client.callTool({ name: "get_lines", arguments: {} });
+    const answered = JSON.parse((result.content as { text: string }[])[0]!.text) as { quarter: string; lines: unknown[] };
+    expect(answered.quarter).toBe(blueFern.quarter);
+    expect(answered.lines).toEqual(blueFern.lines);
+    expect(answered.lines).not.toContainEqual(northwind.lines.find((l) => l.vendor === "Pixelform"));
+    expect(calls).toEqual([{ tool: "get_lines", customer: "blue-fern-press", by: "Someone at Blue Fern Press, through the agent" }]);
     await client.close();
   });
 

@@ -435,3 +435,63 @@ body {
   margin: 0;
   font-weight: 600;
 }
+
+/* Adding Stigmer: the drawer's switch, the card showing what Acme added, and the Assistant arriving. */
+.acme-drawer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0;
+}
+.acme-added {
+  position: fixed;
+  top: 76px;
+  right: 20px;
+  width: 400px;
+  max-width: calc(100vw - 40px);
+  padding: 14px 16px;
+  background: var(--acme-surface);
+  border: 1px solid var(--acme-ink);
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  z-index: 9;
+}
+.acme-added-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.acme-added p {
+  margin: 8px 0;
+  color: var(--acme-muted);
+}
+.acme-added pre {
+  margin: 0;
+  padding: 10px 12px;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--acme-ink);
+  color: var(--acme-surface);
+  border-radius: 6px;
+  white-space: pre;
+  overflow-x: auto;
+}
+.acme-assistant-toggle.is-new {
+  box-shadow: 0 0 0 3px var(--acme-highlight), 0 0 0 4px var(--acme-ink);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .acme-assistant-toggle.is-new {
+    animation: acme-arrive 600ms ease-out;
+  }
+}
+@keyframes acme-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -4,7 +4,8 @@
  * Stigmer's server words it (a refusal may say permission denied or not found; both keep the
  * conversation out of reach), so the walls are shown, not claimed.
  *
- * It also resets the quarter between rehearsals.
+ * It also adds Stigmer to Acme Books or takes it out (the page opens without it), and resets the
+ * quarter between showings, which takes Stigmer out too so the next viewer starts from Acme alone.
  */
 import { useEffect, useState } from "react";
 import type { Stigmer } from "@stigmer/client";
@@ -17,7 +18,19 @@ function describe(error: unknown): Answer {
   return { kind: "refused", code: String(e.code ?? "error"), message: String(e.message ?? error) };
 }
 
-export function PresenterDrawer({ client, config, personId }: { client: Stigmer; config: AppConfig; personId: string }) {
+export function PresenterDrawer({
+  client,
+  config,
+  personId,
+  stigmerAdded,
+  onStigmerAdded,
+}: {
+  client: Stigmer;
+  config: AppConfig;
+  personId: string;
+  stigmerAdded: boolean;
+  onStigmerAdded: (added: boolean) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [answer, setAnswer] = useState<Answer>();
   const [target, setTarget] = useState<{ owner: string; sessionId: string }>();
@@ -64,6 +77,23 @@ export function PresenterDrawer({ client, config, personId }: { client: Stigmer;
           Close (Alt+D)
         </button>
       </div>
+      <div className="acme-drawer-row">
+        <span>
+          Stigmer in Acme Books: <strong>{stigmerAdded ? "added" : "not yet"}</strong>
+        </span>
+        <button
+          type="button"
+          className={stigmerAdded ? "acme-button" : "acme-button acme-primary"}
+          onClick={() => {
+            onStigmerAdded(!stigmerAdded);
+            // Adding is the moment to show: the drawer gets out of the way of the Assistant arriving.
+            if (!stigmerAdded) setOpen(false);
+          }}
+        >
+          {stigmerAdded ? "Take Stigmer out" : "Add Stigmer"}
+        </button>
+      </div>
+      <hr />
       <p>
         Signed in as <strong>{me ? `${me.name} · ${me.customer.name}` : personId}</strong>.
       </p>
@@ -85,8 +115,15 @@ export function PresenterDrawer({ client, config, personId }: { client: Stigmer;
         </pre>
       )}
       <hr />
-      <button type="button" className="acme-link" onClick={() => void api.reset()}>
-        Start the quarter over (rehearsals)
+      <button
+        type="button"
+        className="acme-link"
+        onClick={() => {
+          onStigmerAdded(false);
+          void api.reset();
+        }}
+      >
+        Start the quarter over (takes Stigmer out too)
       </button>
     </div>
   );
