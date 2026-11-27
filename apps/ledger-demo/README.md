@@ -6,10 +6,12 @@ Hosted at `https://acme.demo.stigmer.ai`, on Stigmer Cloud's demo environment, b
 
 ## What happens in it
 
-- **Dana at Northwind Books** exports the quarter (`ledger.csv`), attaches it in the panel and sends "Review this quarter's ledger."
-- **The agent** works in its own sandbox. It reads the file and Northwind's budgets from Acme's `ledger` server (`get_budgets`, read-only, asks nothing) and finds the miscoded line: a design tool booked to Marketing.
+- **Acme Books opens without an assistant**, as it was before Stigmer. The presenter's drawer (Alt+D) adds Stigmer: the Assistant arrives, with a card showing the one component Acme's page added.
+- **Dana at Northwind Books** opens the Assistant and sends "Review this quarter's ledger." She attaches nothing.
+- **The agent** works in its own sandbox. It reads Northwind's booked lines and budgets from Acme's `ledger` server (`get_lines` and `get_budgets`, both read-only, so they ask nothing) and finds the miscoded line: a design tool booked to Marketing.
 - **Before posting**, `post_adjustment` is marked destructive, so Stigmer stops on an approval card. On approve, the correction appears in Acme's own ledger and Marketing's overspend is gone.
 - **Priya at Blue Fern Press** sees none of it. Her token can't open Northwind's conversation; the presenter's drawer (Alt+D) shows Stigmer's own refusal.
+- **Start the quarter over** in the drawer clears the adjustments and takes Stigmer out again, ready for the next viewer. Export ledger.csv stays as a plain product feature.
 - **`/stage`** is the presenter's opening: five things a team would otherwise build, ticked as the demo shows each.
 
 ## How it is put together

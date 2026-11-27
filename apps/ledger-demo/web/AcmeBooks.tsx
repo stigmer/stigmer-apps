@@ -7,6 +7,11 @@
  * with a new client whose token cache asks `/api/token` for that person's token, minted into their
  * own customer's organization. The Agent lives in Acme's organization and is shared with every customer's, so
  * the panel names the Agent by Acme's organization and the conversation by the customer's.
+ *
+ * The page opens as Acme Books was before Stigmer: no Assistant. The presenter adds Stigmer from the
+ * drawer, and the Assistant arrives with a card showing the one component Acme's page added, so a
+ * demo shows the product without an agent first and what it took to give it one. This browser
+ * remembers the choice; "Start the quarter over" takes Stigmer out again for the next viewer.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createTokenCache, Stigmer } from "@stigmer/client";
@@ -17,6 +22,24 @@ import { Ledger } from "./Ledger.js";
 import { PresenterDrawer } from "./PresenterDrawer.js";
 import { SignIn } from "./SignIn.js";
 
+const ADDED_KEY = "acme-books:stigmer-added";
+
+function rememberedAdded(): boolean {
+  try {
+    return window.localStorage.getItem(ADDED_KEY) === "yes";
+  } catch {
+    return false;
+  }
+}
+
+function rememberAdded(added: boolean): void {
+  try {
+    window.localStorage.setItem(ADDED_KEY, added ? "yes" : "no");
+  } catch {
+    // Storage refused (a private window): the choice lasts until the page reloads.
+  }
+}
+
 export function AcmeBooks() {
   const [config, setConfig] = useState<AppConfig>();
   const [personId, setPersonId] = useState<string>();
@@ -24,6 +47,9 @@ export function AcmeBooks() {
   // The assistant starts closed: Acme's page comes first, and opening the assistant is the moment the
   // product shows what it has inside. Closed, the panel stays mounted, so a turn keeps running.
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [stigmerAdded, setStigmerAdded] = useState(rememberedAdded);
+  // The card showing what Acme added: up from the moment Stigmer is added until the Assistant opens.
+  const [showAdded, setShowAdded] = useState(false);
   const [error, setError] = useState<string>();
 
   useEffect(() => {
@@ -33,6 +59,13 @@ export function AcmeBooks() {
       setSignedIn(me.signedIn);
       if (me.signedIn) setPersonId(me.person.id);
     })().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+  }, []);
+
+  const addStigmer = useCallback((added: boolean) => {
+    rememberAdded(added);
+    setStigmerAdded(added);
+    setShowAdded(added);
+    if (!added) setAssistantOpen(false);
   }, []);
 
   const switchTo = useCallback(async (id: string) => {
@@ -78,15 +111,24 @@ export function AcmeBooks() {
           <span className="acme-nav-item">Invoices</span>
           <span className="acme-nav-item">Reports</span>
         </nav>
-        <button
-          type="button"
-          className={assistantOpen ? "acme-button acme-assistant-toggle is-open" : "acme-button acme-assistant-toggle"}
-          aria-pressed={assistantOpen}
-          onClick={() => setAssistantOpen((o) => !o)}
-        >
-          <Sparkles className="acme-icon" aria-hidden />
-          Assistant
-        </button>
+        {stigmerAdded && (
+          <button
+            type="button"
+            className={[
+              "acme-button acme-assistant-toggle",
+              assistantOpen ? "is-open" : "",
+              showAdded ? "is-new" : "",
+            ].join(" ")}
+            aria-pressed={assistantOpen}
+            onClick={() => {
+              setShowAdded(false);
+              setAssistantOpen((o) => !o);
+            }}
+          >
+            <Sparkles className="acme-icon" aria-hidden />
+            Assistant
+          </button>
+        )}
         <label className="acme-account">
           <span className="acme-visually-hidden">Signed in as</span>
           <select value={personId} onChange={(e) => void switchTo(e.target.value)}>
@@ -98,7 +140,25 @@ export function AcmeBooks() {
           </select>
         </label>
       </header>
-      <main className={assistantOpen ? "acme-main" : "acme-main is-assistant-closed"}>
+      {stigmerAdded && showAdded && (
+        <div className="acme-added" role="status">
+          <div className="acme-added-head">
+            <strong>Stigmer, added to Acme Books</strong>
+            <button type="button" className="acme-link" aria-label="Close" onClick={() => setShowAdded(false)}>
+              Close
+            </button>
+          </div>
+          <p>The one component Acme’s page added:</p>
+          <pre>{`<AgentChat
+  agent={{
+    org: "${config.agent.org}",
+    slug: "${config.agent.slug}",
+  }}
+  org="${person.customer.slug}"
+/>`}</pre>
+        </div>
+      )}
+      <main className={stigmerAdded && assistantOpen ? "acme-main" : "acme-main is-assistant-closed"}>
         <Ledger key={personId} />
         <aside className="acme-panel" aria-label="Assistant">
           <StigmerProvider key={personId} client={client}>
@@ -117,7 +177,13 @@ export function AcmeBooks() {
           </StigmerProvider>
         </aside>
       </main>
-      <PresenterDrawer client={client} config={config} personId={personId} />
+      <PresenterDrawer
+        client={client}
+        config={config}
+        personId={personId}
+        stigmerAdded={stigmerAdded}
+        onStigmerAdded={addStigmer}
+      />
     </div>
   );
 }
